@@ -1,19 +1,33 @@
 import Link from 'next/link';
+import Image from 'next/image';
+import srmLogo from './assets/SRMRMP_LOGO.png';
+
 
 export default function HomePage() {
   return (
     <div className="bg-white">
       
       {/* Header */}
-      <header className="bg-gradient-to-r from-blue-700 to-blue-600 shadow-lg w-full">
-        <div className="w-full">
-          <div className="flex justify-start items-center py-8 pl-6">
-            <h1 className="text-4xl font-bold text-white tracking-wide drop-shadow-sm">
-              SRM-RMP Approval System
-            </h1>
-          </div>
-        </div>
-      </header>
+<header className="bg-gradient-to-r from-blue-700 to-blue-600 shadow-lg w-full">
+  <div className="w-full">
+    <div className="flex items-center py-6 pl-6 gap-4">
+
+      {/* SRM Logo */}
+      <Image
+        src={srmLogo}
+        alt="SRM Logo"
+        className="h-16 w-auto"
+        priority
+      />
+
+      {/* Title */}
+      <h1 className="text-4xl font-bold text-white tracking-wide drop-shadow-sm">
+        SRM-RMP Approval System
+      </h1>
+
+    </div>
+  </div>
+</header>
 
       {/* Hero Section */}
       <div className="relative bg-white overflow-hidden">

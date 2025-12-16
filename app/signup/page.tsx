@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserRole } from '../../lib/types';
 import PasswordInput from '../../components/PasswordInput';
+import Image from 'next/image';
+import SRMRMP_Logo from '../assets/SRMRMP_LOGO.png';
 
 const roleOptions = [
   { value: UserRole.REQUESTER, label: 'Requester/HOD' },
@@ -21,16 +23,14 @@ const roleOptions = [
   { value: UserRole.CHAIRMAN, label: 'Chairman' },
 ];
 
-const rolesWithDepartment = [
-  UserRole.REQUESTER,
-  UserRole.DEAN,
-  UserRole.HEAD_OF_INSTITUTION
-];
+// ✅ ONLY requester needs department
+const rolesWithDepartment = [UserRole.REQUESTER];
 
 export default function SignupPage() {
   const [name, setName] = useState('');
   const [empId, setEmpId] = useState('');
   const [email, setEmail] = useState('');
+  const [contactNo, setContactNo] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.REQUESTER);
   const [college, setCollege] = useState('');
   const [department, setDepartment] = useState('');
@@ -40,10 +40,10 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const router = useRouter();
 
-  const inputClass = 
-    "mt-1 block w-full border border-gray-400 rounded-lg px-3 py-2 " +
-    "bg-white shadow-sm placeholder-gray-500 text-gray-900 " +
-    "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition";
+  const inputClass =
+    'mt-1 block w-full border border-gray-400 rounded-lg px-3 py-2 ' +
+    'bg-white shadow-sm placeholder-gray-500 text-gray-900 ' +
+    'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition';
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +58,15 @@ export default function SignupPage() {
 
     const isDepartmentRequired = rolesWithDepartment.includes(selectedRole);
 
-    if (!name || !email || !password || !empId || !college || (isDepartmentRequired && !department)) {
+    if (
+      !name ||
+      !email ||
+      !password ||
+      !empId ||
+      !college ||
+      !contactNo ||
+      (isDepartmentRequired && !department)
+    ) {
       setError('Please fill in all required fields');
       setLoading(false);
       return;
@@ -72,6 +80,7 @@ export default function SignupPage() {
           name,
           empId,
           email,
+          contactNo,
           password,
           role: selectedRole,
           college,
@@ -97,15 +106,32 @@ export default function SignupPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 px-4 animate-fadeIn">
       <div className="max-w-md w-full space-y-8">
 
+        {/* LOGO + SYSTEM TITLE */}
+        <div className="flex flex-col items-center text-center">
+          <Image
+            src={SRMRMP_Logo}
+            alt="SRM Logo"
+            width={100}
+            height={100}
+            className="mb-4"
+            priority
+          />
+          <h1 className="text-3xl font-extrabold text-gray-900 drop-shadow-sm">
+            SRM-RMP Approval System
+          </h1>
+        </div>
+
+        {/* PAGE TITLE */}
         <div className="text-center">
-          <h2 className="text-4xl font-bold text-gray-900">
+          <h2 className="text-2xl font-bold text-gray-900">
             Create an account
           </h2>
-          <p className="mt-2 text-gray-600 text-sm">
+          <p className="mt-1 text-gray-600 text-sm">
             Sign up for SRM-RMP Institutional Approval System
           </p>
         </div>
 
+        {/* FORM CARD */}
         <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
 
           {error && (
@@ -115,7 +141,6 @@ export default function SignupPage() {
           )}
 
           <form className="space-y-6" onSubmit={handleSignup}>
-
             <div>
               <label className="block text-sm font-medium text-gray-700">Full Name *</label>
               <input
@@ -123,7 +148,7 @@ export default function SignupPage() {
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="John Doe"
+                placeholder="Enter your Name"
                 className={inputClass}
               />
             </div>
@@ -135,7 +160,7 @@ export default function SignupPage() {
                 required
                 value={empId}
                 onChange={(e) => setEmpId(e.target.value)}
-                placeholder="EMP12345"
+                placeholder="Enter your ID"
                 className={inputClass}
               />
             </div>
@@ -147,46 +172,48 @@ export default function SignupPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="name@srmrmp.edu.in"
+                className={inputClass}
+              />
+            </div>
+
+            {/* ✅ CONTACT NUMBER */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Contact Number *</label>
+              <input
+                type="tel"
+                required
+                value={contactNo}
+                onChange={(e) => setContactNo(e.target.value)}
+                placeholder="Enter contact number"
                 className={inputClass}
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Password *</label>
-              <PasswordInput
-                value={password}
-                onChange={setPassword}
-                required
-                placeholder="••••••••"
-              />
+              <PasswordInput value={password} onChange={setPassword} required />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Confirm Password *</label>
-              <PasswordInput
-                value={confirmPassword}
-                onChange={setConfirmPassword}
-                required
-                placeholder="••••••••"
-              />
+              <PasswordInput value={confirmPassword} onChange={setConfirmPassword} required />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Role *</label>
               <select
-                required
                 value={selectedRole}
                 onChange={(e) => {
-                  const newRole = e.target.value as UserRole;
-                  setSelectedRole(newRole);
-                  if (!rolesWithDepartment.includes(newRole)) setDepartment('');
+                  const role = e.target.value as UserRole;
+                  setSelectedRole(role);
+                  if (!rolesWithDepartment.includes(role)) setDepartment('');
                 }}
                 className={inputClass}
               >
-                {roleOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+                {roleOptions.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
                   </option>
                 ))}
               </select>
@@ -199,11 +226,12 @@ export default function SignupPage() {
                 required
                 value={college}
                 onChange={(e) => setCollege(e.target.value)}
-                placeholder="Enter your college name"
+                placeholder="Enter College Name"
                 className={inputClass}
               />
             </div>
 
+            {/* ✅ DEPARTMENT ONLY FOR REQUESTER */}
             {rolesWithDepartment.includes(selectedRole) && (
               <div>
                 <label className="block text-sm font-medium text-gray-700">Department *</label>
@@ -212,7 +240,7 @@ export default function SignupPage() {
                   required
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
-                  placeholder="Enter your department name"
+                  placeholder="Enter Department"
                   className={inputClass}
                 />
               </div>
@@ -232,7 +260,7 @@ export default function SignupPage() {
               Already have an account?{' '}
               <button
                 onClick={() => router.push('/login')}
-                className="text-blue-600 hover:text-blue-500 font-medium"
+                className="text-blue-600 font-medium"
               >
                 Sign in
               </button>

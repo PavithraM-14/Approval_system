@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PasswordInput from '../../components/PasswordInput';
+import Image from "next/image";
+import SRMRMP_Logo from "../assets/SRMRMP_LOGO.png"; 
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -44,13 +46,29 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 px-4">
       <div className="max-w-md w-full space-y-8 animate-fadeIn">
 
-        {/* Title */}
-        <div className="text-center">
-          <h2 className="text-4xl font-extrabold text-gray-900 drop-shadow-sm">
-            SRM-RMP Approval System
-          </h2>
-          <p className="mt-2 text-gray-600 text-sm">Sign in to your account</p>
-        </div>
+        {/* Logo + Title */}
+<div className="flex flex-col items-center text-center">
+  {/* SRM Logo */}
+  <Image
+    src={SRMRMP_Logo}
+    alt="SRM Logo"
+    width={100}
+    height={100}
+    className="mb-4"
+    priority
+  />
+
+
+  {/* Title */}
+  <h2 className="text-4xl font-extrabold text-gray-900 drop-shadow-sm">
+    SRM-RMP Approval System
+  </h2>
+
+  <p className="mt-2 text-gray-600 text-sm">
+    Sign in to your account
+  </p>
+</div>
+
 
         {/* Optional Success Message */}
         {message && (
@@ -81,7 +99,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="name@example.com"
                 className="mt-1 block w-full border border-gray-400 rounded-lg px-3 py-2 bg-white shadow-sm
                            placeholder-gray-500 text-gray-900
                            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"

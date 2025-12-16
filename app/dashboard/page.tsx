@@ -54,11 +54,8 @@ export default function DashboardPage() {
         }
         break;
       case 'Approved':
-        if (currentUser?.role === 'requester') {
+        
           router.push('/dashboard/requests?status=approved');
-        } else {
-          router.push('/dashboard/approvals'); // Approvers don't filter by approved
-        }
         break;
       case 'Rejected':
         if (currentUser?.role === 'requester') {
