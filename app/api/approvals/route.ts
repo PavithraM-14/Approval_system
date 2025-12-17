@@ -39,19 +39,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Requesters don't have pending approvals to process (temporarily allowing for testing)
+    // Requesters don't have pending approvals to process
     if (user.role === UserRole.REQUESTER) {
-      console.log('[DEBUG] User is requester, but allowing access for testing');
-      // Temporarily allow requesters to test the approvals API
-      // return NextResponse.json({
-      //   requests: [],
-      //   pagination: { page: 1, limit: 10, total: 0, pages: 0 }
-      // });
+      console.log('[DEBUG] User is requester, redirecting to requests');
+      return NextResponse.json({
+        error: 'Requesters should use /api/requests endpoint',
+        requests: [],
+        pagination: { page: 1, limit: 10, total: 0, pages: 0 }
+      }, { status: 403 });
     }
 
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
+    const statusFilter = searchParams.get('status'); // Get status filter from query
+    
+    console.log('[DEBUG] Query params:', { page, limit, statusFilter });
     
     // Get user's database record
     let dbUser = null;
@@ -84,18 +87,40 @@ export async function GET(request: NextRequest) {
     console.log('[DEBUG] User role:', user.role);
     console.log('[DEBUG] Is user authorized for MANAGER_REVIEW?', requiredApprovers.includes(user.role as UserRole));
 
-    // Apply role-based visibility filtering - only show pending approvals
-    const visibleRequests = filterRequestsByVisibility(
-      allRequests, 
-      user.role as UserRole, 
-      dbUser._id.toString(),
-      'pending' // Only show requests pending user's approval
-    );
+    // Determine visibility mode based on status filter
+    let visibilityMode: 'pending' | 'all' = 'pending';
+    let visibleRequests: any[] = [];
 
-    console.log('[DEBUG] Visible pending requests for user:', visibleRequests.length);
-    
+    if (statusFilter === 'approved') {
+      // Show only fully approved requests (Chairman approved)
+      visibleRequests = allRequests.filter(req => req.status === RequestStatus.APPROVED);
+      console.log('[DEBUG] Filtered to approved requests:', visibleRequests.length);
+    } else if (statusFilter === 'rejected') {
+      // Show only rejected requests
+      visibleRequests = allRequests.filter(req => req.status === RequestStatus.REJECTED);
+      console.log('[DEBUG] Filtered to rejected requests:', visibleRequests.length);
+    } else if (statusFilter === 'all') {
+      // Show all requests visible to this role
+      visibleRequests = filterRequestsByVisibility(
+        allRequests, 
+        user.role as UserRole, 
+        dbUser._id.toString(),
+        'all'
+      );
+      console.log('[DEBUG] Showing all visible requests:', visibleRequests.length);
+    } else {
+      // Default: show only pending approvals
+      visibleRequests = filterRequestsByVisibility(
+        allRequests, 
+        user.role as UserRole, 
+        dbUser._id.toString(),
+        'pending'
+      );
+      console.log('[DEBUG] Showing pending approvals:', visibleRequests.length);
+    }
+
     // Debug: Show visibility analysis for MANAGER_REVIEW requests
-    if (managerReviewRequests.length > 0) {
+    if (managerReviewRequests.length > 0 && !statusFilter) {
       console.log('[DEBUG] MANAGER_REVIEW requests visibility analysis:');
       managerReviewRequests.forEach(req => {
         const visibility = analyzeRequestVisibility(req, user.role as UserRole, dbUser._id.toString());
@@ -148,6 +173,7 @@ export async function GET(request: NextRequest) {
         total,
         pages: Math.ceil(total / limit),
       },
+      filter: statusFilter || 'pending' // Include filter info in response
     });
   } catch (error) {
     console.error('Get approvals error:', error);

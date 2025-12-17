@@ -40,36 +40,58 @@ export default function DashboardPage() {
 
   const handleStatsCardClick = (cardName: string) => {
     // Route based on user role
-    const basePath = currentUser?.role === 'requester' ? '/dashboard/requests' : '/dashboard/approvals';
+    const isRequester = currentUser?.role === 'requester';
+    
+    console.log('[DEBUG] Stats card clicked:', {
+      cardName,
+      userRole: currentUser?.role,
+      isRequester
+    });
     
     switch (cardName) {
       case 'Total Requests':
-        router.push(basePath);
+        if (isRequester) {
+          router.push('/dashboard/requests');
+        } else {
+          router.push('/dashboard/approvals?status=all');
+        }
         break;
+        
       case 'Pending':
-        if (currentUser?.role === 'requester') {
+        if (isRequester) {
           router.push('/dashboard/requests?status=pending');
         } else {
-          router.push('/dashboard/approvals'); // Approvers see all their pending approvals
+          router.push('/dashboard/approvals'); // Default is pending
         }
         break;
-      case 'Approved':
         
+      case 'Approved':
+        if (isRequester) {
           router.push('/dashboard/requests?status=approved');
+        } else {
+          router.push('/dashboard/approvals?status=approved');
+        }
         break;
+        
       case 'Rejected':
-        if (currentUser?.role === 'requester') {
+        if (isRequester) {
           router.push('/dashboard/requests?status=rejected');
         } else {
-          router.push('/dashboard/approvals'); // Approvers don't filter by rejected
+          router.push('/dashboard/approvals?status=rejected');
         }
         break;
+        
       case 'In Progress':
       case 'My Involvement':
         router.push('/dashboard/in-progress');
         break;
+        
       default:
-        router.push(basePath);
+        if (isRequester) {
+          router.push('/dashboard/requests');
+        } else {
+          router.push('/dashboard/approvals');
+        }
     }
   };
 

@@ -52,9 +52,17 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
-    const status = searchParams.get('status');
+    const statusFilter = searchParams.get('status'); // Renamed for clarity
     const college = searchParams.get('college');
     const pendingApprovals = searchParams.get('pendingApprovals') === 'true';
+    
+    console.log('[DEBUG] Requests API called:', {
+      userId: user.id,
+      userRole: user.role,
+      statusFilter,
+      page,
+      limit
+    });
     
     let filter: any = {};
     
@@ -84,6 +92,8 @@ export async function GET(request: NextRequest) {
       .sort({ createdAt: -1 })
       .lean(); // Convert to plain objects for better performance
 
+    console.log('[DEBUG] Total requests fetched:', allRequests.length);
+
     // Apply role-based visibility filtering
     let visibleRequests = filterRequestsByVisibility(
       allRequests, 
@@ -91,25 +101,45 @@ export async function GET(request: NextRequest) {
       dbUser._id.toString()
     );
 
-    // Apply status filtering based on visibility categories
-    if (status) {
-      if (status === 'pending') {
-        visibleRequests = visibleRequests.filter(req => req._visibility.category === 'pending');
-      } else if (status === 'approved') {
+    console.log('[DEBUG] Requests after visibility filtering:', visibleRequests.length);
+
+    // Apply status filtering based on the URL query parameter
+    if (statusFilter) {
+      console.log('[DEBUG] Applying status filter:', statusFilter);
+      
+      if (statusFilter === 'pending') {
+        // For requesters: show all non-approved, non-rejected requests
+        if (user.role === UserRole.REQUESTER) {
+          visibleRequests = visibleRequests.filter(req => 
+            req.status !== RequestStatus.APPROVED && 
+            req.status !== RequestStatus.REJECTED
+          );
+        } else {
+          // For approvers: show requests pending their action
+          visibleRequests = visibleRequests.filter(req => req._visibility?.category === 'pending');
+        }
+      } else if (statusFilter === 'approved') {
         // Approved requests = only requests that have been fully approved by Chairman
         visibleRequests = visibleRequests.filter(req => req.status === RequestStatus.APPROVED);
-      } else if (status === 'rejected') {
+      } else if (statusFilter === 'rejected') {
         visibleRequests = visibleRequests.filter(req => req.status === RequestStatus.REJECTED);
+      } else if (statusFilter === 'all') {
+        // Show all visible requests (no additional filtering)
+        // visibleRequests already contains all visible requests
       } else {
-        // Filter by actual status
-        visibleRequests = visibleRequests.filter(req => req.status === status);
+        // Filter by specific status
+        visibleRequests = visibleRequests.filter(req => req.status === statusFilter);
       }
+      
+      console.log('[DEBUG] Requests after status filter:', visibleRequests.length);
     }
 
     // Apply pagination
     const skip = (page - 1) * limit;
     const filteredRequests = visibleRequests.slice(skip, skip + limit);
     const total = visibleRequests.length;
+
+    console.log('[DEBUG] Returning', filteredRequests.length, 'requests after pagination');
 
     return NextResponse.json({
       requests: filteredRequests,
@@ -119,10 +149,14 @@ export async function GET(request: NextRequest) {
         total,
         pages: Math.ceil(total / limit),
       },
+      filter: statusFilter || 'all' // Include active filter in response
     });
   } catch (error) {
     console.error('Get requests error:', error);
-    return NextResponse.json({ error: 'Failed to fetch requests' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Failed to fetch requests',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
 
@@ -192,9 +226,18 @@ export async function POST(request: NextRequest) {
     const populatedRequest = await Request.findById(newRequest._id)
       .populate('requester', 'name email empId');
 
+    console.log('[DEBUG] Request created successfully:', {
+      requestId: newRequest._id,
+      title: validatedData.title,
+      requester: user.email
+    });
+
     return NextResponse.json(populatedRequest, { status: 201 });
   } catch (error) {
     console.error('Create request error:', error);
-    return NextResponse.json({ error: 'Failed to create request' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Failed to create request',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
