@@ -2,25 +2,7 @@
 
 A comprehensive digital approval workflow system built with Next.js, TypeScript, MongoDB, and Tailwind CSS. This system streamlines institutional request approvals through a sophisticated role-based workflow with real-time tracking, enhanced UI/UX, and comprehensive audit capabilities.
 
-## 🆕 Latest Updates (v2.0.0)
 
-### Enhanced User Experience
-- ✅ **Indian Number System** - Real-time comma formatting for cost estimates (₹30,00,000)
-- ✅ **Password Visibility Toggle** - Eye icon for show/hide password functionality
-- ✅ **Improved Navigation** - Fixed dashboard stats card routing for all user roles
-- ✅ **Mobile Responsiveness** - Enhanced mobile experience across all pages
-
-### Workflow Improvements
-- ✅ **Department Clarification System** - Targeted clarifications with proper role-based visibility
-- ✅ **Simplified SOP/Accountant Workflow** - Removed unnecessary clarification steps
-- ✅ **Parallel Verification** - SOP and Budget verification happen simultaneously
-- ✅ **Enhanced Role-Based Visibility** - Sophisticated request visibility system
-
-### Technical Enhancements
-- ✅ **Reusable Components** - CostEstimateInput, PasswordInput, FormattedAmount
-- ✅ **Email Domain Validation** - Restricted to @srmrmp.edu.in emails
-- ✅ **Comprehensive Debugging** - Enhanced error handling and logging
-- ✅ **Updated Seed Script** - Compatible with new validation requirements
 
 ## ✨ Features Implemented
 
