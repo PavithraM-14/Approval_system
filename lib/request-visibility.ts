@@ -55,13 +55,26 @@ function analyzeApproverVisibility(
   // Check if user has been involved in this request
   const userInvolvement = analyzeUserInvolvement(history, userRole, userId);
   
-  if (!userInvolvement.hasBeenInvolved) {
-    // Check if request has reached their level through proper workflow
-    const hasReachedLevel = hasRequestReachedUserLevel(request, userRole, history);
-    
-    if (!hasReachedLevel) {
-      return { canSee: false, category: 'completed', reason: 'Request has not reached this level' };
-    }
+  // Check if request currently needs user's approval
+  const needsCurrentApproval = doesRequestNeedUserApproval(request, userRole, userId, history);
+  
+  // Special handling for Dean - can see requests they sent for department clarification
+  const deanCanSeeClariRequest = userRole === UserRole.DEAN && 
+    request.status === RequestStatus.DEPARTMENT_CHECKS &&
+    history.some((h: any) => 
+      h.action === ActionType.CLARIFY && 
+      h.clarificationTarget &&
+      (h.actor?._id?.toString() === userId || h.actor?.toString() === userId)
+    );
+  
+  // User can see request if:
+  // 1. They have previously approved it, OR
+  // 2. It currently needs their approval, OR
+  // 3. (Dean only) They sent it for department clarification
+  const canSee = userInvolvement.hasApproved || needsCurrentApproval || deanCanSeeClariRequest;
+  
+  if (!canSee) {
+    return { canSee: false, category: 'completed', reason: 'Not involved and not pending for user' };
   }
 
   // User can see the request, now categorize it
@@ -106,7 +119,10 @@ function analyzeUserInvolvement(
     involvement.lastAction = lastAction.action;
     involvement.lastActionTimestamp = lastAction.timestamp;
     
-    involvement.hasApproved = userActions.some(a => a.action === ActionType.APPROVE);
+    // Consider both APPROVE and FORWARD as approval actions
+    involvement.hasApproved = userActions.some(a => 
+      a.action === ActionType.APPROVE || a.action === ActionType.FORWARD
+    );
     involvement.hasRejected = userActions.some(a => a.action === ActionType.REJECT);
     involvement.hasClarified = userActions.some(a => a.action === ActionType.CLARIFY);
   }
@@ -114,9 +130,15 @@ function analyzeUserInvolvement(
   return involvement;
 }
 
-function hasRequestReachedUserLevel(
+
+
+/**
+ * Check if a request currently needs the user's approval
+ */
+function doesRequestNeedUserApproval(
   request: any,
   userRole: UserRole,
+  userId: string,
   history: any[]
 ): boolean {
   
@@ -141,100 +163,26 @@ function hasRequestReachedUserLevel(
     return false; // No clarification found, don't show to any department
   }
   
-  // Special handling for Dean - show requests that have completed department checks
-  if (userRole === UserRole.DEAN) {
-    // Dean can see requests that are back from department clarifications
-    if (currentStatus === RequestStatus.DEAN_REVIEW) {
-      // Check if this request came back from department checks
-      const hasDepartmentResponse = history.some((h: any) => 
-        h.departmentResponse && h.action === ActionType.FORWARD
-      );
-      if (hasDepartmentResponse) {
-        return true;
-      }
-    }
-    
-    // Dean can also see requests currently in department checks (that they sent)
-    if (currentStatus === RequestStatus.DEPARTMENT_CHECKS) {
-      const deanSentClarification = history.some((h: any) => 
-        h.action === ActionType.CLARIFY && 
-        h.clarificationTarget &&
-        h.actor?.role === 'dean'
-      );
-      return deanSentClarification;
-    }
-  }
-  
   // Check if current status requires this user's role
   const requiredApprovers = approvalEngine.getRequiredApprover(currentStatus);
-  if (requiredApprovers.includes(userRole)) {
-    return true;
+  if (!requiredApprovers.includes(userRole)) {
+    return false;
   }
 
-  // ENHANCED: Check if request has EVER passed through this user's level
-  // This ensures users can see ALL requests that have historically been at their level
-  const statusesRequiringThisRole = getAllStatusesForRole(userRole);
-  
-  // Check history for any status that required this role
-  const hasPassedThrough = history.some(h => 
-    statusesRequiringThisRole.includes(h.newStatus) || 
-    statusesRequiringThisRole.includes(h.previousStatus)
-  );
-  
-  // ADDITIONAL: Check if request has progressed beyond this user's level
-  // This catches cases where the request has moved past their level
-  const hasProgressedBeyond = checkIfRequestProgressedBeyondUserLevel(request, userRole, history);
-  
-  return hasPassedThrough || hasProgressedBeyond;
-}
+  // Find when the request was last set to the current status
+  const lastStatusChange = history
+    ?.filter((h: any) => h.newStatus === currentStatus)
+    ?.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
 
-/**
- * Check if a request has progressed beyond the user's approval level
- * This ensures users can see requests they've previously approved
- */
-function checkIfRequestProgressedBeyondUserLevel(
-  request: any,
-  userRole: UserRole,
-  history: any[]
-): boolean {
-  
-  // Define the approval workflow order
-  const workflowOrder = [
-    UserRole.INSTITUTION_MANAGER,
-    UserRole.SOP_VERIFIER,
-    UserRole.ACCOUNTANT,
-    UserRole.VP,
-    UserRole.HEAD_OF_INSTITUTION,
-    UserRole.DEAN,
-    UserRole.MMA, // Department roles are parallel to Dean
-    UserRole.HR,
-    UserRole.AUDIT,
-    UserRole.IT,
-    UserRole.CHIEF_DIRECTOR,
-    UserRole.CHAIRMAN
-  ];
-  
-  const userLevelIndex = workflowOrder.indexOf(userRole);
-  if (userLevelIndex === -1) return false;
-  
-  // Check if request has reached any level beyond the user's level
-  const currentStatus = request.status;
-  const statusesForLaterRoles = workflowOrder
-    .slice(userLevelIndex + 1)
-    .flatMap(role => getAllStatusesForRole(role));
-  
-  // If current status is for a later role, user should see this request
-  if (statusesForLaterRoles.includes(currentStatus)) {
-    return true;
-  }
-  
-  // Check history for any status that indicates progression beyond user's level
-  const hasReachedLaterLevel = history.some(h => 
-    statusesForLaterRoles.includes(h.newStatus) || 
-    statusesForLaterRoles.includes(h.previousStatus)
+  // Check if user has acted AFTER the request was set to current status
+  const hasActedAfterStatusChange = lastStatusChange && history?.some((h: any) => 
+    (h.actor?._id?.toString() === userId || h.actor?.toString() === userId) &&
+    new Date(h.timestamp) > new Date(lastStatusChange.timestamp) &&
+    (h.action === ActionType.APPROVE || h.action === ActionType.FORWARD)
   );
-  
-  return hasReachedLaterLevel;
+
+  // User needs to act if they haven't acted after the latest status change
+  return !hasActedAfterStatusChange;
 }
 
 function getAllStatusesForRole(userRole: UserRole): RequestStatus[] {
