@@ -79,9 +79,7 @@ export default function ApprovalsPage() {
       setError(null);
       
       // Build URL with status filter
-      const url = status === 'all' 
-        ? '/api/approvals' 
-        : `/api/approvals?status=${status}`;
+      const url = `/api/approvals?status=${status}`;
       
       console.log('[DEBUG] Making request to:', url);
       const response = await fetch(url, {
@@ -96,6 +94,8 @@ export default function ApprovalsPage() {
 
       const data = await response.json();
       console.log('[DEBUG] Response data:', data);
+      console.log('[DEBUG] Number of requests received:', data.requests?.length || 0);
+      console.log('[DEBUG] Filter used:', data.filter);
       setRequests(data.requests || []);
     } catch (err) {
       console.error('Error fetching approvals:', err);
@@ -154,11 +154,11 @@ export default function ApprovalsPage() {
   const getPageDescription = () => {
     switch (activeTab) {
       case 'all':
-        return 'All requests forwarded to you (pending approval + already approved by you)';
+        return 'All requests you have been involved with (pending + approved by you + in progress)';
       case 'approved':
-        return 'Requests that have been fully approved';
+        return 'Requests that you have approved (regardless of current status)';
       case 'rejected':
-        return 'Requests that have been rejected';
+        return 'Requests you approved but were later rejected by someone else';
       default:
         return 'Requests waiting for your approval';
     }

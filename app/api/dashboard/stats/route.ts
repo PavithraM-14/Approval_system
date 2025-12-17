@@ -3,7 +3,7 @@ import connectDB from '../../../../lib/mongodb';
 import Request from '../../../../models/Request';
 import User from '../../../../models/User';
 import { getCurrentUser } from '../../../../lib/auth';
-import { RequestStatus, UserRole } from '../../../../lib/types';
+import { RequestStatus, ActionType, UserRole } from '../../../../lib/types';
 import { filterRequestsByVisibility } from '../../../../lib/request-visibility';
 import mongoose from 'mongoose';
 
@@ -89,15 +89,24 @@ export async function GET() {
         req._visibility.category === 'pending'
       ).length;
       
-      // Approved: show requests they can see that are approved
+      // Approved: show requests they have approved (regardless of current status)
       approvedRequests = visibleRequests.filter(req => 
-        req._visibility.category === 'approved' || req.status === RequestStatus.APPROVED
+        req._visibility.category === 'approved'
       ).length;
       
-      // Rejected: show requests they can see that are rejected
-      rejectedRequests = visibleRequests.filter(req => 
-        req.status === RequestStatus.REJECTED
-      ).length;
+      // Rejected: show requests they approved but were later rejected by someone else
+      rejectedRequests = visibleRequests.filter(req => {
+        // Request must be rejected
+        if (req.status !== RequestStatus.REJECTED) return false;
+        
+        // Check if this user has approved this request in the history
+        const userHasApproved = req.history?.some((h: any) => 
+          (h.actor?._id?.toString() === dbUser._id.toString() || h.actor?.toString() === dbUser._id.toString()) &&
+          (h.action === ActionType.APPROVE || h.action === ActionType.FORWARD)
+        );
+        
+        return userHasApproved;
+      }).length;
       
       // In-progress: show requests they've been involved with
       inProgressRequests = visibleRequests.filter(req => 

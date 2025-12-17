@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
     const statusFilter = searchParams.get('status'); // Get status filter from query
     
     console.log('[DEBUG] Query params:', { page, limit, statusFilter });
+    console.log('[DEBUG] Status filter type:', typeof statusFilter, 'Value:', statusFilter);
     
     // Get user's database record
     let dbUser = null;
@@ -92,13 +93,38 @@ export async function GET(request: NextRequest) {
     let visibleRequests: any[] = [];
 
     if (statusFilter === 'approved') {
-      // Show only fully approved requests (Chairman approved)
-      visibleRequests = allRequests.filter(req => req.status === RequestStatus.APPROVED);
-      console.log('[DEBUG] Filtered to approved requests:', visibleRequests.length);
+      // Show all requests that the user has approved (not just finally approved ones)
+      visibleRequests = filterRequestsByVisibility(
+        allRequests, 
+        user.role as UserRole, 
+        dbUser._id.toString(),
+        'approved'
+      );
+      console.log('[DEBUG] Filtered to user-approved requests:', visibleRequests.length);
     } else if (statusFilter === 'rejected') {
-      // Show only rejected requests
-      visibleRequests = allRequests.filter(req => req.status === RequestStatus.REJECTED);
-      console.log('[DEBUG] Filtered to rejected requests:', visibleRequests.length);
+      // For non-requesters: show requests they approved but were later rejected by someone else
+      visibleRequests = allRequests.filter(req => {
+        // Request must be rejected
+        if (req.status !== RequestStatus.REJECTED) return false;
+        
+        // Check if this user has approved this request in the history
+        const userHasApproved = req.history?.some((h: any) => 
+          (h.actor?._id?.toString() === dbUser._id.toString() || h.actor?.toString() === dbUser._id.toString()) &&
+          (h.action === ActionType.APPROVE || h.action === ActionType.FORWARD)
+        );
+        
+        return userHasApproved;
+      });
+      console.log('[DEBUG] Filtered to user-approved but later rejected requests:', visibleRequests.length);
+    } else if (statusFilter === 'in_progress') {
+      // Show requests that are in progress and visible to this user
+      visibleRequests = filterRequestsByVisibility(
+        allRequests, 
+        user.role as UserRole, 
+        dbUser._id.toString(),
+        'in_progress'
+      );
+      console.log('[DEBUG] Filtered to in-progress requests:', visibleRequests.length);
     } else if (statusFilter === 'all') {
       // Show all requests visible to this role (no category filter)
       visibleRequests = filterRequestsByVisibility(
@@ -107,8 +133,23 @@ export async function GET(request: NextRequest) {
         dbUser._id.toString()
       );
       console.log('[DEBUG] Showing all visible requests:', visibleRequests.length);
+      
+      // Debug: Show breakdown by category
+      const breakdown = {
+        pending: visibleRequests.filter(req => req._visibility?.category === 'pending').length,
+        approved: visibleRequests.filter(req => req._visibility?.category === 'approved').length,
+        in_progress: visibleRequests.filter(req => req._visibility?.category === 'in_progress').length,
+        completed: visibleRequests.filter(req => req._visibility?.category === 'completed').length,
+      };
+      console.log('[DEBUG] All requests breakdown by category:', breakdown);
+      console.log('[DEBUG] Sample visible requests:', visibleRequests.slice(0, 3).map(req => ({
+        id: req._id,
+        title: req.title,
+        status: req.status,
+        visibility: req._visibility
+      })));
     } else {
-      // Default: show only pending approvals
+      // Default: show only pending approvals (when no status filter or status=pending)
       visibleRequests = filterRequestsByVisibility(
         allRequests, 
         user.role as UserRole, 

@@ -119,10 +119,32 @@ export async function GET(request: NextRequest) {
           visibleRequests = visibleRequests.filter(req => req._visibility?.category === 'pending');
         }
       } else if (statusFilter === 'approved') {
-        // Approved requests = only requests that have been fully approved by Chairman
-        visibleRequests = visibleRequests.filter(req => req.status === RequestStatus.APPROVED);
+        if (user.role === UserRole.REQUESTER) {
+          // For requesters: show only requests that have been fully approved by Chairman
+          visibleRequests = visibleRequests.filter(req => req.status === RequestStatus.APPROVED);
+        } else {
+          // For non-requesters: show requests that they have approved (regardless of current status)
+          visibleRequests = visibleRequests.filter(req => req._visibility?.category === 'approved');
+        }
       } else if (statusFilter === 'rejected') {
-        visibleRequests = visibleRequests.filter(req => req.status === RequestStatus.REJECTED);
+        if (user.role === UserRole.REQUESTER) {
+          // For requesters: show requests that were rejected at any stage
+          visibleRequests = visibleRequests.filter(req => req.status === RequestStatus.REJECTED);
+        } else {
+          // For non-requesters: show requests they approved but were later rejected by someone else
+          visibleRequests = visibleRequests.filter(req => {
+            // Request must be rejected AND user must have approved it at some point
+            if (req.status !== RequestStatus.REJECTED) return false;
+            
+            // Check if this user has approved this request in the history
+            const userHasApproved = req.history?.some((h: any) => 
+              (h.actor?._id?.toString() === dbUser!._id.toString() || h.actor?.toString() === dbUser!._id.toString()) &&
+              (h.action === ActionType.APPROVE || h.action === ActionType.FORWARD)
+            );
+            
+            return userHasApproved;
+          });
+        }
       } else if (statusFilter === 'all') {
         // Show all visible requests (no additional filtering)
         // visibleRequests already contains all visible requests
@@ -229,7 +251,7 @@ export async function POST(request: NextRequest) {
     console.log('[DEBUG] Request created successfully:', {
       requestId: newRequest._id,
       title: validatedData.title,
-      requester: user.email
+      requester: user!.email
     });
 
     return NextResponse.json(populatedRequest, { status: 201 });
