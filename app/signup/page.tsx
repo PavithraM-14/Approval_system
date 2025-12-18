@@ -45,13 +45,13 @@ export default function SignupPage() {
     'bg-white shadow-sm placeholder-gray-500 text-gray-900 ' +
     'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition';
 
-  const validateEmail = () => {
+  /*const validateEmail = () => {
     if (email && !email.endsWith('@srmrmp.edu.in')) {
       setError('Only @srmrmp.edu.in emails are allowed');
     } else {
       setError('');
     }
-  };
+  };*/
 
   // ✅ Contact number validation
   const validateContactNo = () => {
@@ -76,11 +76,11 @@ export default function SignupPage() {
       return;
     }
 
-    if (!email.endsWith('@srmrmp.edu.in')) {
+    /*if (!email.endsWith('@srmrmp.edu.in')) {
       setError('Only @srmrmp.edu.in emails are allowed');
       setLoading(false);
       return;
-    }
+    }*/
 
     // ✅ Validate contact number before submission
     const contactDigits = contactNo.replace(/\D/g, '');
@@ -206,7 +206,7 @@ export default function SignupPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                onBlur={validateEmail}
+                /*onBlur={validateEmail}*/
                 placeholder="name@srmrmp.edu.in"
                 className={inputClass}
               />

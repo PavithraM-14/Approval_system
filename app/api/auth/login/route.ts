@@ -27,9 +27,9 @@ export async function POST(request: NextRequest) {
     }
     
     // Validate email domain
-    if (!email.endsWith('@srmrmp.edu.in')) {
+    /*if (!email.endsWith('@srmrmp.edu.in')) {
       return NextResponse.json({ error: 'Only @srmrmp.edu.in emails are allowed' }, { status: 400 });
-    }
+    }*/
     
     // Find user
     const user = await User.findOne({ email });

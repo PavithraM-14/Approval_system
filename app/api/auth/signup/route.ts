@@ -25,9 +25,9 @@ export async function POST(request: NextRequest) {
     const formattedContactNo = `+91 ${contactNoDigits}`;
     
     // Validate email domain
-    if (!email.endsWith('@srmrmp.edu.in')) {
+    /*if (!email.endsWith('@srmrmp.edu.in')) {
       return NextResponse.json({ error: 'Only @srmrmp.edu.in emails are allowed' }, { status: 400 });
-    }
+    }*/
     
     // Validate role
     if (!Object.values(UserRole).includes(role)) {
