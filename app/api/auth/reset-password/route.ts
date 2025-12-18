@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
-import bcrypt from 'bcryptjs';
 
 export async function POST(req: NextRequest) {
   try {
@@ -58,11 +57,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
     // Update password and clear OTP
-    user.password = hashedPassword;
+    // Don't hash here - let the User model's pre-save hook handle it
+    user.password = newPassword;
     user.otp = undefined;
     user.otpExpiry = undefined;
     await user.save();
