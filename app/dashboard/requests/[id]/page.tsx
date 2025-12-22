@@ -242,7 +242,36 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
     }
   };
 
-  const handleApprove = async (notes: string, attachments: string[]) => {
+  const handleForward = async (notes: string, attachments: string[]) => {
+    try {
+      setProcessingApproval(true);
+      const response = await fetch(`/api/requests/${params.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'forward',
+          notes,
+          attachments
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to forward request');
+      }
+
+      await fetchRequest();
+      setIsApprovalModalOpen(false);
+
+    } catch (err) {
+      console.error('Forward error:', err);
+      throw err;
+    } finally {
+      setProcessingApproval(false);
+    }
+  };
+
+  const handleApprove = async (notes: string, attachments: string[], sopReference?: string, budgetAvailable?: boolean) => {
     try {
       setProcessingApproval(true);
       const response = await fetch(`/api/requests/${params.id}/approve`, {
@@ -251,7 +280,9 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         body: JSON.stringify({
           action: 'approve',
           notes,
-          attachments
+          attachments,
+          sopReference,
+          budgetAvailable
         }),
       });
       
@@ -767,6 +798,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         onApprove={handleApprove}
         onReject={handleReject}
         onRejectWithClarification={handleRejectWithClarification}
+        onForward={handleForward}
         loading={processingApproval}
       />
 

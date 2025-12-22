@@ -236,6 +236,16 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
                         </span>
                       </div>
                     )}
+
+                    {/* SOP Reference */}
+                    {(historyItem as any).sopReference && (
+                      <div className="mt-2 text-sm">
+                        <span className="font-medium text-gray-700">SOP Reference:</span>{' '}
+                        <span className="text-blue-600 font-mono font-medium">
+                          {(historyItem as any).sopReference}
+                        </span>
+                      </div>
+                    )}
                     
                     {/* Attachments */}
                     {historyItem.attachments && historyItem.attachments.length > 0 && (

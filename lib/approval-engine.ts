@@ -13,8 +13,10 @@ export const approvalEngine = {
     { from: RequestStatus.PARALLEL_VERIFICATION, to: RequestStatus.SOP_COMPLETED, requiredRole: UserRole.SOP_VERIFIER },
     { from: RequestStatus.PARALLEL_VERIFICATION, to: RequestStatus.BUDGET_COMPLETED, requiredRole: UserRole.ACCOUNTANT },
 
-    { from: RequestStatus.SOP_COMPLETED, to: RequestStatus.MANAGER_REVIEW, requiredRole: UserRole.ACCOUNTANT },
-    { from: RequestStatus.BUDGET_COMPLETED, to: RequestStatus.MANAGER_REVIEW, requiredRole: UserRole.SOP_VERIFIER },
+    { from: RequestStatus.SOP_COMPLETED, to: RequestStatus.INSTITUTION_VERIFIED, requiredRole: UserRole.ACCOUNTANT },
+    { from: RequestStatus.BUDGET_COMPLETED, to: RequestStatus.INSTITUTION_VERIFIED, requiredRole: UserRole.SOP_VERIFIER },
+
+    { from: RequestStatus.INSTITUTION_VERIFIED, to: RequestStatus.VP_APPROVAL, requiredRole: UserRole.INSTITUTION_MANAGER },
 
     { from: RequestStatus.MANAGER_REVIEW, to: RequestStatus.VP_APPROVAL, requiredRole: UserRole.INSTITUTION_MANAGER },
     { from: RequestStatus.MANAGER_REVIEW, to: RequestStatus.DEAN_REVIEW, requiredRole: UserRole.INSTITUTION_MANAGER },
@@ -73,6 +75,9 @@ export const approvalEngine = {
         if (currentStatus === RequestStatus.MANAGER_REVIEW && action === ActionType.FORWARD) {
           return RequestStatus.PARALLEL_VERIFICATION;
         }
+        if (currentStatus === RequestStatus.INSTITUTION_VERIFIED && action === ActionType.APPROVE) {
+          return RequestStatus.VP_APPROVAL;
+        }
         break;
 
       case UserRole.SOP_VERIFIER:
@@ -80,7 +85,7 @@ export const approvalEngine = {
           return RequestStatus.SOP_COMPLETED;
         }
         if (currentStatus === RequestStatus.BUDGET_COMPLETED) {
-          return RequestStatus.MANAGER_REVIEW;
+          return RequestStatus.INSTITUTION_VERIFIED;
         }
         break;
 
@@ -89,7 +94,7 @@ export const approvalEngine = {
           return RequestStatus.BUDGET_COMPLETED;
         }
         if (currentStatus === RequestStatus.SOP_COMPLETED) {
-          return RequestStatus.MANAGER_REVIEW;
+          return RequestStatus.INSTITUTION_VERIFIED;
         }
         break;
 
@@ -107,17 +112,32 @@ export const approvalEngine = {
 
       case UserRole.DEAN:
         if (currentStatus === RequestStatus.DEAN_REVIEW && action !== ActionType.CLARIFY) {
+          // Check if this request came from budget not available path
+          const budgetNotAvailable = context?.budgetNotAvailable;
+          if (budgetNotAvailable) {
+            // Budget not available path → Always go to Chairman
+            return RequestStatus.CHAIRMAN_APPROVAL;
+          }
+          // Normal flow (budget available) → Dean → Chief Director
           return RequestStatus.CHIEF_DIRECTOR_APPROVAL;
         }
         break;
 
       case UserRole.CHIEF_DIRECTOR:
         if (currentStatus === RequestStatus.CHIEF_DIRECTOR_APPROVAL) {
-          // ✅ COST BASED DECISION
-          if (cost > 50000) {
-            return RequestStatus.CHAIRMAN_APPROVAL;
+          const budgetNotAvailable = context?.budgetNotAvailable;
+          
+          if (budgetNotAvailable) {
+            // Budget not available path → This should not happen as Dean goes directly to Chairman
+            // But if it does happen, approve it
+            return RequestStatus.APPROVED;
+          } else {
+            // Normal budget available path → Cost-based decision
+            if (cost > 50000) {
+              return RequestStatus.CHAIRMAN_APPROVAL;
+            }
+            return RequestStatus.APPROVED;
           }
-          return RequestStatus.APPROVED; // 🔥 STOP HERE
         }
         break;
 

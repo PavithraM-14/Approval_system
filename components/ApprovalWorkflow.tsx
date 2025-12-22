@@ -63,7 +63,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus }) =>
   const isClarificationStatus = ['sop_clarification', 'budget_clarification', 'clarification_required', 'department_checks'].includes(currentStatus);
   
   // Check if current status is a parallel verification status
-  const isParallelStatus = ['parallel_verification', 'sop_completed', 'budget_completed'].includes(currentStatus);
+  const isParallelStatus = ['parallel_verification', 'sop_completed', 'budget_completed', 'institution_verified'].includes(currentStatus);
   
   // Find the index of the current status in main workflow
   const currentStatusIndex = workflowSteps.findIndex(step => step.id === currentStatus);
@@ -116,6 +116,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus }) =>
                   {currentStatus === 'parallel_verification' && 'Both SOP Verifier and Accountant are working on verification simultaneously'}
                   {currentStatus === 'sop_completed' && 'SOP verification complete. Waiting for budget verification to finish.'}
                   {currentStatus === 'budget_completed' && 'Budget verification complete. Waiting for SOP verification to finish.'}
+                  {currentStatus === 'institution_verified' && 'Both SOP and Budget verifications complete. Waiting for Institution Manager final approval.'}
                 </p>
               </div>
             </div>

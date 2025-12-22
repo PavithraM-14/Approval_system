@@ -1119,6 +1119,304 @@ async function seed() {
       });
       requests.push(leaveRequestMixedCase);
 
+      // ===== COST-BASED APPROVAL TESTING SCENARIOS =====
+      
+      // Low Cost Request 1: ₹30,000 - Should stop at Chief Director
+      const lowCostRequest1 = await Request.create({
+        title: 'Office Supplies Purchase',
+        purpose: 'Purchase of basic office supplies including stationery, printer cartridges, and desk accessories.',
+        college: colleges[0],
+        department: departments[0],
+        costEstimate: 30000, // ≤ ₹50,000 - Should stop at Chief Director
+        expenseCategory: 'Equipment',
+        sopReference: sopRecords[0].code,
+        attachments: [],
+        requester: requester._id,
+        status: RequestStatus.CHIEF_DIRECTOR_APPROVAL,
+        history: [
+          {
+            action: ActionType.CREATE,
+            actor: requester._id,
+            timestamp: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.MANAGER_REVIEW,
+            notes: 'Request created and forwarded to manager'
+          },
+          {
+            action: ActionType.FORWARD,
+            actor: manager._id,
+            timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.VP_APPROVAL,
+            notes: 'Manager approved, forwarded to VP'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: vp._id,
+            timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.HOI_APPROVAL,
+            notes: 'VP approved, forwarded to HOI'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: hoi._id,
+            timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.DEAN_REVIEW,
+            notes: 'HOI approved, forwarded to Dean'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: dean._id,
+            timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.CHIEF_DIRECTOR_APPROVAL,
+            notes: 'Dean approved, forwarded to Chief Director'
+          }
+        ]
+      });
+      requests.push(lowCostRequest1);
+
+      // Low Cost Request 2: ₹45,000 - Should stop at Chief Director
+      const lowCostRequest2 = await Request.create({
+        title: 'Minor Equipment Repair',
+        purpose: 'Repair and maintenance of existing laboratory equipment including calibration and parts replacement.',
+        college: colleges[1],
+        department: departments[1],
+        costEstimate: 45000, // ≤ ₹50,000 - Should stop at Chief Director
+        expenseCategory: 'Equipment',
+        sopReference: sopRecords[1].code,
+        attachments: [],
+        requester: requester._id,
+        status: RequestStatus.APPROVED, // Already approved by Chief Director (cost ≤ ₹50,000)
+        history: [
+          {
+            action: ActionType.CREATE,
+            actor: requester._id,
+            timestamp: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.MANAGER_REVIEW,
+            notes: 'Request created and forwarded to manager'
+          },
+          {
+            action: ActionType.FORWARD,
+            actor: manager._id,
+            timestamp: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.VP_APPROVAL,
+            notes: 'Manager approved, forwarded to VP'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: vp._id,
+            timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.HOI_APPROVAL,
+            notes: 'VP approved, forwarded to HOI'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: hoi._id,
+            timestamp: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.DEAN_REVIEW,
+            notes: 'HOI approved, forwarded to Dean'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: dean._id,
+            timestamp: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.CHIEF_DIRECTOR_APPROVAL,
+            notes: 'Dean approved, forwarded to Chief Director'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: chiefDirector._id,
+            timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.APPROVED,
+            notes: 'Chief Director approved - Final approval (cost ≤ ₹50,000, no Chairman required)'
+          }
+        ]
+      });
+      requests.push(lowCostRequest2);
+
+      // Boundary Test: ₹50,000 exactly - Should stop at Chief Director
+      const boundaryCostRequest = await Request.create({
+        title: 'Software License - Boundary Test',
+        purpose: 'Purchase of software license for department use - exactly at ₹50,000 boundary.',
+        college: colleges[2],
+        department: departments[2],
+        costEstimate: 50000, // = ₹50,000 - Should stop at Chief Director
+        expenseCategory: 'Software',
+        sopReference: sopRecords[2].code,
+        attachments: [],
+        requester: requester._id,
+        status: RequestStatus.APPROVED, // Already approved by Chief Director (cost ≤ ₹50,000)
+        history: [
+          {
+            action: ActionType.CREATE,
+            actor: requester._id,
+            timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.MANAGER_REVIEW,
+            notes: 'Request created and forwarded to manager'
+          },
+          {
+            action: ActionType.FORWARD,
+            actor: manager._id,
+            timestamp: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.VP_APPROVAL,
+            notes: 'Manager approved, forwarded to VP'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: vp._id,
+            timestamp: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.HOI_APPROVAL,
+            notes: 'VP approved, forwarded to HOI'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: hoi._id,
+            timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.DEAN_REVIEW,
+            notes: 'HOI approved, forwarded to Dean'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: dean._id,
+            timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.CHIEF_DIRECTOR_APPROVAL,
+            notes: 'Dean approved, forwarded to Chief Director'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: chiefDirector._id,
+            timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.APPROVED,
+            notes: 'Chief Director approved - Final approval (cost = ₹50,000, no Chairman required)'
+          }
+        ]
+      });
+      requests.push(boundaryCostRequest);
+
+      // ===== BUDGET NOT AVAILABLE FLOW TEST SCENARIOS =====
+      
+      // Budget Not Available 1: High cost (₹75,000) - Should go Dean → Chairman
+      const budgetNotAvailableHighCost = await Request.create({
+        title: 'High Cost Equipment - Budget Not Available',
+        purpose: 'Purchase of specialized equipment when budget is not available - should go to Chairman due to high cost.',
+        college: colleges[0],
+        department: departments[1],
+        costEstimate: 75000, // > ₹50,000 - Should go Dean → Chairman
+        expenseCategory: 'Equipment',
+        sopReference: sopRecords[0].code,
+        attachments: [],
+        requester: requester._id,
+        status: RequestStatus.CHAIRMAN_APPROVAL,
+        budgetNotAvailable: true, // Flag indicating budget not available path
+        history: [
+          {
+            action: ActionType.CREATE,
+            actor: requester._id,
+            timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.MANAGER_REVIEW,
+            notes: 'Request created and forwarded to manager'
+          },
+          {
+            action: ActionType.FORWARD,
+            actor: manager._id,
+            timestamp: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.DEAN_REVIEW,
+            notes: 'Budget not available, forwarded directly to Dean'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: dean._id,
+            timestamp: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.CHAIRMAN_APPROVAL,
+            notes: 'Dean approved - High cost (₹75,000) with no budget, forwarded to Chairman'
+          }
+        ]
+      });
+      requests.push(budgetNotAvailableHighCost);
+
+      // Budget Not Available 2: Low cost (₹35,000) - Should go Dean → Chairman
+      const budgetNotAvailableLowCost = await Request.create({
+        title: 'Low Cost Supplies - Budget Not Available',
+        purpose: 'Purchase of office supplies when budget is not available - should go to Chairman regardless of cost.',
+        college: colleges[1],
+        department: departments[2],
+        costEstimate: 35000, // ≤ ₹50,000 - But still goes Dean → Chairman (budget not available)
+        expenseCategory: 'Equipment',
+        sopReference: sopRecords[1].code,
+        attachments: [],
+        requester: requester._id,
+        status: RequestStatus.APPROVED, // Already approved by Chairman
+        budgetNotAvailable: true, // Flag indicating budget not available path
+        history: [
+          {
+            action: ActionType.CREATE,
+            actor: requester._id,
+            timestamp: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.MANAGER_REVIEW,
+            notes: 'Request created and forwarded to manager'
+          },
+          {
+            action: ActionType.FORWARD,
+            actor: manager._id,
+            timestamp: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.DEAN_REVIEW,
+            notes: 'Budget not available, forwarded directly to Dean'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: dean._id,
+            timestamp: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.CHAIRMAN_APPROVAL,
+            notes: 'Dean approved - Budget not available, forwarded to Chairman'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: chairman._id,
+            timestamp: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.APPROVED,
+            notes: 'Chairman approved - Final approval for budget not available request'
+          }
+        ]
+      });
+      requests.push(budgetNotAvailableLowCost);
+
+      // Budget Not Available 3: No cost (₹0) - Should go Dean → Chairman
+      const budgetNotAvailableNoCost = await Request.create({
+        title: 'No Cost Request - Budget Not Available',
+        purpose: 'Administrative request with no cost when budget is not available - should go to Chairman regardless of cost.',
+        college: colleges[2],
+        department: departments[0],
+        costEstimate: 0, // No cost - But still goes Dean → Chairman (budget not available)
+        expenseCategory: 'Administrative',
+        sopReference: sopRecords[2].code,
+        attachments: [],
+        requester: requester._id,
+        status: RequestStatus.CHAIRMAN_APPROVAL, // Pending at Chairman
+        budgetNotAvailable: true, // Flag indicating budget not available path
+        history: [
+          {
+            action: ActionType.CREATE,
+            actor: requester._id,
+            timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.MANAGER_REVIEW,
+            notes: 'Request created and forwarded to manager'
+          },
+          {
+            action: ActionType.FORWARD,
+            actor: manager._id,
+            timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.DEAN_REVIEW,
+            notes: 'Budget not available, forwarded directly to Dean'
+          },
+          {
+            action: ActionType.APPROVE,
+            actor: dean._id,
+            timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+            newStatus: RequestStatus.CHAIRMAN_APPROVAL,
+            notes: 'Dean approved - Budget not available, forwarded to Chairman'
+          }
+        ]
+      });
+      requests.push(budgetNotAvailableNoCost);
+
       console.log(`✅ Created ${requests.length} sample requests with realistic workflow scenarios`);
       console.log('📊 Request scenarios created:');
       console.log('   • 3 Fully approved requests (Chairman approved)');
@@ -1135,6 +1433,14 @@ async function seed() {
       console.log('     - VP rejected → Requester clarified → VP reviewing (Below Dean)');
       console.log('     - HOI rejected → Requester clarifying (Below Dean)');
       console.log('     - Chief Director → Dean → Requester → Dean reviewing (Above Dean)');
+      console.log('   • 3 COST-BASED APPROVAL TEST scenarios:');
+      console.log('     - ₹30,000 request (pending at Chief Director - should stop here)');
+      console.log('     - ₹45,000 request (approved by Chief Director - stopped correctly)');
+      console.log('     - ₹50,000 request (approved by Chief Director - boundary test)');
+      console.log('   • 3 BUDGET NOT AVAILABLE FLOW scenarios:');
+      console.log('     - ₹75,000 request (Manager → Dean → Chairman - high cost)');
+      console.log('     - ₹35,000 request (Manager → Dean → Chief Director - low cost)');
+      console.log('     - ₹0 request (Manager → Dean → Chief Director - no cost)');
     }
 
     console.log('🎉 Database seeded successfully!');

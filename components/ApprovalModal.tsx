@@ -15,9 +15,10 @@ interface ApprovalModalProps {
     status?: string;
   };
   userRole: string;
-  onApprove: (notes: string, attachments: string[]) => void;
+  onApprove: (notes: string, attachments: string[], sopReference?: string, budgetAvailable?: boolean) => void;
   onReject: (notes: string) => void;
   onRejectWithClarification: (clarificationRequest: string, attachments: string[]) => void;
+  onForward?: (notes: string, attachments: string[]) => void;
   loading?: boolean;
 }
 
@@ -29,21 +30,71 @@ export default function ApprovalModal({
   onApprove,
   onReject,
   onRejectWithClarification,
+  onForward,
   loading = false
 }: ApprovalModalProps) {
-  const [action, setAction] = useState<'approve' | 'reject' | 'reject_with_clarification'>('reject');
+  const [action, setAction] = useState<'approve' | 'reject' | 'reject_with_clarification' | 'forward'>(
+    userRole === 'institution_manager' && request.status === 'manager_review' ? 'forward' : 'approve'
+  );
   const [notes, setNotes] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);
+  
+  // SOP specific fields
+  const [sopReference, setSopReference] = useState('');
+  const [sopReferenceAvailable, setSopReferenceAvailable] = useState<boolean | null>(null);
+  
+  // Accountant specific fields
+  const [budgetAvailable, setBudgetAvailable] = useState<boolean | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
   const handleSubmit = () => {
+    // Validation for SOP Verifier
+    if (userRole === 'sop_verifier') {
+      if (sopReferenceAvailable === null) {
+        alert('Please select whether SOP reference is available or not');
+        return;
+      }
+      if (sopReferenceAvailable && !sopReference.trim()) {
+        alert('Please enter the SOP reference number');
+        return;
+      }
+      // For SOP, always approve - no other actions allowed
+      const finalSopReference = sopReferenceAvailable ? sopReference : undefined;
+      onApprove(notes, attachments, finalSopReference, undefined);
+      return;
+    }
+    
+    // Validation for Accountant
+    if (userRole === 'accountant') {
+      if (budgetAvailable === null) {
+        alert('Please select whether budget is available or not');
+        return;
+      }
+      // For Accountant, always approve - no other actions allowed
+      onApprove(notes, attachments, undefined, budgetAvailable);
+      return;
+    }
+
+    // For Institution Manager in manager_review status, handle forward action
+    if (userRole === 'institution_manager' && request.status === 'manager_review' && action === 'forward') {
+      if (onForward) {
+        onForward(notes, attachments);
+      } else {
+        alert('Forward action not configured');
+      }
+      return;
+    }
+
+    // For other roles and actions, handle different actions
     switch (action) {
       case 'approve':
-        onApprove(notes, attachments);
+      case 'forward':
+        onApprove(notes, attachments, undefined, undefined);
         break;
       case 'reject':
         if (!notes.trim()) {
@@ -63,11 +114,14 @@ export default function ApprovalModal({
   };
 
   const resetForm = () => {
-    setAction('reject');
+    setAction('approve');
     setNotes('');
     setAttachments([]);
     setUrlInput('');
     setShowUrlInput(false);
+    setSopReference('');
+    setSopReferenceAvailable(null);
+    setBudgetAvailable(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -82,7 +136,7 @@ export default function ApprovalModal({
     if (urlInput.trim()) {
       setAttachments(prev => [...prev, urlInput.trim()]);
       setUrlInput('');
-      setShowUrlInput(false); // Hide the input after adding URL
+      setShowUrlInput(false);
     }
   };
 
@@ -132,6 +186,9 @@ export default function ApprovalModal({
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  const isSopVerifier = userRole === 'sop_verifier';
+  const isAccountant = userRole === 'accountant';
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -140,7 +197,7 @@ export default function ApprovalModal({
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h3 className="text-xl font-semibold text-gray-900 mb-1">
-              Process Request
+              {isSopVerifier ? 'SOP Verification' : isAccountant ? 'Budget Verification' : 'Process Request'}
             </h3>
             <p className="text-sm text-gray-500">
               Current status: <span className="font-mono">{request.status || 'pending'}</span>
@@ -174,6 +231,127 @@ export default function ApprovalModal({
               <p className="text-sm text-gray-900">{request.purpose}</p>
             </div>
           </div>
+
+          {/* SOP Verifier Specific Section */}
+          {isSopVerifier && (
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <h4 className="text-lg font-medium text-blue-900 mb-4">SOP Reference Verification</h4>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Is SOP reference available for this request?
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="sopAvailable"
+                        checked={sopReferenceAvailable === true}
+                        onChange={() => setSopReferenceAvailable(true)}
+                        className="mr-2"
+                        disabled={loading}
+                      />
+                      <span className="text-sm">Yes, reference available</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="sopAvailable"
+                        checked={sopReferenceAvailable === false}
+                        onChange={() => setSopReferenceAvailable(false)}
+                        className="mr-2"
+                        disabled={loading}
+                      />
+                      <span className="text-sm">No, not available</span>
+                    </label>
+                  </div>
+                </div>
+
+                {sopReferenceAvailable === true && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      SOP Reference Number *
+                    </label>
+                    <input
+                      type="text"
+                      value={sopReference}
+                      onChange={(e) => setSopReference(e.target.value)}
+                      placeholder="Enter SOP reference number (e.g., SOP-2024-001)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={loading}
+                    />
+                  </div>
+                )}
+
+                {sopReferenceAvailable === false && (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-800">
+                      <strong>Note:</strong> No SOP reference is available for this type of request. 
+                      This will be recorded in the approval history.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Accountant Specific Section */}
+          {isAccountant && (
+            <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+              <h4 className="text-lg font-medium text-green-900 mb-4">Budget Verification</h4>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Budget Status for ₹{request.costEstimate.toLocaleString()}
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="budgetStatus"
+                        checked={budgetAvailable === true}
+                        onChange={() => setBudgetAvailable(true)}
+                        className="mr-2"
+                        disabled={loading}
+                      />
+                      <span className="text-sm">Budget Available</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="budgetStatus"
+                        checked={budgetAvailable === false}
+                        onChange={() => setBudgetAvailable(false)}
+                        className="mr-2"
+                        disabled={loading}
+                      />
+                      <span className="text-sm">Budget Not Available</span>
+                    </label>
+                  </div>
+                </div>
+
+                {budgetAvailable === true && (
+                  <div className="p-3 bg-green-100 border border-green-300 rounded-lg">
+                    <p className="text-sm text-green-800">
+                      <strong>✓ Budget Available:</strong> Sufficient funds are available for this request. 
+                      The request will proceed through the standard approval workflow.
+                    </p>
+                  </div>
+                )}
+
+                {budgetAvailable === false && (
+                  <div className="p-3 bg-red-100 border border-red-300 rounded-lg">
+                    <p className="text-sm text-red-800">
+                      <strong>⚠ Budget Not Available:</strong> Insufficient funds for this request. 
+                      This will require special approval through the Dean pathway.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           
           {/* Document Attachments Section */}
           <div>
@@ -205,7 +383,7 @@ export default function ApprovalModal({
               </button>
             </div>
 
-            {/* URL Input - Only shown when Add URL is clicked */}
+            {/* URL Input */}
             {showUrlInput && (
               <div className="mb-4 flex gap-2">
                 <input
@@ -268,62 +446,140 @@ export default function ApprovalModal({
           <div>
             <h4 className="text-lg font-medium text-gray-900 mb-3">Action</h4>
             
-            <select
-              value={action}
-              onChange={(e) => setAction(e.target.value as any)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-              disabled={loading}
-            >
-              <option value="reject">Reject</option>
-              <option value="approve">Approve</option>
-              <option value="reject_with_clarification">Request Clarification</option>
-            </select>
+            {(isSopVerifier || isAccountant) ? (
+              // Simplified interface for SOP and Accountant - only approve option
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center">
+                  <CheckCircleIcon className="w-5 h-5 text-green-600 mr-2" />
+                  <span className="font-medium text-green-700">
+                    {isSopVerifier ? 'Complete SOP Verification' : 'Complete Budget Verification'}
+                  </span>
+                </div>
+                <p className="text-sm text-green-600 mt-1">
+                  {isSopVerifier 
+                    ? 'Complete SOP verification and forward to next step' 
+                    : 'Complete budget verification and forward to next step'
+                  }
+                </p>
+              </div>
+            ) : userRole === 'institution_manager' && request.status === 'manager_review' ? (
+              // Special interface for Institution Manager in manager_review status
+              <>
+                <select
+                  value={action}
+                  onChange={(e) => setAction(e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  disabled={loading}
+                >
+                  <option value="forward">Send to SOP & Budget Verification</option>
+                  <option value="reject">Reject</option>
+                  <option value="reject_with_clarification">Request Clarification</option>
+                </select>
 
-            {/* Action Options Display */}
-            <div className="mt-3 space-y-2">
-              {action === 'reject' && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="flex items-center">
-                    <XCircleIcon className="w-5 h-5 text-red-600 mr-2" />
-                    <span className="font-medium text-red-700">Reject</span>
-                  </div>
-                  <p className="text-sm text-red-600 mt-1">Permanently reject this request</p>
+                {/* Action Options Display */}
+                <div className="mt-3 space-y-2">
+                  {action === 'forward' && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center">
+                        <CheckCircleIcon className="w-5 h-5 text-green-600 mr-2" />
+                        <span className="font-medium text-green-700">Send for Parallel Verification</span>
+                      </div>
+                      <p className="text-sm text-green-600 mt-1">
+                        This will send the request to both SOP Verifier and Accountant simultaneously for parallel processing.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {action === 'reject' && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-center">
+                        <XCircleIcon className="w-5 h-5 text-red-600 mr-2" />
+                        <span className="font-medium text-red-700">Reject</span>
+                      </div>
+                      <p className="text-sm text-red-600 mt-1">Permanently reject this request</p>
+                    </div>
+                  )}
+                  
+                  {action === 'reject_with_clarification' && (
+                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div className="flex items-center">
+                        <ExclamationTriangleIcon className="w-5 h-5 text-orange-600 mr-2" />
+                        <span className="font-medium text-orange-700">Request Clarification</span>
+                      </div>
+                      <p className="text-sm text-orange-600 mt-1">
+                        Request additional information from the requester
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-              
-              {action === 'approve' && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center">
-                    <CheckCircleIcon className="w-5 h-5 text-green-600 mr-2" />
-                    <span className="font-medium text-green-700">Approve</span>
-                  </div>
-                  <p className="text-sm text-green-600 mt-1">Approve and forward to next level</p>
+              </>
+            ) : (
+              // Full interface for other roles
+              <>
+                <select
+                  value={action}
+                  onChange={(e) => setAction(e.target.value as any)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  disabled={loading}
+                >
+                  <option value="approve">Approve</option>
+                  <option value="reject">Reject</option>
+                  <option value="reject_with_clarification">Request Clarification</option>
+                </select>
+
+                {/* Action Options Display */}
+                <div className="mt-3 space-y-2">
+                  {action === 'reject' && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-center">
+                        <XCircleIcon className="w-5 h-5 text-red-600 mr-2" />
+                        <span className="font-medium text-red-700">Reject</span>
+                      </div>
+                      <p className="text-sm text-red-600 mt-1">Permanently reject this request</p>
+                    </div>
+                  )}
+                  
+                  {action === 'approve' && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center">
+                        <CheckCircleIcon className="w-5 h-5 text-green-600 mr-2" />
+                        <span className="font-medium text-green-700">Approve</span>
+                      </div>
+                      <p className="text-sm text-green-600 mt-1">Approve and forward to next level</p>
+                    </div>
+                  )}
+                  
+                  {action === 'reject_with_clarification' && (
+                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div className="flex items-center">
+                        <ExclamationTriangleIcon className="w-5 h-5 text-orange-600 mr-2" />
+                        <span className="font-medium text-orange-700">Request Clarification</span>
+                      </div>
+                      <p className="text-sm text-orange-600 mt-1">
+                        Request additional information from the requester
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-              
-              {action === 'reject_with_clarification' && (
-                <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                  <div className="flex items-center">
-                    <ExclamationTriangleIcon className="w-5 h-5 text-orange-600 mr-2" />
-                    <span className="font-medium text-orange-700">Request Clarification</span>
-                  </div>
-                  <p className="text-sm text-orange-600 mt-1">
-                    The Dean has requested clarification from your department. Please provide your response.
-                  </p>
-                </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
 
           {/* Notes Section */}
           <div>
-            <h4 className="text-lg font-medium text-gray-900 mb-3">Notes</h4>
+            <h4 className="text-lg font-medium text-gray-900 mb-3">
+              {(isSopVerifier || isAccountant) ? 'Comments (Optional)' : action === 'approve' ? 'Comments (Optional)' : 'Notes'}
+            </h4>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={
-                action === 'approve' 
-                  ? "Add any comments or notes for this approval..." 
+                isSopVerifier
+                  ? "Add any comments about the SOP verification... (Optional)"
+                  : isAccountant
+                  ? "Add any comments about the budget verification... (Optional)"
+                  : action === 'approve' 
+                  ? "Add any comments or notes for this approval..."
                   : action === 'reject_with_clarification'
                   ? "What additional information or clarification do you need?"
                   : "Please provide a reason for rejection..."
@@ -331,6 +587,11 @@ export default function ApprovalModal({
               className="w-full h-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
               disabled={loading}
             />
+            {(isSopVerifier || isAccountant) && (
+              <p className="text-xs text-gray-500 mt-1">
+                Comments are optional. You can leave this blank if no additional notes are needed.
+              </p>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -345,7 +606,14 @@ export default function ApprovalModal({
             <button
               onClick={handleSubmit}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50"
-              disabled={loading || (action !== 'approve' && !notes.trim())}
+              disabled={loading || (
+                // For SOP and Accountant, only check their specific requirements
+                (isSopVerifier && sopReferenceAvailable === null) ||
+                (isSopVerifier && sopReferenceAvailable === true && !sopReference.trim()) ||
+                (isAccountant && budgetAvailable === null) ||
+                // For other roles, check notes requirement for non-approve actions
+                (!isSopVerifier && !isAccountant && action !== 'approve' && !notes.trim())
+              )}
             >
               {loading ? 'Processing...' : 'Submit'}
             </button>

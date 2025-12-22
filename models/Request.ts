@@ -39,6 +39,7 @@ const requestSchema = new mongoose.Schema(
     budgetAllocated: { type: Number, default: 0 },
     budgetSpent: { type: Number, default: 0 },
     budgetBalance: { type: Number, default: 0 },
+    budgetNotAvailable: { type: Boolean, default: false }, // Flag to track budget not available path
 
     requester: {
       type: mongoose.Schema.Types.ObjectId,

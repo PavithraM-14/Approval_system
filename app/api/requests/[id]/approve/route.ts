@@ -136,16 +136,18 @@ export async function POST(
             nextStatus = RequestStatus.BUDGET_COMPLETED;
           }
         } else if (requestRecord.status === RequestStatus.SOP_COMPLETED && user.role === UserRole.ACCOUNTANT) {
-          // Simplified: accountant just confirms budget availability
-          // After both verifications complete, go back to manager for routing decision
-          nextStatus = RequestStatus.MANAGER_REVIEW;
+          // After both verifications complete, go to Institution Manager for final verification
+          nextStatus = RequestStatus.INSTITUTION_VERIFIED;
         } else if (requestRecord.status === RequestStatus.BUDGET_COMPLETED && user.role === UserRole.SOP_VERIFIER) {
-          // After both verifications complete, go back to manager for routing decision
-          nextStatus = RequestStatus.MANAGER_REVIEW;
+          // After both verifications complete, go to Institution Manager for final verification
+          nextStatus = RequestStatus.INSTITUTION_VERIFIED;
         } else if (requestRecord.status === RequestStatus.BUDGET_CHECK && user.role === UserRole.ACCOUNTANT) {
           // Simplified: accountant just confirms budget availability
           // After accountant approval, always go back to manager for routing decision
           nextStatus = RequestStatus.MANAGER_REVIEW;
+        } else if (requestRecord.status === RequestStatus.INSTITUTION_VERIFIED && user.role === UserRole.INSTITUTION_MANAGER) {
+          // Institution Manager approves after both SOP and Accountant verification
+          nextStatus = RequestStatus.VP_APPROVAL;
         } else {
   // ✅ COST-BASED FINAL APPROVAL LOGIC
   if (
@@ -168,7 +170,8 @@ export async function POST(
         ActionType.APPROVE,
         user.role as UserRole,
         { budgetAvailable,
-          costEstimate: requestRecord.costEstimate
+          costEstimate: requestRecord.costEstimate,
+          budgetNotAvailable: requestRecord.budgetNotAvailable
          }
       ) || requestRecord.status;
   }
@@ -188,6 +191,9 @@ export async function POST(
         if (user.role === UserRole.INSTITUTION_MANAGER && requestRecord.status === RequestStatus.MANAGER_REVIEW) {
           nextStatus = RequestStatus.DEAN_REVIEW;
           actionType = ActionType.FORWARD;
+          // Mark this request as coming from budget not available path
+          if (!updateData.$set) updateData.$set = {};
+          updateData.$set.budgetNotAvailable = true;
         }
         break;
 
@@ -371,6 +377,16 @@ export async function POST(
         historyEntry.budgetAvailable = budgetAvailable;
     }
 
+    // Store SOP reference in history
+    if (user.role === UserRole.SOP_VERIFIER && sopReference) {
+      historyEntry.sopReference = sopReference;
+    }
+
+    // Store budget availability for accountant
+    if (user.role === UserRole.ACCOUNTANT && budgetAvailable !== undefined) {
+      historyEntry.budgetAvailable = budgetAvailable;
+    }
+
     // Store clarification target for Dean to department flow
     if (action === 'clarify' && user.role === UserRole.DEAN && target) {
       historyEntry.clarificationTarget = target;
@@ -385,11 +401,6 @@ export async function POST(
     if (action === 'forward' && [UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT].includes(user.role as UserRole) && 
         requestRecord.status === RequestStatus.DEPARTMENT_CHECKS) {
       historyEntry.departmentResponse = user.role;
-    }
-
-    // Store SOP reference in history
-    if (user.role === UserRole.SOP_VERIFIER && sopReference) {
-      historyEntry.sopReference = sopReference;
     }
 
     // Handle clarification workflow fields
@@ -418,10 +429,10 @@ export async function POST(
       }
     }
 
-    // 🔹 ACCOUNTANT BUDGET AVAILABILITY
-    if (user.role === UserRole.ACCOUNTANT && typeof budgetAvailable === 'boolean') {
-      historyEntry.budgetAvailable = budgetAvailable;
-    }
+    // 🔹 ACCOUNTANT BUDGET AVAILABILITY - already handled above
+    // if (user.role === UserRole.ACCOUNTANT && typeof budgetAvailable === 'boolean') {
+    //   historyEntry.budgetAvailable = budgetAvailable;
+    // }
 
     // PREPARE UPDATE
     const updateData: any = {

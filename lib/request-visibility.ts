@@ -286,17 +286,20 @@ function getAllStatusesForRole(userRole: UserRole): RequestStatus[] {
     [UserRole.REQUESTER]: [],
     [UserRole.INSTITUTION_MANAGER]: [
       RequestStatus.MANAGER_REVIEW,
-      RequestStatus.PARALLEL_VERIFICATION
+      RequestStatus.PARALLEL_VERIFICATION,
+      RequestStatus.INSTITUTION_VERIFIED
     ],
     [UserRole.SOP_VERIFIER]: [
       RequestStatus.SOP_VERIFICATION,
       RequestStatus.PARALLEL_VERIFICATION,
-      RequestStatus.SOP_COMPLETED
+      RequestStatus.SOP_COMPLETED,
+      RequestStatus.BUDGET_COMPLETED
     ],
     [UserRole.ACCOUNTANT]: [
       RequestStatus.BUDGET_CHECK,
       RequestStatus.PARALLEL_VERIFICATION,
-      RequestStatus.BUDGET_COMPLETED
+      RequestStatus.BUDGET_COMPLETED,
+      RequestStatus.SOP_COMPLETED
     ],
     [UserRole.VP]: [RequestStatus.VP_APPROVAL],
     [UserRole.HEAD_OF_INSTITUTION]: [RequestStatus.HOI_APPROVAL],
