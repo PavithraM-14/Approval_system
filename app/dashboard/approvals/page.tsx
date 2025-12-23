@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import ClarificationIndicator from '../../../components/ClarificationIndicator';
 
 interface Request {
@@ -298,15 +299,20 @@ export default function ApprovalsPage() {
           <ul className="divide-y divide-gray-200">
             {requests.map((request) => (
               <li key={request._id}>
-                <div
-                  className="hover:bg-gray-50 hover:scale-[1.01] transition cursor-pointer rounded-xl p-3 sm:p-4 active:scale-[0.99]"
-                  onClick={() => router.push(`/dashboard/requests/${request._id}`)}
+                <Link
+                  href={`/dashboard/requests/${request._id}`}
+                  className="block hover:bg-gray-50 hover:scale-[1.01] transition cursor-pointer rounded-xl p-3 sm:p-4 active:scale-[0.99]"
+                  onClick={() => {
+                    console.log('[NAV] Approvals row Link -> navigating to request id:', request._id);
+                  }}
                 >
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
                     <div className="min-w-0 flex-1">
                       <h3 className="text-base sm:text-lg font-semibold text-blue-700 truncate">
                         {request.title}
                       </h3>
+                      {/* Show the request id to ensure clarity */}
+                      <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">ID: {request._id}</p>
                       <p className="text-xs sm:text-sm text-gray-600 mt-1">
                         Requested by: <span className="font-medium">{request.requester.name}</span>
                       </p>
@@ -326,6 +332,19 @@ export default function ApprovalsPage() {
                         {request.pendingClarification && request.clarificationLevel === currentUser?.role && (
                           <ClarificationIndicator size="sm" showText={false} />
                         )}
+                        {/* Explicit action button to process the request */}
+                        <button
+                          onClick={(e) => { 
+                            e.preventDefault();
+                            e.stopPropagation(); 
+                            console.log('[NAV] Approvals Process button -> navigating to request id:', request._id);
+                            router.push(`/dashboard/requests/${request._id}`); 
+                          }}
+                          className="px-2 sm:px-3 py-1 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap"
+                          aria-label="Process request"
+                        >
+                          Process
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -340,11 +359,11 @@ export default function ApprovalsPage() {
                     <span className="text-xs text-gray-400">
                       Created: {new Date(request.createdAt).toLocaleDateString()}
                     </span>
-                    <span className="text-xs text-blue-600 font-medium">
-                      Click to review →
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-blue-600 font-medium">Click to review →</span>
+                    </div>
                   </div>
-                </div>
+                </Link>
               </li>
             ))}
           </ul>

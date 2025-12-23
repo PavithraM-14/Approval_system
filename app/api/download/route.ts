@@ -3,9 +3,12 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
+// Ensure this route is treated as dynamic to avoid static export analysis errors
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = request.nextUrl;
     const filePath = searchParams.get('file');
     
     if (!filePath) {
@@ -56,7 +59,8 @@ export async function GET(request: NextRequest) {
       contentType = mimeTypes[extension];
     }
 
-    return new NextResponse(fileBuffer, {
+    // Use the standard Web Response to return binary content
+    return new Response(new Uint8Array(fileBuffer), {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `attachment; filename="${fileName}"`,

@@ -95,50 +95,90 @@ export const clarificationEngine = {
    */
   isDeanMediatedClarification(request: any): boolean {
     if (!request.history || request.history.length === 0) return false;
-    
+
     const latestRejection = request.history
-      .filter((h: any) => h.action === 'REJECT_WITH_CLARIFICATION')
+      .filter((h: any) => h.action === 'REJECT_WITH_CLARIFICATION' || (h.requiresClarification && h.clarificationRequest))
       .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-    
+
     if (!latestRejection) return false;
-    
-    // Check if rejection came from above Dean level - only Chairman and Chief Director
-    const aboveDeanRoles = ['chief_director', 'chairman'];
-    return latestRejection.actor?.role && aboveDeanRoles.includes(latestRejection.actor.role);
+
+    // Identify above Dean level by the stage that issued the rejection
+    const aboveDeanStatuses = [
+      RequestStatus.CHIEF_DIRECTOR_APPROVAL,
+      RequestStatus.CHAIRMAN_APPROVAL,
+    ];
+    return !!latestRejection.previousStatus && aboveDeanStatuses.includes(latestRejection.previousStatus);
   },
 
   /**
    * Get the original rejector for Dean-mediated queries
    */
-  getOriginalRejector(request: any): any | null {
+  getOriginalRejector(request: any): { role: string; name?: string } | null {
     if (!request.history || request.history.length === 0) return null;
-    
+
     const latestRejection = request.history
-      .filter((h: any) => h.action === 'REJECT_WITH_CLARIFICATION')
+      .filter((h: any) => h.action === 'REJECT_WITH_CLARIFICATION' || (h.requiresClarification && h.clarificationRequest))
       .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-    
-    return latestRejection?.actor || null;
+
+    if (!latestRejection || !latestRejection.previousStatus) return null;
+
+    // Derive role string from the status that performed the rejection
+    const statusToRoleMap: Record<string, string> = {
+      [RequestStatus.CHAIRMAN_APPROVAL]: 'chairman',
+      [RequestStatus.CHIEF_DIRECTOR_APPROVAL]: 'chief_director',
+      [RequestStatus.HOI_APPROVAL]: 'head_of_institution',
+      [RequestStatus.DEAN_REVIEW]: 'dean',
+      [RequestStatus.VP_APPROVAL]: 'vp',
+      [RequestStatus.MANAGER_REVIEW]: 'institution_manager',
+      [RequestStatus.PARALLEL_VERIFICATION]: 'parallel_verification',
+      [RequestStatus.SOP_VERIFICATION]: 'sop_verifier',
+      [RequestStatus.BUDGET_CHECK]: 'accountant',
+    };
+
+    const role = statusToRoleMap[latestRejection.previousStatus];
+    if (!role) return null;
+
+    const roleDisplayMap: Record<string, string> = {
+      'chairman': 'Chairman',
+      'chief_director': 'Chief Director',
+      'head_of_institution': 'Head of Institution',
+      'dean': 'Dean',
+      'vp': 'Vice President',
+      'institution_manager': 'Institution Manager',
+      'sop_verifier': 'SOP Verifier',
+      'accountant': 'Accountant',
+      'parallel_verification': 'Parallel Verification',
+    };
+
+    return { role, name: roleDisplayMap[role] };
   },
 
   /**
    * Get the status to return to after response is provided
    */
   getReturnStatus(request: any): RequestStatus | null {
-    const originalRejector = this.getOriginalRejector(request);
-    if (!originalRejector) return null;
-    
-    // Map rejector roles to their corresponding statuses
-    const roleToStatusMap: Record<string, RequestStatus> = {
-      'chairman': RequestStatus.CHAIRMAN_APPROVAL,
-      'chief_director': RequestStatus.CHIEF_DIRECTOR_APPROVAL,
-      'head_of_institution': RequestStatus.HOI_APPROVAL,
-      'dean': RequestStatus.DEAN_REVIEW,
-      'vp': RequestStatus.VP_APPROVAL,
-      'institution_manager': RequestStatus.MANAGER_REVIEW,
-      'sop_verifier': RequestStatus.PARALLEL_VERIFICATION,
-      'accountant': RequestStatus.PARALLEL_VERIFICATION
+    if (!request.history || request.history.length === 0) return null;
+
+    const latestRejection = request.history
+      .filter((h: any) => h.action === 'REJECT_WITH_CLARIFICATION' || (h.requiresClarification && h.clarificationRequest))
+      .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+
+    if (!latestRejection || !latestRejection.previousStatus) return null;
+
+    // Return to the stage that issued the rejection
+    const statusToReturnMap: Record<string, RequestStatus> = {
+      [RequestStatus.CHAIRMAN_APPROVAL]: RequestStatus.CHAIRMAN_APPROVAL,
+      [RequestStatus.CHIEF_DIRECTOR_APPROVAL]: RequestStatus.CHIEF_DIRECTOR_APPROVAL,
+      [RequestStatus.HOI_APPROVAL]: RequestStatus.HOI_APPROVAL,
+      [RequestStatus.DEAN_REVIEW]: RequestStatus.DEAN_REVIEW,
+      [RequestStatus.VP_APPROVAL]: RequestStatus.VP_APPROVAL,
+      [RequestStatus.MANAGER_REVIEW]: RequestStatus.MANAGER_REVIEW,
+      // Parallel verification: send back to the combined stage
+      [RequestStatus.PARALLEL_VERIFICATION]: RequestStatus.PARALLEL_VERIFICATION,
+      [RequestStatus.SOP_VERIFICATION]: RequestStatus.PARALLEL_VERIFICATION,
+      [RequestStatus.BUDGET_CHECK]: RequestStatus.PARALLEL_VERIFICATION,
     };
-    
-    return roleToStatusMap[originalRejector.role] || null;
+
+    return statusToReturnMap[latestRejection.previousStatus] || null;
   }
 };

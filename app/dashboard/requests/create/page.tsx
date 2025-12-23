@@ -121,7 +121,7 @@ export default function CreateRequestPage() {
     const files = e.target.files;
     if (!files?.length) return;
 
-    const validFiles = [...files].filter(f => f.type === 'application/pdf');
+    const validFiles = Array.from(files).filter(f => f.type === 'application/pdf');
     if (validFiles.length !== files.length) {
       setError('Only PDF documents are allowed.');
       return;

@@ -50,13 +50,13 @@ export const approvalEngine = {
   ],
 
   getRequiredApprover(status: RequestStatus): UserRole[] {
-    return [
-      ...new Set(
+    return Array.from(
+      new Set(
         this.transitions
           .filter(t => t.from === status)
           .flatMap(t => Array.isArray(t.requiredRole) ? t.requiredRole : [t.requiredRole])
       )
-    ];
+    );
   },
 
   getNextStatus(

@@ -698,6 +698,62 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             </div>
           )}
 
+          
+
+          {/* Clarification Response Attachments (latest) */}
+          {(() => {
+            const latestRequesterClarification = request.history
+              ?.filter((h: any) => h.action === 'CLARIFY_AND_REAPPROVE' && h.actor?.role === 'requester' && (h.clarificationAttachments?.length > 0))
+              ?.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+
+            if (!latestRequesterClarification) return null;
+
+            const files: string[] = latestRequesterClarification.clarificationAttachments || [];
+            return (
+              <div className="mt-4 sm:mt-6">
+                <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-2">Clarification Response Attachments</h4>
+                <div className="border rounded-lg divide-y divide-gray-200">
+                  {files.map((a, i) => {
+                    const fileName = a.split('/').pop();
+                    const isPDF = fileName?.toLowerCase().endsWith('.pdf');
+                    return (
+                      <div key={i} className="p-3 flex flex-col xs:flex-row xs:justify-between xs:items-center gap-2 bg-blue-50">
+                        <span className="text-xs sm:text-sm break-all flex-1 min-w-0 text-blue-800">{fileName}</span>
+                        <div className="flex gap-2">
+                          {isPDF && (
+                            <a
+                              href={`/api/view?file=${encodeURIComponent(a)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-green-600 hover:text-green-800 transition-colors text-xs sm:text-sm font-medium px-2 py-1 rounded bg-green-50 hover:bg-green-100 whitespace-nowrap flex items-center gap-1"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                              View
+                            </a>
+                          )}
+                          <a
+                            href={`/api/download?file=${encodeURIComponent(a)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 transition-colors text-xs sm:text-sm font-medium px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 whitespace-nowrap flex items-center gap-1"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Download
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Process Request Button */}
           {(() => {
             // Check if request needs response from this user
@@ -726,36 +782,79 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
               // Special handling for Dean clarification (Dean-mediated from above Dean level)
               if (currentUser?.role === 'dean' && clarificationEngine.isDeanMediatedClarification(request)) {
                 return (
-                  <div className="mt-4 sm:mt-6 flex justify-center sm:justify-start">
-                    <button
-                      onClick={() => setIsDeanClarificationModalOpen(true)}
-                      className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm flex items-center justify-center gap-2"
-                    >
-                      <ClarificationIndicator size="sm" showText={false} className="text-white" />
-                      Handle Rejection
-                    </button>
+                  <div className="mt-4 sm:mt-6 flex flex-col gap-3">
+                    <div className="p-3 bg-red-50 border border-red-200 rounded flex items-center gap-2">
+                      <ClarificationIndicator size="sm" showText={false} />
+                      <span className="text-xs sm:text-sm text-red-800">Requester responded. Review and re-approve below.</span>
+                    </div>
+                    <div className="flex justify-center sm:justify-start">
+                      <button
+                        onClick={() => setIsDeanClarificationModalOpen(true)}
+                        className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <ClarificationIndicator size="sm" showText={false} className="text-white" />
+                        Handle Rejection
+                      </button>
+                    </div>
                   </div>
                 );
               }
-              
-              // Only show response button for requesters
-              // Other roles (VP, Manager, etc.) who raised queries should NOT see this button
+
+              // Requester: allow responding directly
               if (currentUser?.role === 'requester') {
                 return (
-                  <div className="mt-4 sm:mt-6 flex justify-center sm:justify-start">
-                    <button
-                      onClick={() => setIsClarificationModalOpen(true)}
-                      className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm flex items-center justify-center gap-2"
-                    >
-                      <ClarificationIndicator size="sm" showText={false} className="text-white" />
-                      Respond to Clarification
-                    </button>
+                  <div className="mt-4 sm:mt-6 flex flex-col gap-3">
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded flex items-center gap-2">
+                      <ClarificationIndicator size="sm" showText={false} />
+                      <span className="text-xs sm:text-sm text-yellow-800">Please respond to the queries below.</span>
+                    </div>
+                    <div className="flex justify-center sm:justify-start">
+                      <button
+                        onClick={() => setIsClarificationModalOpen(true)}
+                        className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <ClarificationIndicator size="sm" showText={false} className="text-white" />
+                        Respond to Clarification
+                      </button>
+                    </div>
                   </div>
                 );
               }
-              
-              // For other roles (VP, Manager, etc.), don't show any response button
-              // They raised the queries, so they should wait for the requester to respond
+
+              // Other approvers: show banner but still allow processing actions below if authorized
+              // Banner
+              const banner = (
+                <div className="mt-4 sm:mt-6">
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded flex items-center gap-2">
+                    <ClarificationIndicator size="sm" showText={false} />
+                    <span className="text-xs sm:text-sm text-yellow-800">Awaiting requester response. You can still review and act if needed.</span>
+                  </div>
+                </div>
+              );
+
+              const requiredApprovers = approvalEngine.getRequiredApprover(request.status as RequestStatus);
+              const isAuthorized = requiredApprovers.includes(currentUser?.role as UserRole);
+
+              return isAuthorized ? (
+                <div className="mt-4 sm:mt-6 flex flex-col gap-3">
+                  {banner}
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
+                    <button
+                      onClick={() => setIsApprovalModalOpen(true)}
+                      className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm"
+                    >
+                      Process Request
+                    </button>
+                    <button
+                      onClick={() => setIsDirectClarificationModalOpen(true)}
+                      className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm flex items-center justify-center gap-2"
+                    >
+                      <ExclamationTriangleIcon className="w-5 h-5" />
+                      Raise Query
+                    </button>
+                  </div>
+                </div>
+              ) : banner;
             }
             
             const requiredApprovers = approvalEngine.getRequiredApprover(request.status as RequestStatus);

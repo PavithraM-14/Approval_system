@@ -89,10 +89,10 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus }) =>
                   {getStatusDisplayName(currentStatus)}
                 </h4>
                 <p className="text-sm text-yellow-700">
-                  {currentStatus === 'sop_clarification' && 'Waiting for SOP verification queries from Institution Manager'}
-                  {currentStatus === 'budget_clarification' && 'Waiting for budget queries from Institution Manager'}
-                  {currentStatus === 'clarification_required' && 'Waiting for response from Requester'}
-                  {currentStatus === 'department_checks' && 'Waiting for department response'}
+                  {String(currentStatus) === 'sop_clarification' && 'Waiting for SOP verification queries from Institution Manager'}
+                  {String(currentStatus) === 'budget_clarification' && 'Waiting for budget queries from Institution Manager'}
+                  {String(currentStatus) === 'clarification_required' && 'Waiting for response from Requester'}
+                  {String(currentStatus) === 'department_checks' && 'Waiting for department response'}
                 </p>
               </div>
             </div>

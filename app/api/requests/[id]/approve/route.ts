@@ -70,15 +70,34 @@ export async function POST(
       requestRecord.status
     );
 
+    // Clarification responder bypass: allow the role currently responsible for responding
+    const isClarificationResponder = (
+      action === 'clarify_and_reapprove' &&
+      requestRecord.pendingClarification === true &&
+      requestRecord.clarificationLevel === (user.role as UserRole)
+    );
+
+    const isDeanSendToRequester = (
+      action === 'dean_send_to_requester' && user.role === UserRole.DEAN
+    );
+
     console.log('[DEBUG] Role authorization check:', {
       currentStatus: requestRecord.status,
       requiredApprovers,
       userRole: user.role,
-      isAuthorized: requiredApprovers.includes(user.role as UserRole)
+      pendingClarification: requestRecord.pendingClarification,
+      clarificationLevel: requestRecord.clarificationLevel,
+      isAuthorizedApprover: requiredApprovers.includes(user.role as UserRole),
+      isClarificationResponder,
+      isDeanSendToRequester
     });
 
-    if (!requiredApprovers.includes(user.role as UserRole)) {
-      console.log('[DEBUG] Authorization failed - user not in required approvers');
+    if (
+      !requiredApprovers.includes(user.role as UserRole) &&
+      !isClarificationResponder &&
+      !isDeanSendToRequester
+    ) {
+      console.log('[DEBUG] Authorization failed - role not permitted for this action');
       return NextResponse.json(
         { error: 'Not authorized to approve this request' },
         { status: 403 }
@@ -122,6 +141,8 @@ export async function POST(
 
     let nextStatus = requestRecord.status;
     let actionType = ActionType.APPROVE;
+    // Prepare mutable update object early to allow status-specific flags before final assembly
+    let updateData: any = {};
 
     // Handle different actions
     switch (action) {
@@ -297,18 +318,12 @@ export async function POST(
           } else {
             // Direct: Requester → Original Rejector
             const returnStatus = clarificationEngine.getReturnStatus(requestRecord);
-            if (!returnStatus) {
-              return NextResponse.json({ error: 'Cannot determine return status for clarification' }, { status: 400 });
-            }
-            nextStatus = returnStatus;
+            nextStatus = returnStatus || RequestStatus.MANAGER_REVIEW;
           }
         } else if (user.role === UserRole.DEAN) {
           // Dean reviewing requester's clarification and re-approving
           const returnStatus = clarificationEngine.getReturnStatus(requestRecord);
-          if (!returnStatus) {
-            return NextResponse.json({ error: 'Cannot determine return status for Dean re-approval' }, { status: 400 });
-          }
-          nextStatus = returnStatus;
+          nextStatus = returnStatus || RequestStatus.MANAGER_REVIEW;
         } else {
           return NextResponse.json({ error: 'Invalid role for clarification response' }, { status: 400 });
         }
@@ -435,7 +450,7 @@ export async function POST(
     // }
 
     // PREPARE UPDATE
-    const updateData: any = {
+    updateData = {
       $push: { history: historyEntry },
     };
 

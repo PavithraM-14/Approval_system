@@ -383,9 +383,16 @@ export default function QueriesPage() {
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(request.status)}`}>
                         {request.status.replace('_', ' ').toUpperCase()}
                       </span>
-                      <span className="text-xs text-blue-600 font-medium">
-                        Click to respond →
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-blue-600 font-medium">Click to respond →</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/requests/${request._id}`); }}
+                          className="px-2 py-1 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap"
+                          aria-label="Open full details"
+                        >
+                          Details
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -17,8 +17,8 @@ export async function GET(
     }
 
     const requestRecord = await Request.findById(params.id)
-      .populate('requester', 'name email empId _id')
-      .populate('history.actor', 'name email empId');
+      .populate('requester', 'name email empId _id role')
+      .populate('history.actor', 'name email empId role');
 
     if (!requestRecord) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 });

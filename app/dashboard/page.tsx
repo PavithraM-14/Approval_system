@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const { data: stats, error } = useSWR<DashboardStats>('/api/dashboard/stats', fetcher);
+  // Show a single, unified recent list for all roles
   const { data: recentRequests, isLoading: isLoadingRequests } = useSWR('/api/requests?limit=5', fetcher);
 
   useEffect(() => {
@@ -203,9 +204,7 @@ export default function DashboardPage() {
       {/* RECENT REQUESTS */}
       <div className="mt-8 sm:mt-10 bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 lg:p-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-2">
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
-            {currentUser?.role === 'requester' ? 'My Recent Requests' : 'Recent System Requests'}
-          </h3>
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Recent Requests</h3>
           {recentRequests?.requests?.length > 0 && (
             <p className="text-xs sm:text-sm text-gray-500">Click on any request to view details</p>
           )}
@@ -244,6 +243,9 @@ export default function DashboardPage() {
                   <p className="text-base sm:text-lg font-semibold text-blue-700 hover:text-blue-800 transition-colors truncate">
                     {request.title || 'Untitled Request'}
                   </p>
+                  {currentUser?.role !== 'requester' && (
+                    <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">ID: {request._id}</p>
+                  )}
                   <p className="text-xs sm:text-sm text-gray-500 mt-1 truncate">
                     {request.college || 'Unknown'} • {request.department || 'Unknown'}
                   </p>
@@ -276,10 +278,7 @@ export default function DashboardPage() {
           </ul>
         ) : (
           <p className="text-center text-gray-500 py-6">
-            {currentUser?.role === 'requester' 
-              ? 'No recent requests found. Create your first request to get started!' 
-              : 'No recent requests in the system yet.'
-            }
+            {'No recent requests found.'}
           </p>
         )}
 
@@ -288,12 +287,12 @@ export default function DashboardPage() {
           <div className="mt-6 text-center">
             <button
               onClick={() => {
-                const targetPath = currentUser?.role === 'requester' ? '/dashboard/requests' : '/dashboard/approvals';
+                const targetPath = currentUser?.role === 'requester' ? '/dashboard/requests' : '/dashboard/approvals?status=all';
                 router.push(targetPath);
               }}
               className="text-blue-600 hover:text-blue-800 font-medium transition-colors"
             >
-              {currentUser?.role === 'requester' ? 'View All My Requests' : 'View All Pending Approvals'} →
+              View All →
             </button>
           </div>
         )}

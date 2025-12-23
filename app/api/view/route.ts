@@ -3,9 +3,11 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = request.nextUrl;
     const filePath = searchParams.get('file');
     
     if (!filePath) {
@@ -57,7 +59,7 @@ export async function GET(request: NextRequest) {
     }
 
     // KEY DIFFERENCE: Use 'inline' instead of 'attachment' to view in browser
-    return new NextResponse(new Uint8Array(fileBuffer), {
+    return new Response(new Uint8Array(fileBuffer), {
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': `inline; filename="${fileName}"`, // 'inline' opens in browser
