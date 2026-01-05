@@ -89,7 +89,7 @@ export default function DeanClarificationModal({
               <p className="text-gray-800">{rejectionInfo.rejectionReason}</p>
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              Rejected on {new Date(rejectionInfo.timestamp).toLocaleString()}
+              Rejected on {new Date(rejectionInfo.timestamp).toLocaleString('en-GB')}
             </p>
           </div>
         </div>
@@ -126,7 +126,7 @@ export default function DeanClarificationModal({
             )}
             
             <p className="text-xs text-gray-500 mt-2">
-              Provided on {new Date(requesterClarification.timestamp).toLocaleString()}
+              Provided on {new Date(requesterClarification.timestamp).toLocaleString('en-GB')}
             </p>
           </div>
         )}

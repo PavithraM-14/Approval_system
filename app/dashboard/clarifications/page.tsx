@@ -367,7 +367,7 @@ export default function QueriesPage() {
                             {clarificationInfo.message}
                           </p>
                           <p className="text-xs text-yellow-600 mt-1">
-                            {new Date(clarificationInfo.timestamp).toLocaleString()}
+                            {new Date(clarificationInfo.timestamp).toLocaleString('en-GB')}
                           </p>
                         </div>
                       )}
@@ -375,7 +375,7 @@ export default function QueriesPage() {
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <span>{request.college} • {request.department}</span>
                         <span>₹{request.costEstimate.toLocaleString()}</span>
-                        <span>{new Date(request.createdAt).toLocaleDateString()}</span>
+                        <span>{new Date(request.createdAt).toLocaleDateString('en-GB')}</span>
                       </div>
                     </div>
                     

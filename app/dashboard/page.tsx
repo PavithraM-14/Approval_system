@@ -250,7 +250,7 @@ export default function DashboardPage() {
                     {request.college || 'Unknown'} • {request.department || 'Unknown'}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    ₹{request.costEstimate?.toLocaleString() || '0'} • {request.createdAt ? new Date(request.createdAt).toLocaleDateString() : 'Unknown date'}
+                    ₹{request.costEstimate?.toLocaleString() || '0'} • {request.createdAt ? new Date(request.createdAt).toLocaleDateString('en-GB') : 'Unknown date'}
                   </p>
                 </div>
 

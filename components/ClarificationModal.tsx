@@ -117,7 +117,7 @@ export default function ClarificationModal({
           )}
 
           <p className="text-xs text-gray-500">
-            Requested on {new Date(clarificationRequest.timestamp).toLocaleString()}
+            Requested on {new Date(clarificationRequest.timestamp).toLocaleString('en-GB')}
           </p>
         </div>
 

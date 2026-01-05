@@ -164,7 +164,7 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
                         </span>
                       </div>
                       <div className="text-xs sm:text-sm text-gray-500">
-                        {new Date(historyItem.timestamp).toLocaleString()}
+                        {new Date(historyItem.timestamp).toLocaleString('en-GB')}
                       </div>
                     </div>
                     

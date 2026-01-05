@@ -407,7 +407,7 @@ export default function RequestsPage() {
                     </span>
 
                     <span className="px-2 sm:px-3 py-1 rounded-full bg-gray-200 text-gray-700 whitespace-nowrap sm:ml-auto">
-                      {new Date(request.createdAt).toLocaleDateString()}
+                      {new Date(request.createdAt).toLocaleDateString('en-GB')}
                     </span>
                   </div>
                 </div>

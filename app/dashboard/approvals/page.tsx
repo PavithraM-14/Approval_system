@@ -357,7 +357,7 @@ export default function ApprovalsPage() {
 
                   <div className="mt-3 flex justify-between items-center">
                     <span className="text-xs text-gray-400">
-                      Created: {new Date(request.createdAt).toLocaleDateString()}
+                      Created: {new Date(request.createdAt).toLocaleDateString('en-GB')}
                     </span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-blue-600 font-medium">Click to review →</span>

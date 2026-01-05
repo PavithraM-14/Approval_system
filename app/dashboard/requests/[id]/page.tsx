@@ -642,7 +642,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
 
                 <div className="grid grid-cols-3 gap-2 items-start">
                   <dt className="text-xs sm:text-sm font-medium text-gray-700">Created</dt>
-                  <dd className="text-xs sm:text-sm text-gray-900 col-span-2">{new Date(request.createdAt).toLocaleDateString()}</dd>
+                  <dd className="text-xs sm:text-sm text-gray-900 col-span-2">{new Date(request.createdAt).toLocaleDateString('en-GB')}</dd>
                 </div>
               </div>
             </div>
