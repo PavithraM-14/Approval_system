@@ -578,30 +578,30 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
 
         {/* Details */}
         <div className="px-4 sm:px-6 py-4 sm:py-5">
-          <div className="flex flex-col space-y-6 md:space-y-0 md:grid md:grid-cols-2 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
             <div className="w-full">
               <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-3">Request Info</h4>
               <div className="space-y-3">
-                <div className="flex flex-col xs:flex-row xs:justify-between xs:items-start gap-1 xs:gap-2">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700 min-w-0 xs:min-w-[80px]">ID</dt>
-                  <dd className="text-xs sm:text-sm text-gray-900 break-all font-mono flex-1">{request._id}</dd>
+                <div className="grid grid-cols-3 gap-2 items-start">
+                  <dt className="text-xs sm:text-sm font-medium text-gray-700">ID</dt>
+                  <dd className="text-xs sm:text-sm text-gray-900 break-all font-mono col-span-2">{request._id}</dd>
                 </div>
-                <div className="flex flex-col xs:flex-row xs:justify-between xs:items-start gap-1 xs:gap-2">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700 min-w-0 xs:min-w-[80px]">Requester</dt>
-                  <dd className="text-xs sm:text-sm text-gray-900 break-words flex-1">{request.requester.name}</dd>
+                <div className="grid grid-cols-3 gap-2 items-start">
+                  <dt className="text-xs sm:text-sm font-medium text-gray-700">Requester</dt>
+                  <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.requester.name}</dd>
                 </div>
-                <div className="flex flex-col xs:flex-row xs:justify-between xs:items-start gap-1 xs:gap-2">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700 min-w-0 xs:min-w-[80px]">Email</dt>
-                  <dd className="text-xs sm:text-sm text-gray-900 break-all flex-1">{request.requester.email}</dd>
+                <div className="grid grid-cols-3 gap-2 items-start">
+                  <dt className="text-xs sm:text-sm font-medium text-gray-700">Email</dt>
+                  <dd className="text-xs sm:text-sm text-gray-900 break-all col-span-2">{request.requester.email}</dd>
                 </div>
-                <div className="flex flex-col xs:flex-row xs:justify-between xs:items-start gap-1 xs:gap-2">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700 min-w-0 xs:min-w-[80px]">College</dt>
-                  <dd className="text-xs sm:text-sm text-gray-900 break-words flex-1">{request.college}</dd>
+                <div className="grid grid-cols-3 gap-2 items-start">
+                  <dt className="text-xs sm:text-sm font-medium text-gray-700">College</dt>
+                  <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.college}</dd>
                 </div>
-                <div className="flex flex-col xs:flex-row xs:justify-between xs:items-start gap-1 xs:gap-2">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700 min-w-0 xs:min-w-[80px]">Department</dt>
-                  <dd className="text-xs sm:text-sm text-gray-900 break-words flex-1">{request.department}</dd>
+                <div className="grid grid-cols-3 gap-2 items-start">
+                  <dt className="text-xs sm:text-sm font-medium text-gray-700">Department</dt>
+                  <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.department}</dd>
                 </div>
               </div>
             </div>
@@ -609,26 +609,26 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             <div className="w-full">
               <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-3">Financial Info</h4>
               <div className="space-y-3">
-                <div className="flex flex-col xs:flex-row xs:justify-between xs:items-start gap-1 xs:gap-2">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700 min-w-0 xs:min-w-[100px]">Cost Estimate</dt>
-                  <dd className="text-sm sm:text-base font-semibold text-green-600 flex-1">₹{request.costEstimate.toLocaleString()}</dd>
+                <div className="grid grid-cols-3 gap-2 items-start">
+                  <dt className="text-xs sm:text-sm font-medium text-gray-700">Cost Estimate</dt>
+                  <dd className="text-sm sm:text-base font-semibold text-green-600 col-span-2">₹{request.costEstimate.toLocaleString()}</dd>
                 </div>
 
-                <div className="flex flex-col xs:flex-row xs:justify-between xs:items-start gap-1 xs:gap-2">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700 min-w-0 xs:min-w-[100px]">Expense Category</dt>
-                  <dd className="text-xs sm:text-sm text-gray-900 break-words flex-1">{request.expenseCategory}</dd>
+                <div className="grid grid-cols-3 gap-2 items-start">
+                  <dt className="text-xs sm:text-sm font-medium text-gray-700">Expense Category</dt>
+                  <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.expenseCategory}</dd>
                 </div>
 
                 {request.sopReference && (
-                  <div className="flex flex-col xs:flex-row xs:justify-between xs:items-start gap-1 xs:gap-2">
-                    <dt className="text-xs sm:text-sm font-medium text-gray-700 min-w-0 xs:min-w-[100px]">SOP Reference</dt>
-                    <dd className="text-xs sm:text-sm text-gray-900 break-words font-mono flex-1">{request.sopReference}</dd>
+                  <div className="grid grid-cols-3 gap-2 items-start">
+                    <dt className="text-xs sm:text-sm font-medium text-gray-700">SOP Reference</dt>
+                    <dd className="text-xs sm:text-sm text-gray-900 break-words font-mono col-span-2">{request.sopReference}</dd>
                   </div>
                 )}
 
-                <div className="flex flex-col xs:flex-row xs:justify-between xs:items-start gap-1 xs:gap-2">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700 min-w-0 xs:min-w-[100px]">Status</dt>
-                  <dd className="text-xs sm:text-sm flex-1">
+                <div className="grid grid-cols-3 gap-2 items-start">
+                  <dt className="text-xs sm:text-sm font-medium text-gray-700">Status</dt>
+                  <dd className="text-xs sm:text-sm col-span-2">
                     <div className="flex items-center gap-2">
                       <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {request.status.replace('_', ' ').toUpperCase()}
@@ -640,9 +640,9 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                   </dd>
                 </div>
 
-                <div className="flex flex-col xs:flex-row xs:justify-between xs:items-start gap-1 xs:gap-2">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700 min-w-0 xs:min-w-[100px]">Created</dt>
-                  <dd className="text-xs sm:text-sm text-gray-900 flex-1">{new Date(request.createdAt).toLocaleDateString()}</dd>
+                <div className="grid grid-cols-3 gap-2 items-start">
+                  <dt className="text-xs sm:text-sm font-medium text-gray-700">Created</dt>
+                  <dd className="text-xs sm:text-sm text-gray-900 col-span-2">{new Date(request.createdAt).toLocaleDateString()}</dd>
                 </div>
               </div>
             </div>
