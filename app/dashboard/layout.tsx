@@ -155,8 +155,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   {/* HEADER */}
   <div className="flex h-14 sm:h-16 bg-white border-b border-gray-200 items-center justify-between px-4">
 
-    {/* LEFT : Logo + Title */}
-    <div className="flex items-center gap-3">
+    {/* LEFT : Logo + Title - Clickable for Logout */}
+    <button 
+      onClick={handleLogout}
+      className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
+      title="Click to logout"
+    >
       <Image
         src={SRMRMP_Logo}
         alt="SRM Logo"
@@ -168,7 +172,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <span className="text-lg font-semibold text-gray-800 hidden sm:block">
         SRM-RMP Approval System
       </span>
-    </div>
+    </button>
 
           {/* RIGHT */}
           <div className="flex items-center gap-3">
