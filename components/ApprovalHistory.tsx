@@ -36,7 +36,7 @@ const getStatusBadgeClass = (status: string) => {
       return 'bg-amber-100 text-amber-800';
     case 'chairman_approval':
       return 'bg-emerald-100 text-emerald-800';
-    case 'clarification_required':
+    case 'query_required':
       return 'bg-rose-100 text-rose-800';
     default:
       return 'bg-blue-100 text-blue-800';
@@ -81,10 +81,10 @@ const getStatusDisplayName = (status: string) => {
     'chairman_approval': 'Chairman Approval',
     'approved': 'Approved',
     'rejected': 'Rejected',
-    'clarification_required': 'Clarification Required',
-    'sop_clarification': 'SOP Clarification',
-    'budget_clarification': 'Budget Clarification',
-    'department_clarification': 'Department Clarification'
+    'query_required': 'Query Required',
+    'sop_query': 'SOP Query',
+    'budget_query': 'Budget Query',
+    'department_query': 'Department Query'
   };
   
   return statusMap[status.toLowerCase()] || status;
@@ -96,7 +96,7 @@ const getActionDisplayName = (action: string) => {
     'submit': 'Submitted',
     'approve': 'Approved',
     'reject': 'Rejected',
-    'clarify': 'Requested Clarification',
+    'clarify': 'Requested Query',
     'budget_check': 'Budget Check',
     'sop_check': 'SOP Check',
     'forward': 'Forwarded'
@@ -207,19 +207,19 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
                       </div>
                     )}
 
-                    {/* Clarification Request - Inline format */}
-                    {(historyItem as any).clarificationRequest && (
+                    {/* Query Request - Inline format */}
+                    {(historyItem as any).queryRequest && (
                       <div className="mt-1 text-sm">
-                        <span className="font-medium text-gray-700">Clarification Request: </span>
-                        <span className="text-yellow-800">{(historyItem as any).clarificationRequest}</span>
+                        <span className="font-medium text-gray-700">Query Request: </span>
+                        <span className="text-yellow-800">{(historyItem as any).queryRequest}</span>
                       </div>
                     )}
 
                     {/* Clarification Response - Inline format */}
-                    {(historyItem as any).clarificationResponse && (
+                    {(historyItem as any).queryResponse && (
                       <div className="mt-1 text-sm">
                         <span className="font-medium text-gray-700">Clarification Response: </span>
-                        <span className="text-blue-800">{(historyItem as any).clarificationResponse}</span>
+                        <span className="text-blue-800">{(historyItem as any).queryResponse}</span>
                       </div>
                     )}
                     
@@ -271,11 +271,11 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
                     )}
 
                     {/* Clarification Attachments */}
-                    {(historyItem as any).clarificationAttachments && (historyItem as any).clarificationAttachments.length > 0 && (
+                    {(historyItem as any).queryAttachments && (historyItem as any).queryAttachments.length > 0 && (
                       <div className="mt-3">
                         <p className="text-sm font-medium text-gray-700 mb-2">Clarification Attachments:</p>
                         <div className="space-y-2">
-                          {(historyItem as any).clarificationAttachments.map((attachment: string, index: number) => (
+                          {(historyItem as any).queryAttachments.map((attachment: string, index: number) => (
                             <div key={index} className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2 p-2 border border-blue-200 rounded-md bg-blue-50">
                               <div className="flex items-center min-w-0 flex-1">
                                 <svg className="flex-shrink-0 h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
