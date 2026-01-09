@@ -59,7 +59,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus }) =>
     { id: 'approved', name: 'Approved' },
   ];
 
-  // Check if current status is a clarification status
+  // Check if current status is a query status
   const isQueryStatus = ['sop_query', 'budget_query', 'query_required', 'department_checks'].includes(currentStatus);
   
   // Check if current status is a parallel verification status

@@ -64,7 +64,7 @@ export default function QueryModal({
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
-                Clarification Required
+                Query Required
               </h3>
               <p className="text-sm text-gray-500">
                 Response needed from {queryRequest.actor.name}
@@ -125,12 +125,12 @@ export default function QueryModal({
         {!showRejectForm ? (
           <div className="p-6">
             <h4 className="text-sm font-medium text-gray-900 mb-3">
-              Your Response to Clarification:
+              Your Clarification Response:
             </h4>
             <textarea
               value={queryResponse}
               onChange={(e) => setQueryResponse(e.target.value)}
-              placeholder="Provide your response to the clarification here..."
+              placeholder="Provide your clarification response to the query here..."
               className="w-full h-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
               disabled={loading}
             />
@@ -176,7 +176,7 @@ export default function QueryModal({
                   className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50"
                   disabled={loading || !queryResponse.trim()}
                 >
-                  {loading ? 'Processing...' : (isRequester ? 'Submit Response' : 'Approve with Response')}
+                  {loading ? 'Processing...' : (isRequester ? 'Submit Clarification' : 'Approve with Clarification')}
                 </button>
               </div>
             </div>

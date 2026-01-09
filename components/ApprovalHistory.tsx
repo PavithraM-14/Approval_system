@@ -81,10 +81,10 @@ const getStatusDisplayName = (status: string) => {
     'chairman_approval': 'Chairman Approval',
     'approved': 'Approved',
     'rejected': 'Rejected',
-    'query_required': 'Clarification Required',
-    'sop_query': 'SOP Clarification',
-    'budget_query': 'Budget Clarification',
-    'department_query': 'Department Clarification'
+    'query_required': 'Query Required',
+    'sop_query': 'SOP Query',
+    'budget_query': 'Budget Query',
+    'department_query': 'Department Query'
   };
   
   return statusMap[status.toLowerCase()] || status;
@@ -96,7 +96,7 @@ const getActionDisplayName = (action: string) => {
     'submit': 'Submitted',
     'approve': 'Approved',
     'reject': 'Rejected',
-    'clarify': 'Requested Clarification',
+    'clarify': 'Requested Query',
     'budget_check': 'Budget Check',
     'sop_check': 'SOP Check',
     'forward': 'Forwarded'
@@ -207,10 +207,10 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
                       </div>
                     )}
 
-                    {/* Clarification Request - Inline format */}
+                    {/* Query Request - Inline format */}
                     {(historyItem as any).queryRequest && (
                       <div className="mt-1 text-sm">
-                        <span className="font-medium text-gray-700">Clarification Request: </span>
+                        <span className="font-medium text-gray-700">Query Request: </span>
                         <span className="text-yellow-800">{(historyItem as any).queryRequest}</span>
                       </div>
                     )}
