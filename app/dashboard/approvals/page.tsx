@@ -7,6 +7,7 @@ import QueryIndicator from '../../../components/QueryIndicator';
 
 interface Request {
   _id: string;
+  requestId?: string;
   title: string;
   purpose: string;
   college: string;
@@ -312,7 +313,9 @@ export default function ApprovalsPage() {
                         {request.title}
                       </h3>
                       {/* Show the request id to ensure clarity */}
-                      <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">ID: {request._id}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">
+                        ID: {request.requestId || request._id.slice(-6)}
+                      </p>
                       <p className="text-xs sm:text-sm text-gray-600 mt-1">
                         Requested by: <span className="font-medium">{request.requester.name}</span>
                       </p>
@@ -322,9 +325,11 @@ export default function ApprovalsPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-2 items-center justify-between sm:justify-end flex-shrink-0">
-                      <span className="px-2 sm:px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold whitespace-nowrap">
-                        ₹{request.costEstimate.toLocaleString()}
-                      </span>
+                      {request.costEstimate > 0 && (
+                        <span className="px-2 sm:px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold whitespace-nowrap">
+                          ₹{request.costEstimate.toLocaleString()}
+                        </span>
+                      )}
                       <div className="flex items-center gap-2">
                         <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getStatusBadgeClass(request.status)}`}>
                           {getStatusDisplayName(request.status)}

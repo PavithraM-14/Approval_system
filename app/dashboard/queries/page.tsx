@@ -9,6 +9,7 @@ import { queryEngine } from '../../../lib/query-engine';
 
 interface Request {
   _id: string;
+  requestId?: string;
   title: string;
   purpose: string;
   college: string;
@@ -374,7 +375,7 @@ export default function QueriesPage() {
                       
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <span>{request.college} • {request.department}</span>
-                        <span>₹{request.costEstimate.toLocaleString()}</span>
+                        {request.costEstimate > 0 && <span>₹{request.costEstimate.toLocaleString()}</span>}
                         <span>{new Date(request.createdAt).toLocaleDateString('en-GB')}</span>
                       </div>
                     </div>

@@ -310,7 +310,9 @@ export default function ApprovalModal({
               </div>
               <div>
                 <span className="text-sm font-medium text-gray-700">Cost Estimate</span>
-                <p className="text-sm text-gray-900">₹{request.costEstimate.toLocaleString()}</p>
+                <p className="text-sm text-gray-900">
+                  {request.costEstimate > 0 ? `₹${request.costEstimate.toLocaleString()}` : 'No cost specified'}
+                </p>
               </div>
             </div>
             <div>
@@ -389,10 +391,11 @@ export default function ApprovalModal({
               <h4 className="text-lg font-medium text-green-900 mb-4">Budget Verification</h4>
               
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Budget Status for ₹{request.costEstimate.toLocaleString()}
-                  </label>
+                {request.costEstimate > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Budget Status for ₹{request.costEstimate.toLocaleString()}
+                    </label>
                   <div className="flex gap-4">
                     <label className="flex items-center">
                       <input
@@ -418,8 +421,9 @@ export default function ApprovalModal({
                     </label>
                   </div>
                 </div>
+                )}
 
-                {budgetAvailable === true && (
+                {request.costEstimate > 0 && budgetAvailable === true && (
                   <div className="p-3 bg-green-100 border border-green-300 rounded-lg">
                     <p className="text-sm text-green-800">
                       <strong>✓ Budget Available:</strong> Sufficient funds are available for this request. 
@@ -428,11 +432,20 @@ export default function ApprovalModal({
                   </div>
                 )}
 
-                {budgetAvailable === false && (
+                {request.costEstimate > 0 && budgetAvailable === false && (
                   <div className="p-3 bg-red-100 border border-red-300 rounded-lg">
                     <p className="text-sm text-red-800">
                       <strong>⚠ Budget Not Available:</strong> Insufficient funds for this request. 
                       This will require special approval through the Dean pathway.
+                    </p>
+                  </div>
+                )}
+
+                {request.costEstimate === 0 && (
+                  <div className="p-3 bg-blue-100 border border-blue-300 rounded-lg">
+                    <p className="text-sm text-blue-800">
+                      <strong>ℹ No Cost Estimate:</strong> This request has no associated cost. 
+                      Budget verification is not required.
                     </p>
                   </div>
                 )}

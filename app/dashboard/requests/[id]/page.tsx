@@ -150,6 +150,7 @@ interface ApprovalHistoryItem {
 
 interface Request {
   _id: string;
+  requestId?: string;
   title: string;
   purpose: string;
   college: string;
@@ -504,6 +505,8 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
 
   // Institution Manager specific handlers
   const handleSendToDean = async (notes: string, attachments: string[]) => {
+    if (!request) return;
+    
     try {
       setProcessingApproval(true);
       console.log('[DEBUG] handleSendToDean called:', {
@@ -576,6 +579,8 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
   };
 
   const handleSendToChairman = async (notes: string, attachments: string[]) => {
+    if (!request) return;
+    
     try {
       setProcessingApproval(true);
       console.log('[DEBUG] handleSendToChairman called:', {
@@ -697,11 +702,13 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
             <div className="w-full">
-              <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-3">Request Info</h4>
+              <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-3">Request Information</h4>
               <div className="space-y-3">
                 <div className="grid grid-cols-3 gap-2 items-start">
                   <dt className="text-xs sm:text-sm font-medium text-gray-700">ID</dt>
-                  <dd className="text-xs sm:text-sm text-gray-900 break-all font-mono col-span-2">{request._id}</dd>
+                  <dd className="text-xs sm:text-sm text-gray-900 break-all font-mono col-span-2">
+                    {request.requestId || request._id.slice(-6)}
+                  </dd>
                 </div>
                 <div className="grid grid-cols-3 gap-2 items-start">
                   <dt className="text-xs sm:text-sm font-medium text-gray-700">Requester</dt>
@@ -712,7 +719,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                   <dd className="text-xs sm:text-sm text-gray-900 break-all col-span-2">{request.requester.email}</dd>
                 </div>
                 <div className="grid grid-cols-3 gap-2 items-start">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700">College</dt>
+                  <dt className="text-xs sm:text-sm font-medium text-gray-700">Institution</dt>
                   <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.college}</dd>
                 </div>
                 <div className="grid grid-cols-3 gap-2 items-start">
@@ -722,26 +729,39 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
               </div>
             </div>
 
+            {/* Conditionally show Financial Information section */}
+            {(request.costEstimate > 0 || (request.expenseCategory && request.expenseCategory.trim() !== '') || request.sopReference) && (
+              <div className="w-full">
+                <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-3">Financial Information</h4>
+                <div className="space-y-3">
+                  {request.costEstimate > 0 && (
+                    <div className="grid grid-cols-3 gap-2 items-start">
+                      <dt className="text-xs sm:text-sm font-medium text-gray-700">Cost Estimate</dt>
+                      <dd className="text-sm sm:text-base font-semibold text-green-600 col-span-2">₹{request.costEstimate.toLocaleString()}</dd>
+                    </div>
+                  )}
+
+                  {request.expenseCategory && request.expenseCategory.trim() !== '' && (
+                    <div className="grid grid-cols-3 gap-2 items-start">
+                      <dt className="text-xs sm:text-sm font-medium text-gray-700">Expense Category</dt>
+                      <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.expenseCategory}</dd>
+                    </div>
+                  )}
+
+                  {request.sopReference && (
+                    <div className="grid grid-cols-3 gap-2 items-start">
+                      <dt className="text-xs sm:text-sm font-medium text-gray-700">SOP Reference</dt>
+                      <dd className="text-xs sm:text-sm text-gray-900 break-words font-mono col-span-2">{request.sopReference}</dd>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Status and other information */}
             <div className="w-full">
-              <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-3">Financial Info</h4>
+              <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-3">Status Information</h4>
               <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-2 items-start">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700">Cost Estimate</dt>
-                  <dd className="text-sm sm:text-base font-semibold text-green-600 col-span-2">₹{request.costEstimate.toLocaleString()}</dd>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 items-start">
-                  <dt className="text-xs sm:text-sm font-medium text-gray-700">Expense Category</dt>
-                  <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.expenseCategory}</dd>
-                </div>
-
-                {request.sopReference && (
-                  <div className="grid grid-cols-3 gap-2 items-start">
-                    <dt className="text-xs sm:text-sm font-medium text-gray-700">SOP Reference</dt>
-                    <dd className="text-xs sm:text-sm text-gray-900 break-words font-mono col-span-2">{request.sopReference}</dd>
-                  </div>
-                )}
-
                 <div className="grid grid-cols-3 gap-2 items-start">
                   <dt className="text-xs sm:text-sm font-medium text-gray-700">Status</dt>
                   <dd className="text-xs sm:text-sm col-span-2">

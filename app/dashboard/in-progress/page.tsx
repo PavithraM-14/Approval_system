@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 
 interface Request {
   _id: string;
+  requestId?: string;
   title: string;
   purpose: string;
   college: string;
@@ -339,9 +340,11 @@ export default function InProgressPage() {
                         {/* User's action badge */}
                         {getUserActionBadge(request._visibility?.userAction)}
                         
-                        <span className="px-2 sm:px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold whitespace-nowrap">
-                          ₹{request.costEstimate.toLocaleString()}
-                        </span>
+                        {request.costEstimate > 0 && (
+                          <span className="px-2 sm:px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold whitespace-nowrap">
+                            ₹{request.costEstimate.toLocaleString()}
+                          </span>
+                        )}
                       </div>
                     </div>
 

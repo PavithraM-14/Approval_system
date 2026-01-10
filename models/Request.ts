@@ -26,6 +26,17 @@ const approvalHistorySchema = new mongoose.Schema({
 
 const requestSchema = new mongoose.Schema(
   {
+    requestId: { 
+      type: String, 
+      unique: true, 
+      required: true,
+      validate: {
+        validator: function(v: string) {
+          return /^\d{6}$/.test(v); // Exactly 6 digits
+        },
+        message: 'Request ID must be exactly 6 digits'
+      }
+    },
     title: { type: String, required: true },
     purpose: { type: String, required: true },
     college: { type: String, required: true },

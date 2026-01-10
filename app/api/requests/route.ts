@@ -7,6 +7,7 @@ import { getCurrentUser, validateUserAction } from '../../../lib/auth';
 import { CreateRequestSchema } from '../../../lib/types';
 import { RequestStatus, ActionType, UserRole } from '../../../lib/types';
 import { filterRequestsByVisibility } from '../../../lib/request-visibility';
+import { generateRequestId } from '../../../lib/id-generator';
 import mongoose from 'mongoose';
 import { approvalEngine } from '../../../lib/approval-engine';
 
@@ -221,7 +222,11 @@ export async function POST(request: NextRequest) {
       ? 'Leave request created and forwarded directly to VP for approval'
       : 'Request created and forwarded to manager for review';
 
+    // Generate unique 6-digit request ID
+    const requestId = await generateRequestId();
+
     const newRequest = await Request.create({
+      requestId,
       ...validatedData,
       requester: requesterUser._id,
       status: initialStatus,

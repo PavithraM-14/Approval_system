@@ -232,24 +232,50 @@ export default function CreateRequestPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium">Institution* </label>
-            <select {...register('college')} className="mt-1 w-full border p-2 rounded">
-              <option value="">Select Institution </option>
-              <option value="SRM">SRM</option>
-              <option value="EEC">EEC</option>
-              <option value="DENTAL">DENTAL</option>
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Institution</label>
+            <div className="relative">
+              <select {...register('college')} className="mt-1 block w-full border border-gray-300 rounded-lg px-4 py-3 bg-white shadow-sm text-gray-900 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors duration-200 appearance-none cursor-pointer">
+                <option value="" className="text-gray-600 font-medium text-base">Select Institution</option>
+                <option value="SRM" className="py-2">SRM</option>
+                <option value="EEC" className="py-2">EEC</option>
+                <option value="DENTAL" className="py-2">DENTAL</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
             {errors.college && <p className={errorText}>{errors.college.message}</p>}
           </div>
 
           <div>
-            <label className="text-sm font-medium">Department* </label>
-            <select {...register('department')} className="mt-1 w-full border p-2 rounded" >
-            <option value="">Select Department </option>
-            <option value="SRM">CSE</option>
-              <option value="EEC">ECE</option>
-              <option value="DENTAL">EEE</option>
-            </select>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+            <div className="relative">
+              <select 
+                {...register('department')} 
+                className="mt-1 block w-full border border-gray-300 rounded-lg px-4 py-3 bg-white shadow-sm text-gray-900 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors duration-200 appearance-none cursor-pointer"
+              >
+                <option value="" className="text-gray-600 font-medium text-base">Select Department</option>
+                <option value="Department of Biomedical Engineering" className="py-2">Department of Biomedical Engineering</option>
+                <option value="Department of Mechanical Engineering" className="py-2">Department of Mechanical Engineering</option>
+                <option value="Department of Civil Engineering" className="py-2">Department of Civil Engineering</option>
+                <option value="Department of Electronics & Communication Engineering" className="py-2">Department of Electronics & Communication Engineering</option>
+                <option value="Department of Electrical and Electronics Engineering" className="py-2">Department of Electrical and Electronics Engineering</option>
+                <option value="Department of Biotechnology" className="py-2">Department of Biotechnology</option>
+                <option value="Department of Language, Culture and Society (LCS)" className="py-2">Department of Language, Culture and Society (LCS)</option>
+                <option value="Department of Mathematics" className="py-2">Department of Mathematics</option>
+                <option value="Department of Physics" className="py-2">Department of Physics</option>
+                <option value="Department of Chemistry" className="py-2">Department of Chemistry</option>
+                <option value="Department of Architecture" className="py-2">Department of Architecture</option>
+                <option value="School of Computer Science Engineering" className="py-2">School of Computer Science Engineering</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
             {errors.department && <p className={errorText}>{errors.department.message}</p>}
           </div>
 

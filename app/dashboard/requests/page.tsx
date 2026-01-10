@@ -6,6 +6,7 @@ import QueryIndicator from '../../../components/QueryIndicator';
 
 interface Request {
   _id: string;
+  requestId?: string;
   title: string;
   purpose: string;
   college: string;
@@ -394,9 +395,11 @@ export default function RequestsPage() {
                   </p>
 
                   <div className="mt-3 flex flex-wrap gap-1.5 sm:gap-2 text-xs sm:text-sm">
-                    <span className="px-2 sm:px-3 py-1 rounded-full bg-blue-100 text-blue-800 whitespace-nowrap">
-                      ₹{request.costEstimate.toLocaleString()}
-                    </span>
+                    {request.costEstimate > 0 && (
+                      <span className="px-2 sm:px-3 py-1 rounded-full bg-blue-100 text-blue-800 whitespace-nowrap">
+                        ₹{request.costEstimate.toLocaleString()}
+                      </span>
+                    )}
 
                     <span className="px-2 sm:px-3 py-1 rounded-full bg-gray-100 text-gray-800 truncate max-w-[200px]">
                       {request.college} • {request.department}

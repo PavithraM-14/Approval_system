@@ -243,13 +243,15 @@ export default function DashboardPage() {
                     {request.title || 'Untitled Request'}
                   </p>
                   {currentUser?.role !== 'requester' && (
-                    <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">ID: {request._id}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5">
+                      ID: {request.requestId || request._id.slice(-6)}
+                    </p>
                   )}
                   <p className="text-xs sm:text-sm text-gray-500 mt-1 truncate">
                     {request.college || 'Unknown'} • {request.department || 'Unknown'}
                   </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    ₹{request.costEstimate?.toLocaleString() || '0'} • {request.createdAt ? new Date(request.createdAt).toLocaleDateString('en-GB') : 'Unknown date'}
+                    {request.costEstimate > 0 && `₹${request.costEstimate?.toLocaleString() || '0'} • `}{request.createdAt ? new Date(request.createdAt).toLocaleDateString('en-GB') : 'Unknown date'}
                   </p>
                 </div>
 
