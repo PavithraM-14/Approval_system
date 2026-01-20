@@ -748,7 +748,9 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                       <dt className="text-xs sm:text-sm font-medium text-gray-700">Status</dt>
                       <dd className="text-xs sm:text-sm col-span-2">
                         <span className="text-xs sm:text-sm text-gray-900">
-                          {request.status.replace('_', ' ').toUpperCase()}
+                          {request.status === 'parallel_verification' 
+                            ? 'VERIFICATION' 
+                            : request.status.replace('_', ' ').toUpperCase()}
                         </span>
                         {request.pendingQuery && request.queryLevel === currentUser?.role && (
                           <QueryIndicator size="sm" showText={false} />
@@ -854,7 +856,9 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                       <dt className="text-xs sm:text-sm font-medium text-gray-700">Status</dt>
                       <dd className="text-xs sm:text-sm col-span-2">
                         <span className="text-xs sm:text-sm text-gray-900">
-                          {request.status.replace('_', ' ').toUpperCase()}
+                          {request.status === 'parallel_verification' 
+                            ? 'VERIFICATION' 
+                            : request.status.replace('_', ' ').toUpperCase()}
                         </span>
                         {request.pendingQuery && request.queryLevel === currentUser?.role && (
                           <QueryIndicator size="sm" showText={false} />

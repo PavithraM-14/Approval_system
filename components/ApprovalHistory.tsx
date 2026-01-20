@@ -16,6 +16,8 @@ const getStatusBadgeClass = (status: string) => {
       return 'bg-red-100 text-red-800';
     case 'manager_review':
       return 'bg-yellow-100 text-yellow-800';
+    case 'parallel_verification':
+      return 'bg-blue-100 text-blue-800';
     case 'sop_verification':
       return 'bg-teal-100 text-teal-800';
     case 'budget_check':
@@ -69,6 +71,7 @@ const getActionBadgeClass = (action: string) => {
 const getStatusDisplayName = (status: string) => {
   const statusMap: Record<string, string> = {
     'manager_review': 'Manager Review',
+    'parallel_verification': 'Verification',
     'sop_verification': 'SOP Verification',
     'budget_check': 'Budget Check',
     'institution_verified': 'Manager Approval',
