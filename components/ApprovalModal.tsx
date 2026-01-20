@@ -1066,13 +1066,23 @@ export default function ApprovalModal({
                     </div>
                   )}
                   
-                  {action === 'approve' && (
+                  {action === 'approve' && userRole !== 'chairman' && (
                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                       <div className="flex items-center">
                         <CheckCircleIcon className="w-5 h-5 text-green-600 mr-2" />
                         <span className="font-medium text-green-700">Approve</span>
                       </div>
                       <p className="text-sm text-green-600 mt-1">Approve and forward to next level</p>
+                    </div>
+                  )}
+                  
+                  {action === 'approve' && userRole === 'chairman' && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center">
+                        <CheckCircleIcon className="w-5 h-5 text-green-600 mr-2" />
+                        <span className="font-medium text-green-700">Final Approval</span>
+                      </div>
+                      <p className="text-sm text-green-600 mt-1">Grant final approval for this request</p>
                     </div>
                   )}
                   
