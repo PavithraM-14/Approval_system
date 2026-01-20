@@ -25,7 +25,7 @@ const getStatusDisplayName = (status: string) => {
     'budget_check': 'Budget Check',
     'sop_completed': 'SOP Completed',
     'budget_completed': 'Budget Completed',
-    'institution_verified': 'Institution Verified',
+    'institution_verified': 'Manager Approval',
     'vp_approval': 'VP Approval',
     'hoi_approval': 'HOI Approval',
     'dean_review': 'Dean Review',
@@ -49,7 +49,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus }) =>
   const workflowSteps = [
     { id: 'manager_review', name: 'Manager Review' },
     { id: 'parallel_verification', name: 'Parallel Verification' },
-    { id: 'institution_verified', name: 'Institution Verified' },
+    { id: 'institution_verified', name: 'Manager Approval' },
     { id: 'vp_approval', name: 'VP Approval' },
     { id: 'hoi_approval', name: 'HOI Approval' },
     { id: 'dean_review', name: 'Dean Review' },
@@ -93,30 +93,6 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus }) =>
                   {String(currentStatus) === 'budget_query' && 'Waiting for budget queries from Institution Manager'}
                   {String(currentStatus) === 'query_required' && 'Waiting for response from Requester'}
                   {String(currentStatus) === 'department_checks' && 'Waiting for department response'}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Show parallel verification status if applicable */}
-        {isParallelStatus && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center">
-              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center mr-3">
-                <svg className="w-4 h-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <h4 className="text-lg font-medium text-blue-800">
-                  {getStatusDisplayName(currentStatus)}
-                </h4>
-                <p className="text-sm text-blue-700">
-                  {currentStatus === 'parallel_verification' && 'Both SOP Verifier and Accountant are working on verification simultaneously'}
-                  {currentStatus === 'sop_completed' && 'SOP verification complete. Waiting for budget verification to finish.'}
-                  {currentStatus === 'budget_completed' && 'Budget verification complete. Waiting for SOP verification to finish.'}
-                  {currentStatus === 'institution_verified' && 'Both SOP and Budget verifications complete. Waiting for Institution Manager final approval.'}
                 </p>
               </div>
             </div>

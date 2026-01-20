@@ -709,11 +709,11 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             <div className="w-full space-y-6">
               {/* Request Information */}
               <div>
-                <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-3">Request Information</h4>
+                <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 bg-gray-100 px-3 py-2 rounded-md">Request Information</h4>
                 <div className="space-y-3">
                   <div className="grid grid-cols-3 gap-2 items-start">
                     <dt className="text-xs sm:text-sm font-medium text-gray-700">ID</dt>
-                    <dd className="text-xs sm:text-sm text-gray-900 break-all font-mono col-span-2">
+                    <dd className="text-xs sm:text-sm text-gray-900 break-all col-span-2">
                       {request.requestId || request._id.slice(-6)}
                     </dd>
                   </div>
@@ -731,72 +731,152 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                   </div>
                   <div className="grid grid-cols-3 gap-2 items-start">
                     <dt className="text-xs sm:text-sm font-medium text-gray-700">Department</dt>
-                    <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.department}</dd>
+                    <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">
+                      {request.department.replace(/^Department of\s*/i, '')}
+                    </dd>
                   </div>
                 </div>
               </div>
 
-              {/* Status Information - moved to left side */}
-              <div>
-                <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-3">Status Information</h4>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2 items-start">
-                    <dt className="text-xs sm:text-sm font-medium text-gray-700">Status</dt>
-                    <dd className="text-xs sm:text-sm col-span-2">
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              {/* Status Information - show on left side only if there's financial/budget info, otherwise it goes to right side */}
+              {((request.costEstimate > 0 || (request.expenseCategory && request.expenseCategory.trim() !== '') || request.sopReference) || 
+                (request.costEstimate > 0 && (request.budgetAllocated > 0 || request.budgetSpent > 0 || (request.budgetBalance !== undefined && request.budgetBalance !== 0)))) && (
+                <div>
+                  <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 bg-gray-100 px-3 py-2 rounded-md">Status Information</h4>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2 items-start">
+                      <dt className="text-xs sm:text-sm font-medium text-gray-700">Status</dt>
+                      <dd className="text-xs sm:text-sm col-span-2">
+                        <span className="text-xs sm:text-sm text-gray-900">
                           {request.status.replace('_', ' ').toUpperCase()}
                         </span>
                         {request.pendingQuery && request.queryLevel === currentUser?.role && (
                           <QueryIndicator size="sm" showText={false} />
                         )}
-                      </div>
-                    </dd>
-                  </div>
+                      </dd>
+                    </div>
 
-                  <div className="grid grid-cols-3 gap-2 items-start">
-                    <dt className="text-xs sm:text-sm font-medium text-gray-700">Created</dt>
-                    <dd className="text-xs sm:text-sm text-gray-900 col-span-2">{new Date(request.createdAt).toLocaleDateString('en-GB')}</dd>
+                    <div className="grid grid-cols-3 gap-2 items-start">
+                      <dt className="text-xs sm:text-sm font-medium text-gray-700">Created</dt>
+                      <dd className="text-xs sm:text-sm text-gray-900 col-span-2">{new Date(request.createdAt).toLocaleDateString('en-GB')}</dd>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* Conditionally show Financial Information section */}
-            {(request.costEstimate > 0 || (request.expenseCategory && request.expenseCategory.trim() !== '') || request.sopReference) && (
-              <div className="w-full">
-                <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-3">Financial Information</h4>
-                <div className="space-y-3">
-                  {request.costEstimate > 0 && (
-                    <div className="grid grid-cols-3 gap-2 items-start">
-                      <dt className="text-xs sm:text-sm font-medium text-gray-700">Cost Estimate</dt>
-                      <dd className="text-sm sm:text-base font-semibold text-green-600 col-span-2">₹{request.costEstimate.toLocaleString()}</dd>
-                    </div>
-                  )}
+            <div className="w-full space-y-6">
+              {/* Conditionally show Financial Information section */}
+              {(request.costEstimate > 0 || (request.expenseCategory && request.expenseCategory.trim() !== '') || request.sopReference) && (
+                <div>
+                  <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 bg-gray-100 px-3 py-2 rounded-md">Financial Information</h4>
+                  <div className="space-y-3">
+                    {request.costEstimate > 0 && (
+                      <div className="grid grid-cols-3 gap-2 items-start">
+                        <dt className="text-xs sm:text-sm font-medium text-gray-700">Cost Estimate</dt>
+                        <dd className="text-sm sm:text-base font-semibold text-green-600 col-span-2">₹{request.costEstimate.toLocaleString()}</dd>
+                      </div>
+                    )}
 
-                  {request.expenseCategory && request.expenseCategory.trim() !== '' && (
-                    <div className="grid grid-cols-3 gap-2 items-start">
-                      <dt className="text-xs sm:text-sm font-medium text-gray-700">Expense Category</dt>
-                      <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.expenseCategory}</dd>
-                    </div>
-                  )}
+                    {request.expenseCategory && request.expenseCategory.trim() !== '' && (
+                      <div className="grid grid-cols-3 gap-2 items-start">
+                        <dt className="text-xs sm:text-sm font-medium text-gray-700">Expense Category</dt>
+                        <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.expenseCategory}</dd>
+                      </div>
+                    )}
 
-                  {request.sopReference && (
-                    <div className="grid grid-cols-3 gap-2 items-start">
-                      <dt className="text-xs sm:text-sm font-medium text-gray-700">SOP Reference</dt>
-                      <dd className="text-xs sm:text-sm text-gray-900 break-words font-mono col-span-2">{request.sopReference}</dd>
-                    </div>
-                  )}
+                    {request.sopReference && (
+                      <div className="grid grid-cols-3 gap-2 items-start">
+                        <dt className="text-xs sm:text-sm font-medium text-gray-700">SOP Reference</dt>
+                        <dd className="text-xs sm:text-sm text-gray-900 break-words col-span-2">{request.sopReference}</dd>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* Budget Details - show only if there's meaningful budget data and cost estimate > 0 */}
+              {request.costEstimate > 0 && (request.budgetAllocated > 0 || request.budgetSpent > 0 || (request.budgetBalance !== undefined && request.budgetBalance !== 0)) && (
+                <div>
+                  <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 bg-gray-100 px-3 py-2 rounded-md">Budget Details</h4>
+                  <div className="space-y-3">
+                    {request.budgetAllocated > 0 && (
+                      <div className="grid grid-cols-3 gap-2 items-start">
+                        <dt className="text-xs sm:text-sm font-medium text-gray-700">Budget Allocated</dt>
+                        <dd className="text-sm sm:text-base font-semibold text-blue-600 col-span-2">₹{request.budgetAllocated.toLocaleString()}</dd>
+                      </div>
+                    )}
+
+                    {request.budgetSpent > 0 && (
+                      <div className="grid grid-cols-3 gap-2 items-start">
+                        <dt className="text-xs sm:text-sm font-medium text-gray-700">Budget Spent</dt>
+                        <dd className="text-sm sm:text-base font-semibold text-orange-600 col-span-2">₹{request.budgetSpent.toLocaleString()}</dd>
+                      </div>
+                    )}
+
+                    {request.budgetBalance !== undefined && (
+                      <div className="grid grid-cols-3 gap-2 items-start">
+                        <dt className="text-xs sm:text-sm font-medium text-gray-700">Budget Available</dt>
+                        <dd className={`text-sm sm:text-base font-semibold col-span-2 ${
+                          request.budgetBalance >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          ₹{request.budgetBalance.toLocaleString()}
+                        </dd>
+                      </div>
+                    )}
+
+                    {/* Budget Availability Status */}
+                    {request.budgetBalance !== undefined && (
+                      <div className="grid grid-cols-3 gap-2 items-start">
+                        <dt className="text-xs sm:text-sm font-medium text-gray-700">Budget Availability</dt>
+                        <dd className="text-xs sm:text-sm col-span-2">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                            request.budgetBalance >= request.costEstimate 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {request.budgetBalance >= request.costEstimate ? 'Available' : 'Not Available'}
+                          </span>
+                        </dd>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Status Information - show on right side only if there's NO financial/budget info */}
+              {!((request.costEstimate > 0 || (request.expenseCategory && request.expenseCategory.trim() !== '') || request.sopReference) || 
+                (request.costEstimate > 0 && (request.budgetAllocated > 0 || request.budgetSpent > 0 || (request.budgetBalance !== undefined && request.budgetBalance !== 0)))) && (
+                <div>
+                  <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 bg-gray-100 px-3 py-2 rounded-md">Status Information</h4>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2 items-start">
+                      <dt className="text-xs sm:text-sm font-medium text-gray-700">Status</dt>
+                      <dd className="text-xs sm:text-sm col-span-2">
+                        <span className="text-xs sm:text-sm text-gray-900">
+                          {request.status.replace('_', ' ').toUpperCase()}
+                        </span>
+                        {request.pendingQuery && request.queryLevel === currentUser?.role && (
+                          <QueryIndicator size="sm" showText={false} />
+                        )}
+                      </dd>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 items-start">
+                      <dt className="text-xs sm:text-sm font-medium text-gray-700">Created</dt>
+                      <dd className="text-xs sm:text-sm text-gray-900 col-span-2">{new Date(request.createdAt).toLocaleDateString('en-GB')}</dd>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
           </div>
 
           {/* ✅ UPDATED Attachments Section with View Button */}
           {request.attachments?.length > 0 && (
             <div className="mt-4 sm:mt-6">
-              <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-2">Attachments</h4>
+              <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 bg-gray-100 px-3 py-2 rounded-md">Attachments</h4>
               <div className="border rounded-lg divide-y divide-gray-200">
                 {request.attachments.map((a, i) => {
                   const fileName = a.split('/').pop();
@@ -855,7 +935,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             const files: string[] = latestRequesterClarification.queryAttachments || [];
             return (
               <div className="mt-4 sm:mt-6">
-                <h4 className="text-xs sm:text-sm font-medium text-gray-500 mb-2">Query Response Attachments</h4>
+                <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 bg-gray-100 px-3 py-2 rounded-md">Query Response Attachments</h4>
                 <div className="border rounded-lg divide-y divide-gray-200">
                   {files.map((a, i) => {
                     const fileName = a.split('/').pop();
@@ -1032,7 +1112,6 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
       {!hideWorkflowAndHistory && (
         <div className="space-y-4 sm:space-y-6">
           <div className="bg-white shadow rounded-lg sm:rounded-xl p-4 sm:p-6">
-            <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-4">Approval Workflow</h3>
             <ApprovalWorkflow currentStatus={request.status} />
           </div>
 

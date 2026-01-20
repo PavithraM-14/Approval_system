@@ -71,7 +71,7 @@ const getStatusDisplayName = (status: string) => {
     'manager_review': 'Manager Review',
     'sop_verification': 'SOP Verification',
     'budget_check': 'Budget Check',
-    'institution_verified': 'Institution Verified',
+    'institution_verified': 'Manager Approval',
     'vp_approval': 'VP Approval',
     'hoi_approval': 'HOI Approval',
     'dean_review': 'Dean Review',
@@ -116,10 +116,6 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
   if (!history || history.length === 0) {
     return (
       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-        <div className="px-4 py-5 sm:px-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">Approval History</h3>
-          <p className="mt-1 text-sm text-gray-500">Detailed timeline of all actions taken on this request</p>
-        </div>
         <div className="border-t border-gray-200">
           <div className="px-4 py-4 sm:px-6">
             <p className="text-sm text-gray-500">No approval history yet</p>
@@ -136,10 +132,6 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
 
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-      <div className="px-4 py-5 sm:px-6">
-        <h3 className="text-lg leading-6 font-medium text-gray-900">Approval History</h3>
-        <p className="mt-1 text-sm text-gray-500">Detailed timeline of all actions taken on this request</p>
-      </div>
       <div className="border-t border-gray-200">
         <div className="flow-root">
           <ul className="divide-y divide-gray-200">
@@ -202,7 +194,7 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
                     {/* Forward Message - Inline format */}
                     {historyItem.forwardedMessage && (
                       <div className="mt-1 text-sm">
-                        <span className="font-medium text-gray-700">Forward Message: </span>
+                        <span className="font-medium text-gray-700">Notes: </span>
                         <span className="text-gray-600">{historyItem.forwardedMessage}</span>
                       </div>
                     )}

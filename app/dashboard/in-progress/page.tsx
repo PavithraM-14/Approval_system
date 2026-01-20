@@ -131,7 +131,7 @@ export default function InProgressPage() {
       'budget_check': 'Budget Check',
       'sop_completed': 'SOP Completed (Waiting for Budget)',
       'budget_completed': 'Budget Completed (Waiting for SOP)',
-      'institution_verified': 'Institution Verified',
+      'institution_verified': 'Manager Approval',
       'vp_approval': 'VP Approval',
       'hoi_approval': 'Head of Institution Approval',
       'dean_review': 'Dean Review',

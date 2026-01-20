@@ -552,7 +552,7 @@ export default function ApprovalModal({
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Budget Available (Auto-calculated)
+                      Budget Available
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
@@ -638,15 +638,6 @@ export default function ApprovalModal({
                     <p className="text-sm text-green-800">
                       <strong>✓ Budget Available:</strong> Sufficient funds are available for this request. 
                       The request will proceed through the standard approval workflow.
-                    </p>
-                  </div>
-                )}
-
-                {request.costEstimate > 0 && budgetAvailable === false && (
-                  <div className="p-3 bg-red-100 border border-red-300 rounded-lg">
-                    <p className="text-sm text-red-800">
-                      <strong>⚠ Budget Not Available:</strong> Insufficient funds for this request. 
-                      This will require special approval through the Dean pathway.
                     </p>
                   </div>
                 )}

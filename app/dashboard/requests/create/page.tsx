@@ -257,7 +257,7 @@ export default function CreateRequestPage() {
                 className="mt-1 block w-full border border-gray-300 rounded-lg px-4 py-3 bg-white shadow-sm text-gray-900 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors duration-200 appearance-none cursor-pointer"
               >
                 <option value="" className="text-gray-600 font-medium text-base">Select Department</option>
-                <option value="Department of Biomedical Engineering" className="py-2">Department of Biomedical Engineering</option>
+                <option value="Department of Biomedical Engineering" className="py-2">Biomedical Engineering</option>
                 <option value="Department of Mechanical Engineering" className="py-2">Department of Mechanical Engineering</option>
                 <option value="Department of Civil Engineering" className="py-2">Department of Civil Engineering</option>
                 <option value="Department of Electronics & Communication Engineering" className="py-2">Department of Electronics & Communication Engineering</option>
