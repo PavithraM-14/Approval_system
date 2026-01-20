@@ -19,6 +19,8 @@ interface NestedSelectProps {
     placeholder?: string;
     error?: string;
     className?: string;
+    dropUp?: boolean;
+    disabled?: boolean;
 }
 
 export default function NestedSelect({
@@ -27,7 +29,9 @@ export default function NestedSelect({
     options,
     placeholder = 'Select Option',
     error,
-    className
+    className,
+    dropUp = false,
+    disabled = false
 }: NestedSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [hoveredOption, setHoveredOption] = useState<string | null>(null);
@@ -74,9 +78,11 @@ export default function NestedSelect({
         <div className={`relative ${className}`} ref={containerRef}>
             <button
                 type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className={`w-full text-left bg-white border rounded-lg px-4 py-3 flex items-center justify-between shadow-sm transition-all duration-200
-          ${error ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 hover:border-gray-400 focus:ring-blue-500 focus:border-blue-500'}
+                disabled={disabled}
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                className={`w-full text-left border rounded-lg px-4 py-3 flex items-center justify-between shadow-sm transition-all duration-200
+          ${error ? 'border-red-500 focus:ring-red-200' : 'border-gray-300'}
+          ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:border-gray-400 focus:ring-blue-500 focus:border-blue-500 cursor-pointer'}
           focus:outline-none focus:ring-2`}
             >
                 <span className={`block truncate ${!value ? 'text-gray-500' : 'text-gray-900 font-medium'}`}>
@@ -85,8 +91,8 @@ export default function NestedSelect({
                 <ChevronDownIcon className="w-5 h-5 text-gray-400" aria-hidden="true" />
             </button>
 
-            {isOpen && (
-                <div className="absolute z-50 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-visible focus:outline-none sm:text-sm">
+            {isOpen && !disabled && (
+                <div className={`absolute z-50 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-visible focus:outline-none sm:text-sm ${dropUp ? 'bottom-full mb-1' : 'mt-1'}`}>
                     <div className="max-h-60 overflow-y-auto custom-scrollbar">
                         {options.map((rawOpt) => {
                             const opt = normalizeOption(rawOpt);

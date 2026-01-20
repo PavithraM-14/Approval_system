@@ -382,6 +382,8 @@ export default function SignupPage() {
                                 ENGINEERING_DEPARTMENTS
                     }
                     placeholder="Select Department"
+                    dropUp={true}
+                    disabled={!college}
                   />
                 </div>
               </div>

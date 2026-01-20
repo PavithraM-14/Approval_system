@@ -283,6 +283,7 @@ export default function CreateRequestPage() {
                   options={departmentOptions}
                   placeholder="Select Department"
                   error={errors.department?.message}
+                  disabled={!college}
                 />
               )}
             />
