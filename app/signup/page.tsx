@@ -7,6 +7,9 @@ import PasswordInput from '../../components/PasswordInput';
 import Image from 'next/image';
 import SRMRMP_Logo from '../assets/SRMRMP_LOGO.png';
 import OTPVerification from '../../components/OTPVerification';
+import InstitutionSelect from '../../components/InstitutionSelect';
+import NestedSelect from '../../components/NestedSelect';
+import { DENTAL_DEPARTMENTS, ENGINEERING_DEPARTMENTS, FSH_DEPARTMENTS, EEC_DEPARTMENTS, MANAGEMENT_DEPARTMENTS } from '../../lib/constants';
 
 const roleOptions = [
   { value: UserRole.REQUESTER, label: 'Requester/HOD' },
@@ -51,7 +54,7 @@ export default function SignupPage() {
     'bg-white shadow-sm placeholder-gray-500 text-gray-900 ' +
     'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition';
 
-  const selectClass = 
+  const selectClass =
     'mt-1 block w-full border border-gray-300 rounded-lg px-4 py-3 ' +
     'bg-white shadow-sm text-gray-900 text-base font-medium ' +
     'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ' +
@@ -308,10 +311,10 @@ export default function SignupPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Password *</label>
-              <PasswordInput 
-                value={password} 
-                onChange={setPassword} 
-                required 
+              <PasswordInput
+                value={password}
+                onChange={setPassword}
+                required
                 placeholder="Enter your password"
                 autoComplete="new-password"
               />
@@ -319,10 +322,10 @@ export default function SignupPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Confirm Password *</label>
-              <PasswordInput 
-                value={confirmPassword} 
-                onChange={setConfirmPassword} 
-                required 
+              <PasswordInput
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                required
                 placeholder="Confirm your password"
                 autoComplete="new-password"
               />
@@ -352,21 +355,12 @@ export default function SignupPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Institution *</label>
                 <div className="relative">
-                  <select
-                    required
-                    value={college}
-                    onChange={(e) => setCollege(e.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="" className="text-gray-700 font-medium text-base">Select Institution</option>
-                    <option value="SRM" className="py-2">SRM</option>
-                    <option value="EEC" className="py-2">EEC</option>
-                    <option value="DENTAL" className="py-2">DENTAL</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                  <div className="relative">
+                    <InstitutionSelect
+                      value={college}
+                      onChange={setCollege}
+                    />
+                    {/* Icon is inside the component now */}
                   </div>
                 </div>
               </div>
@@ -376,31 +370,19 @@ export default function SignupPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Department *</label>
                 <div className="relative">
-                  <select
-                    required
+                  <NestedSelect
                     value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="" className="text-gray-700 font-medium text-base">Select Department</option>
-                    <option value="Department of Biomedical Engineering" className="py-2">Department of Biomedical Engineering</option>
-                    <option value="Department of Mechanical Engineering" className="py-2">Department of Mechanical Engineering</option>
-                    <option value="Department of Civil Engineering" className="py-2">Department of Civil Engineering</option>
-                    <option value="Department of Electronics & Communication Engineering" className="py-2">Department of Electronics & Communication Engineering</option>
-                    <option value="Department of Electrical and Electronics Engineering" className="py-2">Department of Electrical and Electronics Engineering</option>
-                    <option value="Department of Biotechnology" className="py-2">Department of Biotechnology</option>
-                    <option value="Department of Language, Culture and Society (LCS)" className="py-2">Department of Language, Culture and Society (LCS)</option>
-                    <option value="Department of Mathematics" className="py-2">Department of Mathematics</option>
-                    <option value="Department of Physics" className="py-2">Department of Physics</option>
-                    <option value="Department of Chemistry" className="py-2">Department of Chemistry</option>
-                    <option value="Department of Architecture" className="py-2">Department of Architecture</option>
-                    <option value="School of Computer Science Engineering" className="py-2">School of Computer Science Engineering</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
+                    onChange={setDepartment}
+                    options={
+                      college === 'DENTAL' ? DENTAL_DEPARTMENTS :
+                        college === 'EEC' ? EEC_DEPARTMENTS :
+                          college?.includes('FSH') ? FSH_DEPARTMENTS :
+                            college?.includes('Management') ? MANAGEMENT_DEPARTMENTS :
+                              college?.includes('E&T') ? ENGINEERING_DEPARTMENTS :
+                                ENGINEERING_DEPARTMENTS
+                    }
+                    placeholder="Select Department"
+                  />
                 </div>
               </div>
             )}

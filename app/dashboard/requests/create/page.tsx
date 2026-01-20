@@ -8,6 +8,10 @@ import { CreateRequestSchema, UserRole } from '../../../../lib/types';
 import { AuthUser } from '../../../../lib/auth';
 import { z } from 'zod';
 import CostEstimateInput from '../../../../components/CostEstimateInput';
+import InstitutionSelect from '../../../../components/InstitutionSelect';
+import NestedSelect from '../../../../components/NestedSelect';
+import { Controller } from 'react-hook-form';
+import { DENTAL_DEPARTMENTS, ENGINEERING_DEPARTMENTS, FSH_DEPARTMENTS, EEC_DEPARTMENTS, MANAGEMENT_DEPARTMENTS } from '../../../../lib/constants';
 
 type CreateRequestFormData = z.infer<typeof CreateRequestSchema>;
 
@@ -44,6 +48,7 @@ export default function CreateRequestPage() {
     handleSubmit,
     setValue,
     watch,
+    control,
     formState: { errors }
   } = useForm<CreateRequestFormData>({
     resolver: zodResolver(CreateRequestSchema),
@@ -55,6 +60,26 @@ export default function CreateRequestPage() {
   });
 
   const costEstimate = watch('costEstimate');
+  const college = watch('college');
+
+  // Use any because the constants have different structures (strings vs objects)
+  // NestedSelect handles normalization internally
+  let departmentOptions: any[] = ENGINEERING_DEPARTMENTS;
+  if (college === 'DENTAL') {
+    departmentOptions = DENTAL_DEPARTMENTS;
+  } else if (college?.includes('FSH')) {
+    departmentOptions = FSH_DEPARTMENTS;
+  } else if (college?.includes('Management')) {
+    departmentOptions = MANAGEMENT_DEPARTMENTS;
+  } else if (college === 'EEC') {
+    departmentOptions = EEC_DEPARTMENTS;
+  } else if (college?.includes('E&T')) {
+    departmentOptions = ENGINEERING_DEPARTMENTS;
+  }
+  // Default fallback to ENGINEERING if just "SRMIST" or others for now unless specified
+  // Or maybe empty? User didn't specify behavior for other cases. 
+  // Sticking to engineering as default seems safe for "SRMIST - E&T" or generic "SRM" if that happens.
+
   const errorText = 'text-xs text-red-600 mt-1';
 
   /* AUTH CHECK */
@@ -132,7 +157,7 @@ export default function CreateRequestPage() {
 
     try {
       const formData = new FormData();
-      
+
       // Add all files to the form data (fixed to use 'files' parameter)
       validFiles.forEach(file => {
         formData.append('files', file);
@@ -233,49 +258,34 @@ export default function CreateRequestPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Institution* </label>
-            <div className="relative">
-              <select {...register('college')} className="mt-1 block w-full border border-gray-300 rounded-lg px-4 py-3 bg-white shadow-sm text-gray-900 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors duration-200 appearance-none cursor-pointer">
-                <option value="" className="text-gray-600 font-medium text-base">Select Institution</option>
-                <option value="SRM" className="py-2">SRM</option>
-                <option value="EEC" className="py-2">EEC</option>
-                <option value="DENTAL" className="py-2">DENTAL</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-            {errors.college && <p className={errorText}>{errors.college.message}</p>}
+            <Controller
+              control={control}
+              name="college"
+              render={({ field: { value, onChange } }) => (
+                <InstitutionSelect
+                  value={value}
+                  onChange={onChange}
+                  error={errors.college?.message}
+                />
+              )}
+            />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Department* </label>
-            <div className="relative">
-              <select 
-                {...register('department')} 
-                className="mt-1 block w-full border border-gray-300 rounded-lg px-4 py-3 bg-white shadow-sm text-gray-900 text-base font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors duration-200 appearance-none cursor-pointer"
-              >
-                <option value="" className="text-gray-600 font-medium text-base">Select Department</option>
-                <option value="Department of Biomedical Engineering" className="py-2">Biomedical Engineering</option>
-                <option value="Department of Mechanical Engineering" className="py-2">Department of Mechanical Engineering</option>
-                <option value="Department of Civil Engineering" className="py-2">Department of Civil Engineering</option>
-                <option value="Department of Electronics & Communication Engineering" className="py-2">Department of Electronics & Communication Engineering</option>
-                <option value="Department of Electrical and Electronics Engineering" className="py-2">Department of Electrical and Electronics Engineering</option>
-                <option value="Department of Biotechnology" className="py-2">Department of Biotechnology</option>
-                <option value="Department of Language, Culture and Society (LCS)" className="py-2">Department of Language, Culture and Society (LCS)</option>
-                <option value="Department of Mathematics" className="py-2">Department of Mathematics</option>
-                <option value="Department of Physics" className="py-2">Department of Physics</option>
-                <option value="Department of Chemistry" className="py-2">Department of Chemistry</option>
-                <option value="Department of Architecture" className="py-2">Department of Architecture</option>
-                <option value="School of Computer Science Engineering" className="py-2">School of Computer Science Engineering</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
+            <Controller
+              control={control}
+              name="department"
+              render={({ field: { value, onChange } }) => (
+                <NestedSelect
+                  value={value}
+                  onChange={onChange}
+                  options={departmentOptions}
+                  placeholder="Select Department"
+                  error={errors.department?.message}
+                />
+              )}
+            />
             {errors.department && <p className={errorText}>{errors.department.message}</p>}
           </div>
 
