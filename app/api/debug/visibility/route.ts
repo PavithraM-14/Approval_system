@@ -10,7 +10,7 @@ import { filterRequestsByVisibility, analyzeRequestVisibility } from '../../../.
 export async function GET() {
   try {
     await connectDB();
-    
+
     const currentUser = await getCurrentUser();
     if (!currentUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -24,7 +24,7 @@ export async function GET() {
 
     // Test approval engine for MANAGER_REVIEW status
     const requiredApprovers = approvalEngine.getRequiredApprover(RequestStatus.MANAGER_REVIEW);
-    
+
     // Get all requests in MANAGER_REVIEW status
     const managerReviewRequests = await Request.find({ status: RequestStatus.MANAGER_REVIEW })
       .populate('requester', 'name email empId')
@@ -36,7 +36,7 @@ export async function GET() {
       requestId: request._id,
       title: request.title,
       status: request.status,
-      visibility: analyzeRequestVisibility(request, currentUser.role as UserRole, dbUser._id.toString())
+      visibility: analyzeRequestVisibility(request, currentUser.role as UserRole, dbUser._id.toString(), dbUser.college)
     }));
 
     // Apply full filtering
@@ -44,6 +44,7 @@ export async function GET() {
       managerReviewRequests,
       currentUser.role as UserRole,
       dbUser._id.toString(),
+      dbUser.college,
       'pending'
     );
 

@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
     const user = await getCurrentUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
-    
+
     // Get user's database record
     let dbUser = null;
     if (mongoose.Types.ObjectId.isValid(user.id)) {
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     } else {
       dbUser = await User.findOne({ email: user.email });
     }
-    
+
     if (!dbUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -49,22 +49,23 @@ export async function GET(request: NextRequest) {
 
     // Apply role-based visibility filtering - show both in-progress and approved requests
     const visibleRequests = filterRequestsByVisibility(
-      allRequests, 
-      user.role as UserRole, 
-      dbUser._id.toString()
+      allRequests,
+      user.role as UserRole,
+      dbUser._id.toString(),
+      dbUser.college
       // No category filter - get all visible requests
     );
 
     // Filter to show requests where user has taken action (in-progress or completed)
     const inProgressRequests = visibleRequests.filter(request => {
       // Show requests where the user has approved or clarified, including completed ones
-      const userTookAction = request._visibility?.userAction === 'approve' || 
-                            request._visibility?.userAction === 'clarify';
-      
+      const userTookAction = request._visibility?.userAction === 'approve' ||
+        request._visibility?.userAction === 'clarify';
+
       // Include both in-progress and approved requests where user was involved
-      const isRelevant = request._visibility?.category === 'in_progress' || 
-                        (request._visibility?.category === 'approved' && request.status === RequestStatus.APPROVED);
-      
+      const isRelevant = request._visibility?.category === 'in_progress' ||
+        (request._visibility?.category === 'approved' && request.status === RequestStatus.APPROVED);
+
       return userTookAction && isRelevant;
     });
 

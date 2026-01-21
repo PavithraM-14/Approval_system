@@ -13,7 +13,7 @@ export async function GET() {
   try {
     await connectDB();
     const user = await getCurrentUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -25,7 +25,7 @@ export async function GET() {
     } else {
       dbUser = await User.findOne({ email: user.email });
     }
-    
+
     if (!dbUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -35,89 +35,90 @@ export async function GET() {
       .populate('requester', 'name email empId')
       .populate('history.actor', 'name email empId')
       .lean(); // Convert to plain objects
-    
+
     // For total requests: 
     // - Requesters see only their own requests
     // - Non-requesters see ALL requests that have ever been at their level (including approved ones)
     let totalRequests: number;
     let visibleRequests: any[];
-    
+
     if (user.role === UserRole.REQUESTER) {
       // Requesters see only their own requests
-      visibleRequests = allRequests.filter(req => 
-        req.requester._id?.toString() === dbUser._id.toString() || 
+      visibleRequests = allRequests.filter(req =>
+        req.requester._id?.toString() === dbUser._id.toString() ||
         req.requester.toString() === dbUser._id.toString()
       );
       totalRequests = visibleRequests.length;
     } else {
       // Non-requesters: apply visibility filtering to get ALL requests at their level
       visibleRequests = filterRequestsByVisibility(
-        allRequests, 
-        user.role as UserRole, 
-        dbUser._id.toString()
+        allRequests,
+        user.role as UserRole,
+        dbUser._id.toString(),
+        dbUser.college
       );
-      
+
       // Total requests = all requests they can see (including approved/completed ones)
       totalRequests = visibleRequests.length;
     }
-    
+
     // Calculate other stats based on role
     let pendingRequests: number;
     let approvedRequests: number;
     let rejectedRequests: number;
     let inProgressRequests: number;
-    
+
     if (user.role === UserRole.REQUESTER) {
       // For requesters, use their own requests
-      pendingRequests = visibleRequests.filter(req => 
+      pendingRequests = visibleRequests.filter(req =>
         !['approved', 'rejected'].includes(req.status)
       ).length;
-      
-      approvedRequests = visibleRequests.filter(req => 
+
+      approvedRequests = visibleRequests.filter(req =>
         req.status === RequestStatus.APPROVED
       ).length;
-      
-      rejectedRequests = visibleRequests.filter(req => 
+
+      rejectedRequests = visibleRequests.filter(req =>
         req.status === RequestStatus.REJECTED
       ).length;
-      
+
       inProgressRequests = 0; // Requesters don't have "in progress" concept
     } else {
       // For non-requesters, use visibility-filtered requests for all counts
       // This ensures they only see requests that have been at their level
-      pendingRequests = visibleRequests.filter(req => 
+      pendingRequests = visibleRequests.filter(req =>
         req._visibility.category === 'pending'
       ).length;
-      
+
       // Approved: show requests they have approved (regardless of current status)
-      approvedRequests = visibleRequests.filter(req => 
+      approvedRequests = visibleRequests.filter(req =>
         req._visibility.category === 'approved'
       ).length;
-      
+
       // Rejected: show requests they have rejected OR requests they approved but were later rejected by someone else
       rejectedRequests = visibleRequests.filter(req => {
         // Request must be rejected
         if (req.status !== RequestStatus.REJECTED) return false;
-        
+
         // Check if this user has rejected this request
-        const userHasRejected = req.history?.some((h: any) => 
+        const userHasRejected = req.history?.some((h: any) =>
           (h.actor?._id?.toString() === dbUser._id.toString() || h.actor?.toString() === dbUser._id.toString()) &&
           h.action === ActionType.REJECT
         );
-        
+
         // Check if this user has approved this request in the history
-        const userHasApproved = req.history?.some((h: any) => 
+        const userHasApproved = req.history?.some((h: any) =>
           (h.actor?._id?.toString() === dbUser._id.toString() || h.actor?.toString() === dbUser._id.toString()) &&
           (h.action === ActionType.APPROVE || h.action === ActionType.FORWARD)
         );
-        
+
         // Show if user rejected it OR if user approved it but someone else rejected it later
         return userHasRejected || userHasApproved;
       }).length;
-      
+
       // In-progress: show requests they've been involved with
-      inProgressRequests = visibleRequests.filter(req => 
-        req._visibility.category === 'in_progress' && 
+      inProgressRequests = visibleRequests.filter(req =>
+        req._visibility.category === 'in_progress' &&
         (req._visibility.userAction === 'approve' || req._visibility.userAction === 'clarify')
       ).length;
     }

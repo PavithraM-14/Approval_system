@@ -11,7 +11,7 @@ export async function GET(
   try {
     await connectDB();
     const user = await getCurrentUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -41,12 +41,34 @@ export async function GET(
       UserRole.CHAIRMAN
     ];
 
-    const canViewRequest =
-      allowedRoles.includes(user.role) ||
-      requestRecord.requester._id.toString() === user.id;
+    const canViewByRole = allowedRoles.includes(user.role);
+    const isOwnRequest = requestRecord.requester._id.toString() === user.id;
 
-    if (!canViewRequest) {
+    if (!canViewByRole && !isOwnRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Institutional isolation check
+    const institutionalRoles = [
+      UserRole.REQUESTER,
+      UserRole.INSTITUTION_MANAGER,
+      UserRole.SOP_VERIFIER,
+      UserRole.ACCOUNTANT,
+      UserRole.VP,
+      UserRole.HEAD_OF_INSTITUTION
+    ];
+
+    if (institutionalRoles.includes(user.role)) {
+      // If it's an institutional role, they can only see requests from their college
+      if (user.college && requestRecord.college && user.college !== requestRecord.college) {
+        // Special case: Requester can see their own requests even if college mismatch 
+        // (though college should theoretically match)
+        if (!(user.role === UserRole.REQUESTER && isOwnRequest)) {
+          return NextResponse.json({
+            error: `Access Denied: This request belongs to ${requestRecord.college}, but you are assigned to ${user.college}.`
+          }, { status: 403 });
+        }
+      }
     }
 
     return NextResponse.json(requestRecord);
@@ -63,7 +85,7 @@ export async function PUT(
   try {
     await connectDB();
     const user = await getCurrentUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -135,7 +157,7 @@ export async function DELETE(
   try {
     await connectDB();
     const user = await getCurrentUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

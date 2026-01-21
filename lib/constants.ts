@@ -1,4 +1,5 @@
 export const DENTAL_DEPARTMENTS = [
+    'Common',
     'Orthodontics',
     'Prosthodontics',
     'Conservative Dentistry & Endodontics',
@@ -12,6 +13,7 @@ export const DENTAL_DEPARTMENTS = [
 ];
 
 export const ENGINEERING_DEPARTMENTS = [
+    'Common',
     {
         label: 'Computer Science Engineering',
         subOptions: [
@@ -41,6 +43,7 @@ export const ENGINEERING_DEPARTMENTS = [
 ];
 
 export const FSH_DEPARTMENTS = [
+    'Common',
     'Commerce',
     'Biotechnology',
     'Mathematics',
@@ -58,6 +61,7 @@ export const FSH_DEPARTMENTS = [
 ];
 
 export const EEC_DEPARTMENTS = [
+    'Common',
     'Automobile Engineering',
     'Bio Medical Engineering',
     'Civil Engineering',
@@ -91,5 +95,6 @@ export const EEC_DEPARTMENTS = [
 ];
 
 export const MANAGEMENT_DEPARTMENTS = [
+    'Common',
     'Management Studies',
 ];
