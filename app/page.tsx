@@ -23,55 +23,31 @@ export default function HomePage() {
   }, [backgroundImages.length]);
 
   return (
-    <div className="bg-white">
-      
-      {/* Header */}
-      <header className="bg-gradient-to-r from-blue-700 to-blue-600 shadow-lg w-full relative z-20">
-        <div className="w-full">
-          <div className="flex items-center py-6 pl-6 gap-4">
-
-            {/* SRM Logo */}
-            <Image
-              src={srmLogo}
-              alt="SRM Logo"
-              className="h-12 w-auto"
-              priority
-            />
-
-            {/* Title */}
-            <h1 className="text-4xl font-bold text-white tracking-wide drop-shadow-sm">
-              SRM-RMP Approval System
-            </h1>
-
-          </div>
+    <div className="relative overflow-hidden min-h-screen">
+      {/* Background Images - Carousel Effect */}
+      {backgroundImages.map((img, index) => (
+        <div
+          key={img}
+          className={`absolute inset-0 transition-opacity duration-1000 ${
+            index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+          }`}
+          style={{
+            backgroundImage: `url('${img}')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        >
+          {/* Overlay */}
+          <div className="absolute inset-0 bg-black/40"></div>
         </div>
-      </header>
+      ))}
 
-      {/* Hero Section with Background Image */}
-      <div className="relative overflow-hidden min-h-screen">
-        {/* Background Images - Carousel Effect */}
-        {backgroundImages.map((img, index) => (
-          <div
-            key={img}
-            className={`absolute inset-0 transition-opacity duration-1000 ${
-              index === currentImageIndex ? 'opacity-100' : 'opacity-0'
-            }`}
-            style={{
-              backgroundImage: `url('${img}')`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-            }}
-          >
-            {/* Overlay */}
-            <div className="absolute inset-0 bg-black/40"></div>
-          </div>
-        ))}
-
-        {/* Content on top of background */}
-        <div className="relative z-10 h-full">
-          <main className="mx-auto max-w-4xl px-4 h-full">
-            <div className="flex flex-col items-center justify-center h-full min-h-screen text-center">
+      {/* Content on top of background */}
+      <div className="relative z-10 flex flex-col min-h-screen">
+        <main className="flex-1">
+          <div className="mx-auto max-w-4xl px-4 h-full">
+            <div className="flex flex-col items-center justify-center min-h-[calc(100vh-140px)] text-center">
 
               {/* SRM Logo at top */}
               <div className="mb-8">
@@ -100,10 +76,9 @@ export default function HomePage() {
               </div>
 
             </div>
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
-
     </div>
   );
 }
