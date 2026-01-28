@@ -40,26 +40,15 @@ export default function InstitutionSelect({ value, onChange, error, className }:
     }, []);
 
     const handleSelect = (optionId: string, subOptionId?: string) => {
+        let selectedValue = '';
         if (subOptionId) {
-            onChange(`${optionId} - ${subOptionId}`); // e.g., "SRMIST - E&T" - storing 'SRMIST' not 'SRM' to match user request display, but wait...
-            // The old value was "SRM". The new requirement says "change SRM to SRMIST".
-            // Let's check what the backend expects? 
-            // The current values are "SRM", "EEC", "DENTAL".
-            // If I change the value sent to backend, it might break things if strict validation exists.
-            // However, the prompt says "change SRM to SRMIST" and "sub options as E&T...".
-            // I will assume the value stored should be the combination. 
-            // Actually, for "SRMIST", the value probably should include the sub-option.
-            // Let's use the label for the first part if it's SRM/SRMIST.
-
-            // Let's stick to a format. The user asked "change SRM to SRMIST". 
-            // So if they pick SRM -> E&T, value is "SRMIST - E&T".
+            // Format: "SRMIST - E&T", "SRMIST - FSH", etc.
+            selectedValue = `${optionId} - ${subOptionId}`;
         } else {
-            onChange(optionId === 'SRM' ? 'SRM' : optionId);
-            // Wait, if they pick EEC, it's just EEC. 
-            // If they pick SRM, they MUST pick a sub-option? The prompt implies selection is from sub-options.
-            // "when we hover over this option we should get sub options"
-            // Usually that means the parent is not selectable itself, only children.
+            // Direct selection: "EEC" or "DENTAL"
+            selectedValue = optionId;
         }
+        onChange(selectedValue);
         setIsOpen(false);
         setHoveredOption(null);
     };

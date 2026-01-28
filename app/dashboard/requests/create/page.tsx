@@ -49,13 +49,20 @@ export default function CreateRequestPage() {
     setValue,
     watch,
     control,
-    formState: { errors }
+    formState: { errors },
+    trigger,
+    getValues,
+    setError: setFieldError
   } = useForm<CreateRequestFormData>({
-    resolver: zodResolver(CreateRequestSchema),
+    mode: 'onBlur',
+    reValidateMode: 'onBlur',
+    shouldFocusError: false,
     defaultValues: {
       attachments: [],
-      costEstimate: undefined,     // NOT mandatory
-      expenseCategory: undefined,  // NOT mandatory
+      costEstimate: undefined,
+      expenseCategory: undefined,
+      college: '',
+      department: '',
     }
   });
 
@@ -104,16 +111,59 @@ export default function CreateRequestPage() {
     checkAuth();
   }, [router]);
 
+  /* DEBUG: Log errors when they change */
+  useEffect(() => {
+    if (Object.keys(errors).length > 0) {
+      console.log('Form errors updated:', errors);
+    }
+  }, [errors]);
+
   /* SUBMIT */
   const onSubmit = async (data: CreateRequestFormData) => {
+    console.log('[DEBUG] Form submission attempt:', { data, uploadedFiles: uploadedFiles.length });
+    
     setError(null);
+    let hasErrors = false;
 
-    // ✅ SAFETY CHECK (in case user bypasses UI)
+    // Manual validation - check each field
+    if (!data.title || data.title.trim().length < 5) {
+      console.log('[DEBUG] Title validation failed');
+      setFieldError('title', { type: 'manual', message: 'Title must be at least 5 characters' });
+      hasErrors = true;
+    }
+
+    if (!data.purpose || data.purpose.trim().length < 10) {
+      console.log('[DEBUG] Purpose validation failed');
+      setFieldError('purpose', { type: 'manual', message: 'Purpose must be at least 10 characters' });
+      hasErrors = true;
+    }
+
+    if (!data.college || !data.college.trim()) {
+      console.log('[DEBUG] College validation failed');
+      setFieldError('college', { type: 'manual', message: 'College is required' });
+      hasErrors = true;
+    }
+
+    if (!data.department || !data.department.trim()) {
+      console.log('[DEBUG] Department validation failed');
+      setFieldError('department', { type: 'manual', message: 'Department is required' });
+      hasErrors = true;
+    }
+
     if (uploadedFiles.length === 0) {
-      setError('Please upload at least one PDF document.');
+      console.log('[DEBUG] Attachments validation failed');
+      setFieldError('attachments', { type: 'manual', message: 'At least one document is required' });
+      hasErrors = true;
+    }
+
+    if (hasErrors) {
+      console.log('[DEBUG] Validation failed, showing errors');
+      setError('Please fix all highlighted errors before submitting.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
+    console.log('[DEBUG] All validations passed, proceeding with API call');
     setIsSubmitting(true);
 
     try {
@@ -129,16 +179,36 @@ export default function CreateRequestPage() {
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Failed to create request');
+        console.error('[DEBUG] API error response:', err);
+        
+        // Handle Zod validation errors from the server
+        if (err.errors && Array.isArray(err.errors)) {
+          const errorMessages = err.errors.map((e: any) => e.message).join(', ');
+          setError(`Validation error: ${errorMessages}`);
+        } else {
+          setError(err.error || 'Failed to create request');
+        }
+        
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
       }
 
       const result = await response.json();
+      console.log('[DEBUG] Request created successfully:', result._id);
       router.push(`/dashboard/requests/${result._id}`);
     } catch (err) {
+      console.error('[DEBUG] Submission error:', err);
       setError(err instanceof Error ? err.message : 'Something went wrong');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const onInvalid = (fieldErrors: any) => {
+    console.log('[DEBUG] React-hook-form validation errors:', fieldErrors);
+    setError('Please fix all highlighted errors before submitting.');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   /* FILE UPLOAD */
@@ -240,31 +310,62 @@ export default function CreateRequestPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
           <div className="sm:col-span-2">
-            <label className="text-sm font-medium">Title*</label>
-            <input {...register('title')} className="mt-1 w-full border p-2 rounded" />
-            {errors.title && <p className={errorText}>{errors.title.message}</p>}
+            <label className={`text-sm font-medium ${errors.title ? 'text-red-600' : 'text-gray-700'}`}>Title<span className="text-red-600">*</span></label>
+            <input
+              {...register('title')}
+              placeholder="Enter request title (min 5 characters)"
+              onBlur={(e) => {
+                if (e.target.value.trim().length > 0 && e.target.value.trim().length < 5) {
+                  setFieldError('title', { type: 'manual', message: 'Title must be at least 5 characters' });
+                }
+              }}
+              className={`mt-1 w-full border-2 p-3 rounded transition-all focus:outline-none ${
+                errors.title
+                  ? 'border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200'
+                  : 'border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+              }`}
+            />
+            {errors.title && <p className={`${errorText} font-semibold`}>{errors.title.message}</p>}
           </div>
 
           <div className="sm:col-span-2">
-            <label className="text-sm font-medium">Purpose*</label>
-            <textarea rows={3} {...register('purpose')} className="mt-1 w-full border p-2 rounded" />
-            {errors.purpose && <p className={errorText}>{errors.purpose.message}</p>}
+            <label className={`text-sm font-medium ${errors.purpose ? 'text-red-600' : 'text-gray-700'}`}>Purpose<span className="text-red-600">*</span></label>
+            <textarea
+              rows={3}
+              {...register('purpose')}
+              placeholder="Explain the purpose of this request (min 10 characters)"
+              onBlur={(e) => {
+                if (e.target.value.trim().length > 0 && e.target.value.trim().length < 10) {
+                  setFieldError('purpose', { type: 'manual', message: 'Purpose must be at least 10 characters' });
+                }
+              }}
+              className={`mt-1 w-full border-2 p-3 rounded transition-all focus:outline-none ${
+                errors.purpose
+                  ? 'border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200'
+                  : 'border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+              }`}
+            />
+            {errors.purpose && <p className={`${errorText} font-semibold`}>{errors.purpose.message}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Institution* </label>
+            <label className={`block text-sm font-medium mb-2 ${errors.college ? 'text-red-600' : 'text-gray-700'}`}>Institution<span className="text-red-600">*</span></label>
             <Controller
               control={control}
               name="college"
               render={({ field: { value, onChange } }) => (
                 <InstitutionSelect
                   value={value}
-                  onChange={onChange}
+                  onChange={(newValue) => {
+                    onChange(newValue);
+                    // Validate college field after selection
+                    trigger('college');
+                  }}
                   error={errors.college?.message}
                 />
               )}
@@ -272,14 +373,18 @@ export default function CreateRequestPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Department* </label>
+            <label className={`block text-sm font-medium mb-2 ${errors.department ? 'text-red-600' : 'text-gray-700'}`}>Department<span className="text-red-600">*</span></label>
             <Controller
               control={control}
               name="department"
               render={({ field: { value, onChange } }) => (
                 <NestedSelect
                   value={value}
-                  onChange={onChange}
+                  onChange={(newValue) => {
+                    onChange(newValue);
+                    // Validate department field after selection
+                    trigger('department');
+                  }}
                   options={departmentOptions}
                   placeholder="Select Department"
                   error={errors.department?.message}
@@ -287,11 +392,10 @@ export default function CreateRequestPage() {
                 />
               )}
             />
-            {errors.department && <p className={errorText}>{errors.department.message}</p>}
           </div>
 
           <div>
-            <label className="text-sm font-medium">Cost Estimate</label>
+            <label className="text-sm font-medium text-gray-700">Cost Estimate</label>
             <CostEstimateInput
               value={costEstimate || 0}
               onChange={(v) => setValue('costEstimate', v)}
@@ -299,21 +403,21 @@ export default function CreateRequestPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium">Expense Category</label>
-            <input {...register('expenseCategory')} className="mt-1 w-full border p-2 rounded" />
+            <label className="text-sm font-medium text-gray-700">Expense Category</label>
+            <input {...register('expenseCategory')} className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500" />
           </div>
 
           <div className="sm:col-span-2">
-            <label className="text-sm font-medium">SOP Reference</label>
-            <input {...register('sopReference')} className="mt-1 w-full border p-2 rounded" />
+            <label className="text-sm font-medium text-gray-700">SOP Reference</label>
+            <input {...register('sopReference')} className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500" />
           </div>
         </div>
 
         {/* DOCUMENTS */}
         <div>
           <div className="flex justify-between items-center">
-            <label className="text-sm font-medium">
-              Document Attachments *
+            <label className={`text-sm font-medium ${errors.attachments ? 'text-red-600' : 'text-gray-700'}`}>
+              Document Attachments <span className="text-red-600">*</span>
             </label>
             <input
               type="file"
@@ -326,7 +430,7 @@ export default function CreateRequestPage() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="text-blue-600 text-sm"
+              className="text-blue-600 text-sm hover:underline font-medium"
             >
               + Add Document
             </button>
@@ -338,36 +442,42 @@ export default function CreateRequestPage() {
             </p>
           )}
 
-          <ul className="border rounded divide-y mt-2">
+          <ul className={`border rounded divide-y mt-2 ${errors.attachments ? 'border-red-600' : 'border-gray-200'}`}>
             {uploadedFiles.map((f, i) => (
-              <li key={i} className="flex justify-between p-2">
-                <span className="truncate">{f.filename}</span>
+              <li key={i} className="flex justify-between p-2 bg-white">
+                <span className="truncate text-sm">{f.filename}</span>
                 <button
                   type="button"
                   onClick={() => handleRemoveFile(i)}
-                  className="text-red-500 text-sm"
+                  className="text-red-500 text-sm hover:text-red-700"
                 >
                   Remove
                 </button>
               </li>
             ))}
+            {uploadedFiles.length === 0 && !errors.attachments && (
+              <li className="p-4 text-center text-sm text-gray-400 italic">No documents uploaded</li>
+            )}
+            {uploadedFiles.length === 0 && errors.attachments && (
+              <li className="p-4 text-center text-sm text-red-500 italic bg-red-50">Please upload at least one PDF</li>
+            )}
           </ul>
         </div>
 
-        <div className="flex justify-end gap-4 pt-2">
+        <div className="flex justify-end gap-4 pt-6">
           <button
             type="button"
             onClick={() => router.back()}
-            className="px-4 py-2 bg-gray-100 rounded"
+            className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting || isUploading}
-            className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm"
           >
-            {isSubmitting ? 'Creating...' : 'Create Request'}
+            {isSubmitting ? 'Creating...' : isUploading ? 'Uploading...' : 'Create Request'}
           </button>
         </div>
 
