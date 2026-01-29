@@ -41,6 +41,22 @@ const navigation: NavItem[] = [
   }
 ];
 
+const rolesWithDepartments = new Set<UserRole>([
+  UserRole.REQUESTER,
+  UserRole.INSTITUTION_MANAGER,
+]);
+
+const formatLabel = (value?: string | UserRole) => {
+  if (!value) return '';
+  return value
+    .toString()
+    .replace(/_/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -48,6 +64,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const shouldShowDepartment = !!(user?.department && user?.role && rolesWithDepartments.has(user.role));
+  const formattedDepartment = shouldShowDepartment ? formatLabel(user?.department) : '';
+  const formattedRole = user?.role ? formatLabel(user.role) : '';
 
   // Function to check if navigation item is active
   const isActiveRoute = (href: string) => {
@@ -215,12 +234,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* RIGHT */}
           <div className="flex items-center gap-3">
-            <div className="text-right">
+            <div className="text-center sm:text-right">
               <div className="text-sm text-gray-700">
                 Welcome, <span className="font-medium">{user?.name}</span>
               </div>
-              <div className="text-xs text-gray-500">
-                ({user?.department ? `HoD - ${user.department}` : user?.role})
+              <div className="text-xs text-gray-500 flex items-center gap-1 justify-center sm:justify-end">
+                {formattedDepartment && <span>{formattedDepartment}</span>}
+                {formattedDepartment && formattedRole && <span>•</span>}
+                {formattedRole && <span>{formattedRole}</span>}
               </div>
             </div>
 
