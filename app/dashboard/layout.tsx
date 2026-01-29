@@ -1,7 +1,7 @@
  'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   HomeIcon,
@@ -47,23 +47,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [queryCount, setClarificationCount] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // Function to check if navigation item is active
   const isActiveRoute = (href: string) => {
-    if (href === '/dashboard') {
-      return pathname === '/dashboard';
+    const [hrefPath, hrefQuery] = href.split('?');
+
+    const matchesPath = () => {
+      if (hrefPath === '/dashboard') {
+        return pathname === '/dashboard';
+      }
+
+      if (hrefPath === '/dashboard/requests' && !hrefQuery) {
+        return pathname === '/dashboard/requests' && !searchParams.get('status');
+      }
+
+      if (hrefPath === '/dashboard/requests/create') {
+        return pathname === '/dashboard/requests/create';
+      }
+
+      return pathname.startsWith(hrefPath);
+    };
+
+    if (!matchesPath()) {
+      return false;
     }
-    
-    // Special handling for requests routes to avoid conflicts
-    if (href === '/dashboard/requests') {
-      return pathname === '/dashboard/requests';
+
+    if (!hrefQuery) {
+      return true;
     }
-    if (href === '/dashboard/requests/create') {
-      return pathname === '/dashboard/requests/create';
+
+    const params = new URLSearchParams(hrefQuery);
+    for (const [key, value] of params.entries()) {
+      if (searchParams.get(key) !== value) {
+        return false;
+      }
     }
-    
-    // For other routes, use startsWith
-    return pathname.startsWith(href);
+
+    return true;
   };
 
   useEffect(() => {
