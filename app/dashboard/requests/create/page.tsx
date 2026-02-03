@@ -120,6 +120,11 @@ export default function CreateRequestPage() {
 
   /* SUBMIT */
   const onSubmit = async (data: CreateRequestFormData) => {
+    if (isSubmitting || isUploading) {
+      console.log('[DEBUG] Submission blocked: already processing');
+      return;
+    }
+
     console.log('[DEBUG] Form submission attempt:', { data, uploadedFiles: uploadedFiles.length });
     
     setError(null);

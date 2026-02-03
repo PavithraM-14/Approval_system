@@ -1,7 +1,7 @@
  'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   HomeIcon,
@@ -29,11 +29,32 @@ const navigation: NavItem[] = [
   { name: 'Queries', href: '/dashboard/queries', icon: ClockIcon, roles: [UserRole.REQUESTER, UserRole.DEAN] },
   {
     name: 'Pending Approvals',
+    href: '/dashboard/requests?status=pending', // Redirect requesters to their pending requests
+    icon: ClipboardDocumentListIcon,
+    roles: [UserRole.REQUESTER] // Only for requesters
+  },
+  {
+    name: 'Pending Approvals',
     href: '/dashboard/approvals',
     icon: ClipboardDocumentListIcon,
-    roles: Object.values(UserRole)
+    roles: [UserRole.INSTITUTION_MANAGER, UserRole.SOP_VERIFIER, UserRole.ACCOUNTANT, UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN] // All non-requester roles
   }
 ];
+
+const rolesWithDepartments = new Set<UserRole>([
+  UserRole.REQUESTER,
+]);
+
+const formatLabel = (value?: string | UserRole) => {
+  if (!value) return '';
+  return value
+    .toString()
+    .replace(/_/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -41,13 +62,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [queryCount, setClarificationCount] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const shouldShowDepartment = !!(user?.department && user?.role && rolesWithDepartments.has(user.role));
+  const formattedDepartment = shouldShowDepartment ? formatLabel(user?.department).toUpperCase() : '';
+  const formattedRole = user?.role ? formatLabel(user.role).toUpperCase() : '';
 
   // Function to check if navigation item is active
   const isActiveRoute = (href: string) => {
-    if (href === '/dashboard') {
-      return pathname === '/dashboard';
+    const [hrefPath, hrefQuery] = href.split('?');
+
+    const matchesPath = () => {
+      if (hrefPath === '/dashboard') {
+        return pathname === '/dashboard';
+      }
+
+      if (hrefPath === '/dashboard/requests' && !hrefQuery) {
+        return pathname === '/dashboard/requests' && !searchParams.get('status');
+      }
+
+      if (hrefPath === '/dashboard/requests/create') {
+        return pathname === '/dashboard/requests/create';
+      }
+
+      return pathname.startsWith(hrefPath);
+    };
+
+    if (!matchesPath()) {
+      return false;
     }
-    return pathname.startsWith(href);
+
+    if (!hrefQuery) {
+      return true;
+    }
+
+    const params = new URLSearchParams(hrefQuery);
+    for (const [key, value] of params.entries()) {
+      if (searchParams.get(key) !== value) {
+        return false;
+      }
+    }
+
+    return true;
   };
 
   useEffect(() => {
@@ -117,29 +172,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="h-screen flex overflow-hidden bg-gray-100">
       {/* Sidebar */}
       <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
-        <div className="flex flex-col flex-grow bg-blue-600 pt-5 pb-4">
-          <div className="px-4 text-white text-lg font-semibold">
-            SRM-RMP 
+        <div className="flex flex-col flex-grow bg-white border-r border-gray-200 pt-5 pb-4 shadow-sm">
+          <div className="px-6 mb-8">
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">
+              SRM-RMP
+            </h1>
           </div>
-          <nav className="mt-6 px-2 space-y-1">
+          <nav className="flex-1 px-4 space-y-2">
             {filteredNavigation.map(item => {
               const isActive = isActiveRoute(item.href);
               return (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`flex items-center px-2 py-2 text-sm rounded-md transition-colors ${
+                  className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
                     isActive
-                      ? 'bg-blue-700 text-white'
-                      : 'text-blue-200 hover:text-white hover:bg-blue-700'
+                      ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  <item.icon className={`h-6 w-6 mr-4 ${
-                    isActive ? 'text-white' : 'text-blue-300'
+                  <item.icon className={`h-5 w-5 mr-3 ${
+                    isActive ? 'text-blue-700' : 'text-gray-400'
                   }`} />
                   <span className="flex-1">{item.name}</span>
                   {item.name === 'Queries' && queryCount > 0 && (
-                    <span className="ml-2 bg-yellow-500 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full min-w-[20px] text-center">
+                    <span className="ml-2 bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-1 rounded-full min-w-[20px] text-center">
                       {queryCount}
                     </span>
                   )}
@@ -176,11 +233,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* RIGHT */}
           <div className="flex items-center gap-3">
-            <div className="text-right">
+            <div className="text-center sm:text-right">
               <div className="text-sm text-gray-700">
                 Welcome, <span className="font-medium">{user?.name}</span>
               </div>
-              <div className="text-xs text-gray-500">({user?.role})</div>
+              <div className="text-xs text-gray-500 flex items-center gap-1 justify-center sm:justify-end">
+                {formattedDepartment && <span>{formattedDepartment}</span>}
+                {formattedDepartment && formattedRole && <span>•</span>}
+                {formattedRole && <span>{formattedRole}</span>}
+              </div>
             </div>
 
             {/* LOGOUT BUTTON – RIGHT CORNER */}
