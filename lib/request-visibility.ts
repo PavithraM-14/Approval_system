@@ -20,7 +20,7 @@ export function analyzeRequestVisibility(
 
   // Apply institutional isolation for roles up to Head of Institution
   const institutionalRoles = [
-    UserRole.REQUESTER,
+    // UserRole.REQUESTER, // REMOVED: Requesters are filtered by ID, so college check is redundant and can hide legitimate requests
     UserRole.INSTITUTION_MANAGER,
     UserRole.SOP_VERIFIER,
     UserRole.ACCOUNTANT,

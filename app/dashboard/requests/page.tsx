@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
 import QueryIndicator from '../../../components/QueryIndicator';
+
+const fetcher = (url: string) => fetch(url, { credentials: 'include' }).then(res => res.json());
 
 interface Request {
   _id: string;
@@ -29,17 +32,33 @@ export default function RequestsPage() {
   const searchParams = useSearchParams();
   const statusFilter = searchParams.get('status');
   
-  const [requests, setRequests] = useState<Request[]>([]);
+  const { data, error, isLoading, mutate } = useSWR('/api/requests', fetcher);
+  const requests = data?.requests || [];
+
   const [filteredRequests, setFilteredRequests] = useState<Request[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeFilter, setActiveFilter] = useState<string>('all');
 
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/me', { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch user');
+      const user = await response.json();
+      setCurrentUser(user);
+      
+      // Redirect non-requesters to approvals page
+      if (user.role !== 'requester') {
+        router.push('/dashboard/approvals');
+        return;
+      }
+    } catch {
+      setCurrentUser(null);
+    }
+  }, [router]);
+
   useEffect(() => {
     fetchCurrentUser();
-    fetchRequests();
-  }, []);
+  }, [fetchCurrentUser]);
 
   useEffect(() => {
     // Set active filter based on URL parameter
@@ -65,38 +84,33 @@ export default function RequestsPage() {
     }
   }, [requests, activeFilter]);
 
-  const fetchCurrentUser = async () => {
-    try {
-      const response = await fetch('/api/auth/me', { credentials: 'include' });
-      if (!response.ok) throw new Error('Failed to fetch user');
-      const user = await response.json();
-      setCurrentUser(user);
-      
-      // Redirect non-requesters to approvals page
-      if (user.role !== 'requester') {
-        router.push('/dashboard/approvals');
-        return;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleFocus = () => {
+      mutate();
+    };
+
+    const handlePopState = () => {
+      mutate();
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        mutate();
       }
-    } catch {
-      setCurrentUser(null);
-    }
-  };
+    };
 
-  const fetchRequests = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/requests', { credentials: 'include' });
-      if (!response.ok) throw new Error('Failed to fetch requests');
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('popstate', handlePopState);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
-      const data = await response.json();
-      setRequests(data.requests);
-    } catch (err) {
-      console.error('Error fetching requests:', err);
-      setError('Failed to load requests');
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [mutate]);
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
@@ -144,7 +158,7 @@ export default function RequestsPage() {
     return null;
   };
 
-  if (loading || !currentUser) {
+  if (isLoading || !currentUser) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -203,7 +217,7 @@ export default function RequestsPage() {
 
         <div className="flex gap-2 sm:gap-3 flex-shrink-0">
           <button
-            onClick={fetchRequests}
+            onClick={() => mutate()}
             className="px-3 sm:px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 shadow-sm transition text-sm sm:text-base active:scale-95"
           >
             <span className="hidden sm:inline">Refresh</span>
@@ -256,12 +270,12 @@ export default function RequestsPage() {
       {/* Error Message */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-          {error}
+          Error loading requests. Please try again.
         </div>
       )}
 
       {/* No Requests */}
-      {filteredRequests.length === 0 ? (
+      {!isLoading && filteredRequests.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl shadow-md border border-gray-100">
           <svg
             className="mx-auto h-14 w-14 text-gray-400"

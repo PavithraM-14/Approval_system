@@ -52,7 +52,8 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam, 10) : 0; // default 0 = return all
     const statusFilter = searchParams.get('status'); // Renamed for clarity
     const college = searchParams.get('college');
     const pendingApprovals = searchParams.get('pendingApprovals') === 'true';
@@ -145,8 +146,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Apply pagination
-    const skip = (page - 1) * limit;
-    const filteredRequests = visibleRequests.slice(skip, skip + limit);
+    const shouldPaginate = limit > 0;
+    const skip = shouldPaginate ? (page - 1) * limit : 0;
+    const sliceEnd = shouldPaginate ? skip + limit : undefined;
+    const filteredRequests = visibleRequests.slice(skip, sliceEnd);
     const total = visibleRequests.length;
 
     console.log('[DEBUG] Returning', filteredRequests.length, 'requests after pagination');
@@ -157,9 +160,9 @@ export async function GET(request: NextRequest) {
       requests: filteredRequests,
       pagination: {
         page,
-        limit,
+        limit: shouldPaginate ? limit : total,
         total,
-        pages: Math.ceil(total / limit),
+        pages: shouldPaginate ? Math.ceil(total / limit) : 1,
       },
       filter: statusFilter || 'all' // Include active filter in response
     });

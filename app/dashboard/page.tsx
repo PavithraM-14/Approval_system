@@ -22,11 +22,16 @@ export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const { data: stats, error } = useSWR<DashboardStats>('/api/dashboard/stats', fetcher);
   // Show a single, unified recent list for all roles
-  const { data: recentRequests, isLoading: isLoadingRequests } = useSWR('/api/requests?limit=5', fetcher);
+  const { data: recentRequests, isLoading: isLoadingRequests, mutate: mutateRecentRequests } = useSWR('/api/requests?limit=5', fetcher);
 
   useEffect(() => {
     fetchCurrentUser();
   }, []);
+
+  useEffect(() => {
+    if (!stats) return;
+    mutateRecentRequests();
+  }, [stats, mutateRecentRequests]);
 
   const fetchCurrentUser = async () => {
     try {
