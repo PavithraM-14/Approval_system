@@ -372,24 +372,6 @@ export default function RequestsPage() {
                           {request._visibility.category === 'completed' && '✅ Completed'}
                         </span>
                       )}
-
-                      {(() => {
-                        const queryStatus = getQueryStatus(request);
-                        if (queryStatus?.type === 'completed') {
-                          return (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 whitespace-nowrap">
-                              ✓ {queryStatus.respondedBy.toUpperCase()} Responded
-                            </span>
-                          );
-                        } else if (queryStatus?.type === 'pending') {
-                          return (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 whitespace-nowrap">
-                              ⏳ Awaiting {queryStatus.department.toUpperCase()}
-                            </span>
-                          );
-                        }
-                        return null;
-                      })()}
                       
                       <div className="flex items-center gap-2">
                         <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getStatusBadgeClass(request.status)}`}>
