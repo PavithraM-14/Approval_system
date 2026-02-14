@@ -233,14 +233,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* RIGHT */}
           <div className="flex items-center gap-3">
-            <div className="text-center sm:text-right">
+            <div className="text-right">
               <div className="text-sm text-gray-700">
                 Welcome, <span className="font-medium">{user?.name}</span>
               </div>
-              <div className="text-xs text-gray-500 flex items-center gap-1 justify-center sm:justify-end">
-                {formattedDepartment && <span>{formattedDepartment}</span>}
-                {formattedDepartment && formattedRole && <span>•</span>}
-                {formattedRole && <span>{formattedRole}</span>}
+              <div className="text-xs text-gray-500">
+                {user?.role === 'requester' && user?.department 
+                  ? `${user.department.toUpperCase()} - ${user.role.replace(/_/g, ' ').toUpperCase()}`
+                  : user?.role?.replace(/_/g, ' ').toUpperCase()
+                }
               </div>
             </div>
 

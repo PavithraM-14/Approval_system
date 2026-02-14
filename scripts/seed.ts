@@ -12,7 +12,7 @@ import { UserRole, RequestStatus, ActionType } from '../lib/types';
 // Load environment variables from .env.local
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
-const colleges = ['Engineering', 'Medicine', 'Business'];
+const colleges = ['EEC', 'Medicine', 'Business'];
 const departments = ['Computer Science', 'Mechanical', 'Electrical', 'Civil'];
 const expenseCategories = ['Equipment', 'Software', 'Travel', 'Training', 'Infrastructure'];
 
@@ -48,6 +48,12 @@ async function seed() {
       // Use plain password - the User model will hash it automatically
       const plainPassword = 'password123'; // Default password for all users
       
+      // Only REQUESTER and HOI should have a department
+      let userDepartment = undefined;
+      if (role === UserRole.REQUESTER || role === UserRole.HEAD_OF_INSTITUTION) {
+        userDepartment = departments[0]; // Computer Science
+      }
+      
       const user = await User.create({
         // Match README: requester@srmrmp.edu.in, institution_manager@srmrmp.edu.in, etc.
         email: `${role}@gmail.com`,
@@ -56,8 +62,8 @@ async function seed() {
         contactNo: `+91 ${contactCounter.toString().slice(-10)}`, // Format contact number correctly
         password: plainPassword, // Pass plain password - model will hash it
         role,
-        college: colleges[0],
-        department: departments[0],
+        college: 'EEC', // All users belong to EEC college
+        department: userDepartment, // Only REQUESTER and HOI have department
       });
       users.push(user);
       contactCounter++; // Increment for next user
@@ -1492,18 +1498,18 @@ async function seed() {
 
 function getRoleDisplayName(role: UserRole): string {
   const roleNames = {
-    [UserRole.REQUESTER]: 'Suresh',
-    [UserRole.INSTITUTION_MANAGER]: 'Pavan',
-    [UserRole.SOP_VERIFIER]: 'Hema',
-    [UserRole.ACCOUNTANT]: 'Nagesh',
-    [UserRole.VP]: 'Srinivas',
-    [UserRole.HEAD_OF_INSTITUTION]: 'Sarvesh',
+    [UserRole.REQUESTER]: 'Raj',
+    [UserRole.INSTITUTION_MANAGER]: 'Tharun',
+    [UserRole.SOP_VERIFIER]: 'Akash',
+    [UserRole.ACCOUNTANT]: 'Swathy',
+    [UserRole.VP]: 'Shri',
+    [UserRole.HEAD_OF_INSTITUTION]: 'Priya',
     [UserRole.DEAN]: 'Prashanth',
     [UserRole.MMA]: 'Gopinath',
     [UserRole.HR]: 'Marish',
     [UserRole.AUDIT]: 'Naren',
     [UserRole.IT]: 'Poormila',
-    [UserRole.CHIEF_DIRECTOR]: 'Tharun',
+    [UserRole.CHIEF_DIRECTOR]: 'Sarvesh',
     [UserRole.CHAIRMAN]: 'Shivakumar',
   };
   return roleNames[role] || role;
