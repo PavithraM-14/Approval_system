@@ -35,14 +35,18 @@ function RequestsPageContent() {
   const { data, error, isLoading, mutate } = useSWR('/api/requests', fetcher);
   const requests: Request[] = useMemo(() => data?.requests ?? [], [data?.requests]);
 
-  const [filteredRequests, setFilteredRequests] = useState<Request[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string>('all');
 
   const fetchCurrentUser = useCallback(async () => {
     try {
       const response = await fetch('/api/auth/me', { credentials: 'include' });
-      if (!response.ok) throw new Error('Failed to fetch user');
+      if (!response.ok) {
+        router.push('/login');
+        return;
+      }
+
       const user = await response.json();
       setCurrentUser(user);
       
@@ -52,7 +56,9 @@ function RequestsPageContent() {
         return;
       }
     } catch {
-      setCurrentUser(null);
+      router.push('/login');
+    } finally {
+      setAuthLoading(false);
     }
   }, [router]);
 
@@ -69,19 +75,17 @@ function RequestsPageContent() {
     }
   }, [statusFilter]);
 
-  useEffect(() => {
-    // Filter requests based on active filter
+  const filteredRequests = useMemo(() => {
     if (activeFilter === 'all') {
-      setFilteredRequests(requests);
-    } else {
-      const filtered = requests.filter(request => {
-        if (activeFilter === 'pending') {
-          return !['approved', 'rejected'].includes(request.status);
-        }
-        return request.status === activeFilter;
-      });
-      setFilteredRequests(filtered);
+      return requests;
     }
+
+    return requests.filter(request => {
+      if (activeFilter === 'pending') {
+        return !['approved', 'rejected'].includes(request.status);
+      }
+      return request.status === activeFilter;
+    });
   }, [requests, activeFilter]);
 
   useEffect(() => {
@@ -158,12 +162,16 @@ function RequestsPageContent() {
     return null;
   };
 
-  if (isLoading || !currentUser) {
+  if (isLoading || authLoading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
+  }
+
+  if (!currentUser) {
+    return null;
   }
 
   // Show access denied for non-requesters
