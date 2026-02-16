@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
-import { generateOTP, sendOTPEmail } from '@/lib/email';
+import { generateOTP, sendPasswordResetEmail } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,8 +35,8 @@ export async function POST(req: NextRequest) {
     user.otpExpiry = otpExpiry;
     await user.save();
 
-    // Send OTP email
-    const emailSent = await sendOTPEmail(user.email, otp, user.name);
+    // Send password reset OTP email
+    const emailSent = await sendPasswordResetEmail(user.email, otp, user.name);
 
     if (!emailSent) {
       return NextResponse.json(
