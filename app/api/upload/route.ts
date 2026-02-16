@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
+import { isAbsolute, join, resolve } from 'path';
 import { existsSync } from 'fs';
 import { validateFiles, generateSecureFilename } from '../../../lib/file-validation';
+
+function getUploadRoot(): string {
+  const configuredPath = process.env.UPLOAD_DIR?.trim();
+  if (configuredPath) {
+    return isAbsolute(configuredPath)
+      ? configuredPath
+      : resolve(process.cwd(), configuredPath);
+  }
+
+  return join(process.cwd(), 'public', 'uploads');
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,7 +37,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'queries');
+    const uploadDir = join(getUploadRoot(), 'queries');
     
     // Create upload directory if it doesn't exist
     if (!existsSync(uploadDir)) {

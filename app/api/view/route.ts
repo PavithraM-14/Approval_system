@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { isAbsolute, join, resolve } from 'path';
 import { existsSync } from 'fs';
 
 export const dynamic = 'force-dynamic';
+
+function getUploadRoot(): string {
+  const configuredPath = process.env.UPLOAD_DIR?.trim();
+  if (configuredPath) {
+    return isAbsolute(configuredPath)
+      ? configuredPath
+      : resolve(process.cwd(), configuredPath);
+  }
+
+  return join(process.cwd(), 'public', 'uploads');
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,17 +41,26 @@ export async function GET(request: NextRequest) {
     // Resolve storage path. Supports:
     // 1) /uploads/queries/file.pdf
     // 2) uploads/queries/file.pdf
-    // 3) legacy filename-only values like sample-document.pdf
+    // 3) queries/file.pdf
+    // 4) legacy filename-only values like sample-document.pdf
     const relativePath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
-    const candidates = relativePath.startsWith('uploads/')
-      ? [relativePath]
-      : [`uploads/queries/${relativePath}`, `uploads/${relativePath}`, relativePath];
+    const withoutUploadsPrefix = relativePath.startsWith('uploads/')
+      ? relativePath.slice('uploads/'.length)
+      : relativePath;
+
+    const candidates = [
+      withoutUploadsPrefix,
+      join('queries', withoutUploadsPrefix),
+      relativePath,
+    ];
+
+    const uploadRoot = getUploadRoot();
 
     let fullPath: string | null = null;
     let resolvedRelativePath: string | null = null;
 
     for (const candidate of candidates) {
-      const candidatePath = join(process.cwd(), 'public', candidate);
+      const candidatePath = join(uploadRoot, candidate);
       if (existsSync(candidatePath)) {
         fullPath = candidatePath;
         resolvedRelativePath = candidate;
