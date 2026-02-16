@@ -1,19 +1,31 @@
 import nodemailer from 'nodemailer';
 
-// Create reusable transporter with institutional email support
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: parseInt(process.env.EMAIL_PORT || '587'),
-  secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for 587
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-  // Additional options for institutional servers (useful when you switch to @srmrmp.edu.in)
-  tls: {
-    rejectUnauthorized: false, // May be needed for self-signed certificates
-  },
-});
+// Create reusable transporter with robust default for Gmail
+// If EMAIL_USER is a gmail address, we can use the simplified 'service: gmail'
+const isGmail = process.env.EMAIL_HOST?.includes('gmail') || process.env.EMAIL_USER?.includes('@gmail.com');
+
+const transporterConfig = isGmail 
+  ? {
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    }
+  : {
+      host: process.env.EMAIL_HOST,
+      port: parseInt(process.env.EMAIL_PORT || '587'),
+      secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for 587
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    };
+
+const transporter = nodemailer.createTransport(transporterConfig as any);
 
 // Generate 6-digit OTP
 export function generateOTP(): string {
