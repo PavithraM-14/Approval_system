@@ -4,15 +4,21 @@ import { isAbsolute, join, resolve } from 'path';
 import { existsSync } from 'fs';
 import { validateFiles, generateSecureFilename } from '../../../lib/file-validation';
 
-function getUploadRoot(): string {
+function getUploadRootCandidates(): string[] {
+  const candidates: string[] = [];
+
   const configuredPath = process.env.UPLOAD_DIR?.trim();
   if (configuredPath) {
-    return isAbsolute(configuredPath)
+    candidates.push(isAbsolute(configuredPath)
       ? configuredPath
-      : resolve(process.cwd(), configuredPath);
+      : resolve(process.cwd(), configuredPath));
   }
 
-  return join(process.cwd(), 'public', 'uploads');
+  // Fallbacks for environments where configured path isn't writable
+  candidates.push(join(process.cwd(), 'public', 'uploads'));
+  candidates.push('/tmp/uploads');
+
+  return Array.from(new Set(candidates));
 }
 
 export async function POST(request: NextRequest) {
@@ -37,40 +43,48 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const uploadDir = join(getUploadRoot(), 'queries');
-    
-    // Create upload directory if it doesn't exist
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
+    const uploadRootCandidates = getUploadRootCandidates();
+    let lastUploadError: unknown = null;
+
+    for (const rootPath of uploadRootCandidates) {
+      try {
+        const uploadDir = join(rootPath, 'queries');
+
+        if (!existsSync(uploadDir)) {
+          await mkdir(uploadDir, { recursive: true });
+        }
+
+        const uploadedFiles: string[] = [];
+
+        for (const file of files) {
+          const bytes = await file.arrayBuffer();
+          const buffer = Buffer.from(bytes);
+
+          const filename = generateSecureFilename(file.name);
+          const filepath = join(uploadDir, filename);
+          await writeFile(filepath, buffer);
+
+          // Keep DB path format stable
+          uploadedFiles.push(`/uploads/queries/${filename}`);
+        }
+
+        return NextResponse.json({
+          success: true,
+          files: uploadedFiles,
+          message: `${uploadedFiles.length} file(s) uploaded successfully`
+        });
+      } catch (error) {
+        lastUploadError = error;
+      }
     }
 
-    const uploadedFiles: string[] = [];
-
-    for (const file of files) {
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-
-      // Generate secure filename
-      const filename = generateSecureFilename(file.name);
-      
-      const filepath = join(uploadDir, filename);
-      await writeFile(filepath, buffer);
-      
-      // Store relative path for database
-      const relativePath = `/uploads/queries/${filename}`;
-      uploadedFiles.push(relativePath);
-    }
-
-    return NextResponse.json({
-      success: true,
-      files: uploadedFiles,
-      message: `${uploadedFiles.length} file(s) uploaded successfully`
-    });
+    console.error('All upload paths failed:', lastUploadError);
+    throw lastUploadError;
 
   } catch (error) {
     console.error('File upload error:', error);
     return NextResponse.json(
-      { error: 'Failed to upload files' },
+      { error: error instanceof Error ? `Failed to upload files: ${error.message}` : 'Failed to upload files' },
       { status: 500 }
     );
   }

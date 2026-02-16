@@ -245,6 +245,7 @@ This repository includes `render.yaml` for one-click Blueprint deployment.
 - `MONGODB_URI`
 - `JWT_SECRET`
 - `NEXT_PUBLIC_BASE_URL` (your Render URL)
+- `UPLOAD_DIR` (set to `/var/data/uploads` when using a persistent disk)
 
 4. **Optional email variables**
 - `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM`
@@ -253,6 +254,10 @@ This repository includes `render.yaml` for one-click Blueprint deployment.
 - Build command: `npm ci && npm run build`
 - Start command: `npm run start`
 - Health check: `/api/health`
+
+6. **Enable persistent file storage for uploads**
+- Add a Render Persistent Disk and mount it at `/var/data`
+- Keep `UPLOAD_DIR=/var/data/uploads`
 
 ### Notes for Production
 - Ensure `JWT_SECRET` is a long random value.

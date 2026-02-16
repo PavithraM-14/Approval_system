@@ -6,15 +6,20 @@ import { existsSync } from 'fs';
 // Ensure this route is treated as dynamic to avoid static export analysis errors
 export const dynamic = 'force-dynamic';
 
-function getUploadRoot(): string {
+function getUploadRoots(): string[] {
+  const roots: string[] = [];
+
   const configuredPath = process.env.UPLOAD_DIR?.trim();
   if (configuredPath) {
-    return isAbsolute(configuredPath)
+    roots.push(isAbsolute(configuredPath)
       ? configuredPath
-      : resolve(process.cwd(), configuredPath);
+      : resolve(process.cwd(), configuredPath));
   }
 
-  return join(process.cwd(), 'public', 'uploads');
+  roots.push(join(process.cwd(), 'public', 'uploads'));
+  roots.push('/tmp/uploads');
+
+  return Array.from(new Set(roots));
 }
 
 export async function GET(request: NextRequest) {
@@ -55,16 +60,22 @@ export async function GET(request: NextRequest) {
       relativePath,
     ];
 
-    const uploadRoot = getUploadRoot();
+    const uploadRoots = getUploadRoots();
 
     let fullPath: string | null = null;
     let resolvedRelativePath: string | null = null;
 
-    for (const candidate of candidates) {
-      const candidatePath = join(uploadRoot, candidate);
-      if (existsSync(candidatePath)) {
-        fullPath = candidatePath;
-        resolvedRelativePath = candidate;
+    for (const rootPath of uploadRoots) {
+      for (const candidate of candidates) {
+        const candidatePath = join(rootPath, candidate);
+        if (existsSync(candidatePath)) {
+          fullPath = candidatePath;
+          resolvedRelativePath = candidate;
+          break;
+        }
+      }
+
+      if (fullPath) {
         break;
       }
     }
