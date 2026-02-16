@@ -158,11 +158,14 @@ If you didn't request this OTP, please ignore this email.
 Security Notice: Never share this OTP with anyone.`,
     };
 
-    await transporter.sendMail(mailOptions);
-    console.log(`OTP email sent successfully to ${email}`);
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`OTP email sent successfully to ${email}. MessageID: ${info.messageId}`);
     return true;
   } catch (error) {
     console.error('Error sending OTP email:', error);
+    if (error instanceof Error) {
+        console.error('Stack:', error.stack);
+    }
     return false;
   }
 }
