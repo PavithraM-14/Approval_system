@@ -1,190 +1,104 @@
 import nodemailer from 'nodemailer';
 
-// Create reusable transporter with robust default for Gmail
-// If EMAIL_USER is a gmail address, we can use the simplified 'service: gmail'
 const isGmail = process.env.EMAIL_HOST?.includes('gmail') || process.env.EMAIL_USER?.includes('@gmail.com');
 
-const transporterConfig = isGmail 
-  ? {
+// Helper to create transporter with specific config
+const createTransporter = (forceSecure: boolean) => {
+  if (isGmail) {
+    return nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // true for 465
+      port: forceSecure ? 465 : 587,
+      secure: forceSecure,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD,
       },
-      // Force IPv4 if IPv6 is flaky in the container
-      family: 4, 
-      // Increase connection timeout
-      connectionTimeout: 10000, 
-    }
-  : {
-      host: process.env.EMAIL_HOST,
-      port: parseInt(process.env.EMAIL_PORT || '587'),
-      secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for 587
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-    };
+      family: 4, // Force IPv4
+    });
+  }
+  
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: parseInt(process.env.EMAIL_PORT || '587'),
+    secure: process.env.EMAIL_SECURE === 'true',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+    tls: { rejectUnauthorized: false },
+  });
+};
 
-const transporter = nodemailer.createTransport(transporterConfig as any);
+// Primary transporter (Secure 465)
+const transporterSecure = createTransporter(true);
+// Fallback transporter (TLS 587)
+const transporterFallback = createTransporter(false);
 
-// Generate 6-digit OTP
-export function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-// Send OTP email
+// Send OTP email with retry logic
 export async function sendOTPEmail(email: string, otp: string, name?: string): Promise<boolean> {
   console.log('Attempting to send OTP email to:', email);
-  console.log('Email Config:', {
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    user: process.env.EMAIL_USER ? 'Set' : 'Missing',
-    pass: process.env.EMAIL_PASSWORD ? 'Set' : 'Missing',
-    secure: process.env.EMAIL_SECURE
-  });
+  
+  // Construct email content
+  const mailOptions = {
+    from: `"SRM-RMP Approval System" <${process.env.EMAIL_FROM}>`,
+    to: email,
+    subject: 'Your Login OTP - SRM-RMP Approval System',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb; }
+          .header { background: linear-gradient(135deg, #dbeafe 0%, #dbeafe 100%); color: #1e3a8a; padding: 30px 20px; text-align: center; border-radius: 12px 12px 0 0; }
+          .header h1 { margin: 0; font-size: 24px; font-weight: bold; }
+          .content { background-color: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+          .greeting { font-size: 18px; font-weight: bold; color: #111827; margin-bottom: 15px; }
+          .otp-box { background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 2px solid #3b82f6; padding: 25px; text-align: center; margin: 25px 0; border-radius: 8px; }
+          .otp-code { font-size: 36px; font-weight: bold; color: #1d4ed8; letter-spacing: 8px; font-family: 'Courier New', monospace; }
+          .warning { background-color: #fef2f2; border-left: 4px solid #dc2626; color: #991b1b; padding: 12px 16px; margin-top: 20px; border-radius: 4px; font-size: 14px; }
+          .info-text { color: #4b5563; font-size: 15px; margin: 15px 0; }
+          .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header"><h1> SRM-RMP Approval System</h1></div>
+          <div class="content">
+            <div class="greeting">Hello${name ? ' ' + name : ''}!</div>
+            <p class="info-text">You requested to login to the SRM-RMP Approval System. Please use the following One-Time Password (OTP) to complete your login:</p>
+            <div class="otp-box"><div class="otp-code">${otp}</div></div>
+            <p class="info-text"><strong> This OTP is valid for 1 minute.</strong></p>
+            <p class="info-text">If you didn't request this OTP, please ignore this email and ensure your account is secure.</p>
+            <div class="warning"><strong> Security Notice:</strong> Never share this OTP with anyone. </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+    text: `Your OTP is: ${otp}`,
+  };
 
   try {
-    const mailOptions = {
-      from: `"SRM-RMP Approval System" <${process.env.EMAIL_FROM}>`,
-      to: email,
-      subject: 'Your Login OTP - SRM-RMP Approval System',
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              line-height: 1.6;
-              color: #333;
-            }
-            .container {
-              max-width: 600px;
-              margin: 0 auto;
-              padding: 20px;
-              background-color: #f9fafb;
-            }
-            .header {
-              background: linear-gradient(135deg, #dbeafe 0%, #dbeafe 100%);
-              color: #1e3a8a;
-              padding: 30px 20px;
-              text-align: center;
-              border-radius: 12px 12px 0 0;
-            }
-            .header h1 {
-              margin: 0;
-              font-size: 24px;
-              font-weight: bold;
-            }
-            .content {
-              background-color: white;
-              padding: 30px;
-              border-radius: 0 0 12px 12px;
-              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            }
-            .greeting {
-              font-size: 18px;
-              font-weight: bold;
-              color: #111827;
-              margin-bottom: 15px;
-            }
-            .otp-box {
-              background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-              border: 2px solid #3b82f6;
-              padding: 25px;
-              text-align: center;
-              margin: 25px 0;
-              border-radius: 8px;
-            }
-            .otp-code {
-              font-size: 36px;
-              font-weight: bold;
-              color: #1d4ed8;
-              letter-spacing: 8px;
-              font-family: 'Courier New', monospace;
-            }
-            .warning {
-              background-color: #fef2f2;
-              border-left: 4px solid #dc2626;
-              color: #991b1b;
-              padding: 12px 16px;
-              margin-top: 20px;
-              border-radius: 4px;
-              font-size: 14px;
-            }
-            .info-text {
-              color: #4b5563;
-              font-size: 15px;
-              margin: 15px 0;
-            }
-            .footer {
-              text-align: center;
-              margin-top: 30px;
-              padding-top: 20px;
-              border-top: 1px solid #e5e7eb;
-              font-size: 12px;
-              color: #6b7280;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1> SRM-RMP Approval System</h1>
-            </div>
-            <div class="content">
-              <div class="greeting">Hello${name ? ' ' + name : ''}!</div>
-              <p class="info-text">
-                You requested to login to the SRM-RMP Approval System. Please use the following 
-                One-Time Password (OTP) to complete your login:
-              </p>
-              
-              <div class="otp-box">
-                <div class="otp-code">${otp}</div>
-              </div>
-              
-              <p class="info-text">
-                <strong> This OTP is valid for 1 minute.</strong>
-              </p>
-              
-              <p class="info-text">
-                If you didn't request this OTP, please ignore this email and ensure your account is secure.
-              </p>
-              
-              <div class="warning">
-                <strong> Security Notice:</strong> Never share this OTP with anyone. 
-              </div>
-            </div>
-          </div>
-        </body>
-        </html>
-      `,
-      text: `Hello${name ? ' ' + name : ''},
-
-Your OTP for SRM-RMP Approval System login is: ${otp}
-
-This OTP is valid for 1 minute.
-
-If you didn't request this OTP, please ignore this email.
-
-Security Notice: Never share this OTP with anyone.`,
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`OTP email sent successfully to ${email}. MessageID: ${info.messageId}`);
+    // Attempt 1: Try secure connection (465)
+    console.log('Trying primary transport (Port 465)...');
+    const info = await transporterSecure.sendMail(mailOptions);
+    console.log(`Email sent via Port 465. MessageID: ${info.messageId}`);
     return true;
-  } catch (error) {
-    console.error('Error sending OTP email:', error);
-    if (error instanceof Error) {
-        console.error('Stack:', error.stack);
+  } catch (errorSecure) {
+    console.error('Port 465 failed:', errorSecure);
+    
+    try {
+      // Attempt 2: Try fallback connection (587)
+      console.log('Trying fallback transport (Port 587)...');
+      const info = await transporterFallback.sendMail(mailOptions);
+      console.log(`Email sent via Port 587. MessageID: ${info.messageId}`);
+      return true;
+    } catch (errorFallback) {
+      console.error('All email attempts failed.');
+      console.error('Port 587 error:', errorFallback);
+      return false;
     }
-    return false;
   }
 }
 
