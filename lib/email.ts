@@ -34,6 +34,11 @@ const transporterSecure = createTransporter(true);
 // Fallback transporter (TLS 587)
 const transporterFallback = createTransporter(false);
 
+// Generate 6-digit OTP
+export function generateOTP(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 // Send OTP email with retry logic
 export async function sendOTPEmail(email: string, otp: string, name?: string): Promise<boolean> {
   console.log('Attempting to send OTP email to:', email);
@@ -105,7 +110,7 @@ export async function sendOTPEmail(email: string, otp: string, name?: string): P
 // Verify transporter configuration (useful for debugging)
 export async function verifyEmailConfig(): Promise<boolean> {
   try {
-    await transporter.verify();
+    await transporterSecure.verify();
     console.log('Email service is ready');
     return true;
   } catch (error) {
