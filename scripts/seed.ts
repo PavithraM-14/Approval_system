@@ -6,7 +6,7 @@ import User from '../models/User';
 import Request from '../models/Request';
 import BudgetRecord from '../models/BudgetRecord';
 import SOPRecord from '../models/SOPRecord';
-import { UserRole } from '../lib/types';
+import { ActionType, RequestStatus, UserRole } from '../lib/types';
 
 
 // Load environment variables from .env.local
@@ -15,6 +15,13 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 const colleges = ['EEC', 'Medicine', 'Business'];
 const departments = ['Computer Science', 'Mechanical', 'Electrical', 'Civil'];
 const expenseCategories = ['Equipment', 'Software', 'Travel', 'Training', 'Infrastructure'];
+
+function generateRequestId(): string {
+  const now = new Date();
+  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const randomPart = Math.floor(1000 + Math.random() * 9000);
+  return `REQ-${datePart}-${randomPart}`;
+}
 
 async function seed() {
   try {
@@ -105,7 +112,6 @@ async function seed() {
     }
 
     console.log(`✅ Created ${sopRecords.length} SOP records`);
-<<<<<<< Updated upstream
 
     // Create sample requests with realistic workflow scenarios
     const requester = users.find(u => u.role === UserRole.REQUESTER);
@@ -1474,9 +1480,6 @@ async function seed() {
       console.log('     - ₹35,000 request (Manager → Dean → Chief Director - low cost)');
       console.log('     - ₹0 request (Manager → Dean → Chief Director - no cost)');
     }
-=======
-    console.log('✅ No requests created - database contains only users, budget records, and SOP records');
->>>>>>> Stashed changes
 
     console.log('🎉 Database seeded successfully!');
     console.log('\n👥 Login Credentials:');

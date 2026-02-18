@@ -34,12 +34,13 @@ JWT_SECRET=your-super-secret-jwt-key-here
 # Upload directory
 UPLOAD_DIR=./public/uploads
 
-# Email Configuration (Gmail SMTP with App Password)
-EMAIL_USER=srmapprovaldev123@gmail.com
-EMAIL_PASSWORD=wncb mxsx muhb ezii
+# Email Configuration (MailerSend API)
+MAILERSEND_API_KEY=your-mailersend-api-key
+MAILERSEND_SENDER_EMAIL=info@domain.com
+MAILERSEND_SENDER_NAME=SRM-RMP Institutional Approval
 ```
 
-**IMPORTANT:** Make sure to copy the email credentials exactly as shown above. The email system uses Gmail SMTP and requires these credentials to send OTP emails.
+**IMPORTANT:** OTP emails require valid `MAILERSEND_API_KEY` and `MAILERSEND_SENDER_EMAIL` values.
 
 ### 4. Run the Development Server
 ```bash
@@ -53,12 +54,12 @@ The application will be available at http://localhost:3000
 ### "Failed to send OTP" Error
 This error occurs when:
 1. `.env.local` file is missing
-2. Email credentials are incorrect or missing
-3. Email credentials have extra spaces
+2. MailerSend credentials are incorrect or missing
+3. Environment variable names are incorrect
 
 **Solution:**
 - Make sure `.env.local` exists in the root directory
-- Copy the email configuration exactly as shown above
+- Add valid MailerSend credentials in `.env.local`
 - Restart the dev server after creating/updating `.env.local`
 
 ### Email Not Received

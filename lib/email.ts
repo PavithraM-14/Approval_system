@@ -1,24 +1,52 @@
-import nodemailer from 'nodemailer';
+import { EmailParams, MailerSend, Recipient, Sender } from 'mailersend';
 
 /**
- * Create and configure Nodemailer transporter
- * Uses SMTP authentication
+ * Create and configure MailerSend client
  */
-const createTransporter = () => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-    throw new Error('EMAIL_USER and EMAIL_PASSWORD must be set in environment variables');
+const createMailerSendClient = () => {
+  const apiKey = process.env.MAILERSEND_API_KEY || process.env.API_KEY;
+
+  if (!apiKey) {
+    throw new Error('MAILERSEND_API_KEY (or API_KEY) must be set in environment variables');
   }
 
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: Number(process.env.EMAIL_PORT || 587),
-    secure: process.env.EMAIL_SECURE === 'true',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
+  return new MailerSend({
+    apiKey,
   });
 };
+
+const getSender = () => {
+  const senderEmail = process.env.MAILERSEND_SENDER_EMAIL;
+  const senderName = process.env.MAILERSEND_SENDER_NAME || process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System';
+
+  if (!senderEmail) {
+    throw new Error('MAILERSEND_SENDER_EMAIL must be set in environment variables');
+  }
+
+  return new Sender(senderEmail, senderName);
+};
+
+async function sendEmailWithMailerSend(options: {
+  toEmail: string;
+  toName: string;
+  subject: string;
+  html: string;
+  text: string;
+}) {
+  const mailerSend = createMailerSendClient();
+  const sentFrom = getSender();
+  const recipients = [new Recipient(options.toEmail, options.toName)];
+
+  const emailParams = new EmailParams()
+    .setFrom(sentFrom)
+    .setTo(recipients)
+    .setReplyTo(sentFrom)
+    .setSubject(options.subject)
+    .setHtml(options.html)
+    .setText(options.text);
+
+  return mailerSend.email.send(emailParams);
+}
 
 /**
  * Generate a 6-digit OTP
@@ -40,13 +68,8 @@ export async function sendOTPEmail(
   name: string = 'User'
 ): Promise<boolean> {
   try {
-    const transporter = createTransporter();
-
-    const mailOptions = {
-      from: `"${process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System'}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Verify Your Email - OTP Code',
-      html: `
+    const subject = 'Verify Your Email - OTP Code';
+    const html = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -144,14 +167,19 @@ export async function sendOTPEmail(
           </div>
         </body>
         </html>
-      `,
-      text: `Hello ${name},\n\nThank you for signing up! Your OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you didn't request this verification, please ignore this email.`,
-    };
+      `;
+    const text = `Hello ${name},\n\nThank you for signing up! Your OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you didn't request this verification, please ignore this email.`;
 
-    const info = await transporter.sendMail(mailOptions);
+    const response = await sendEmailWithMailerSend({
+      toEmail: email,
+      toName: name,
+      subject,
+      html,
+      text,
+    });
     
     console.log('✅ OTP email sent successfully:', {
-      messageId: info.messageId,
+      response,
       recipient: email,
       timestamp: new Date().toISOString(),
     });
@@ -185,13 +213,8 @@ export async function sendPasswordResetEmail(
   name: string = 'User'
 ): Promise<boolean> {
   try {
-    const transporter = createTransporter();
-
-    const mailOptions = {
-      from: `"${process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System'}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
-      to: email,
-      subject: 'Password Reset Request - OTP Code',
-      html: `
+    const subject = 'Password Reset Request - OTP Code';
+    const html = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -289,14 +312,19 @@ export async function sendPasswordResetEmail(
           </div>
         </body>
         </html>
-      `,
-      text: `Hello ${name},\n\nWe received a request to reset your password. Your OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you didn't request a password reset, please ignore this email.`,
-    };
+      `;
+    const text = `Hello ${name},\n\nWe received a request to reset your password. Your OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you didn't request a password reset, please ignore this email.`;
 
-    const info = await transporter.sendMail(mailOptions);
+    const response = await sendEmailWithMailerSend({
+      toEmail: email,
+      toName: name,
+      subject,
+      html,
+      text,
+    });
     
     console.log('✅ Password reset email sent successfully:', {
-      messageId: info.messageId,
+      response,
       recipient: email,
       timestamp: new Date().toISOString(),
     });

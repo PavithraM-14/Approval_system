@@ -248,7 +248,9 @@ This repository includes `render.yaml` for one-click Blueprint deployment.
 - `UPLOAD_DIR` (set to `/var/data/uploads` when using a persistent disk)
 
 4. **Optional email variables**
-- `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASSWORD`, `EMAIL_FROM`
+- `MAILERSEND_API_KEY` (or `API_KEY`)
+- `MAILERSEND_SENDER_EMAIL`
+- `MAILERSEND_SENDER_NAME`
 
 5. **Deploy**
 - Build command: `npm ci && npm run build`
@@ -268,7 +270,7 @@ This repository includes `render.yaml` for one-click Blueprint deployment.
 
 ### Ready-to-Implement Features
 - **NextAuth Integration** - Replace dev auth with production-ready auth
-- **Email Notifications** - SMTP integration for email alerts
+- **Email Notifications** - MailerSend API integration for email alerts
 - **File Uploads** - Complete file attachment system  
 - **PDF Generation** - Server-side PDF export
 - **Push Notifications** - Real-time browser notifications
