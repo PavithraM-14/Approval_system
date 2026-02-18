@@ -1,31 +1,31 @@
 import nodemailer from 'nodemailer';
 
 /**
- * Generate a 6-digit OTP
- */
-export function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-/**
  * Create and configure Nodemailer transporter
- * Uses Gmail SMTP with App Password authentication
+ * Uses SMTP authentication
  */
 const createTransporter = () => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
     throw new Error('EMAIL_USER and EMAIL_PASSWORD must be set in environment variables');
   }
 
-  return nodemailer.createTransporter({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // Use TLS
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: Number(process.env.EMAIL_PORT || 587),
+    secure: process.env.EMAIL_SECURE === 'true',
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD,
     },
   });
 };
+
+/**
+ * Generate a 6-digit OTP
+ */
+export function generateOTP(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 /**
  * Send OTP email to user
@@ -43,7 +43,7 @@ export async function sendOTPEmail(
     const transporter = createTransporter();
 
     const mailOptions = {
-      from: `"${process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System'}" <${process.env.EMAIL_USER}>`,
+      from: `"${process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System'}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
       to: email,
       subject: 'Verify Your Email - OTP Code',
       html: `
@@ -145,6 +145,7 @@ export async function sendOTPEmail(
         </body>
         </html>
       `,
+      text: `Hello ${name},\n\nThank you for signing up! Your OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you didn't request this verification, please ignore this email.`,
     };
 
     const info = await transporter.sendMail(mailOptions);
@@ -187,7 +188,7 @@ export async function sendPasswordResetEmail(
     const transporter = createTransporter();
 
     const mailOptions = {
-      from: `"${process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System'}" <${process.env.EMAIL_USER}>`,
+      from: `"${process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System'}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
       to: email,
       subject: 'Password Reset Request - OTP Code',
       html: `
@@ -289,6 +290,7 @@ export async function sendPasswordResetEmail(
         </body>
         </html>
       `,
+      text: `Hello ${name},\n\nWe received a request to reset your password. Your OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you didn't request a password reset, please ignore this email.`,
     };
 
     const info = await transporter.sendMail(mailOptions);
