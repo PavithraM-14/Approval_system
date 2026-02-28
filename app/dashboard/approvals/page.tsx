@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import QueryIndicator from '../../../components/QueryIndicator';
+import RequestSearch from '../../../components/RequestSearch';
 
 interface Request {
   _id: string;
@@ -35,6 +36,14 @@ function ApprovalsPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<string>(statusFilter || 'pending');
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchResults, setSearchResults] = useState<Request[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  // Extract unique values for search filters
+  const colleges = [...new Set(requests.map(r => r.college))];
+  const departments = [...new Set(requests.map(r => r.department))];
+  const expenseCategories = [...new Set(requests.map(r => r.expenseCategory))];
 
   // Update active tab when URL changes
   useEffect(() => {
@@ -118,6 +127,35 @@ function ApprovalsPageContent() {
     } else {
       router.push(`/dashboard/approvals?status=${tab}`);
     }
+  };
+
+  const handleSearch = async (filters: any) => {
+    setSearchLoading(true);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.append(key, value as string);
+      });
+
+      const response = await fetch(`/api/requests/search?${params.toString()}`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.requests);
+        setSearchActive(true);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchActive(false);
+    setSearchResults([]);
   };
 
   const getStatusBadgeClass = (status: string) => {
@@ -211,6 +249,30 @@ function ApprovalsPageContent() {
         </div>
       </div>
 
+      {/* Search Component */}
+      <RequestSearch
+        onSearch={handleSearch}
+        onClear={handleClearSearch}
+        colleges={colleges}
+        departments={departments}
+        expenseCategories={expenseCategories}
+      />
+
+      {/* Search Results Indicator */}
+      {searchActive && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+          <span className="text-sm text-blue-700">
+            Showing search results ({(searchActive ? searchResults : requests).length} found)
+          </span>
+          <button
+            onClick={handleClearSearch}
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Clear search
+          </button>
+        </div>
+      )}
+
       {/* Tab Navigation */}
       <div className="mb-6 border-b border-gray-200">
         <nav className="flex gap-4 overflow-x-auto">
@@ -265,7 +327,7 @@ function ApprovalsPageContent() {
       )}
 
       {/* No Approvals */}
-      {requests.length === 0 ? (
+      {(searchActive ? searchResults : requests).length === 0 ? (
         <div className="text-center py-12 sm:py-16 bg-white rounded-xl sm:rounded-2xl shadow-md border border-gray-100">
           <svg
             className="mx-auto h-12 w-12 sm:h-14 sm:w-14 text-gray-400"
@@ -293,12 +355,12 @@ function ApprovalsPageContent() {
           {/* Results Summary */}
           <div className="mb-4 pb-4 border-b border-gray-200">
             <p className="text-xs sm:text-sm text-gray-600">
-              {requests.length} request{requests.length !== 1 ? 's' : ''} found
+              {(searchActive ? searchResults : requests).length} request{(searchActive ? searchResults : requests).length !== 1 ? 's' : ''} found
             </p>
           </div>
 
           <ul className="divide-y divide-gray-200">
-            {requests.map((request) => (
+            {(searchActive ? searchResults : requests).map((request) => (
               <li key={request._id}>
                 <Link
                   href={`/dashboard/requests/${request._id}`}

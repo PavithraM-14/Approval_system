@@ -5,6 +5,7 @@ import { getCurrentUser } from '../../../../../lib/auth';
 import { RequestStatus, ActionType, UserRole } from '../../../../../lib/types';
 import { approvalEngine } from '../../../../../lib/approval-engine';
 import { queryEngine } from '../../../../../lib/query-engine';
+import { notifyStatusChange } from '../../../../../lib/notification-service';
 
 export async function POST(
   request: NextRequest,
@@ -598,6 +599,22 @@ export async function POST(
       .populate('history.actor', 'name email empId role');
 
     console.log('[DEBUG] Request updated successfully');
+
+    // Send notifications to stakeholders
+    try {
+      await notifyStatusChange(
+        params.id,
+        nextStatus,
+        user.id,
+        action as 'approve' | 'reject' | 'clarify',
+        notes
+      );
+      console.log('[DEBUG] Notifications sent successfully');
+    } catch (notificationError) {
+      console.error('[ERROR] Failed to send notifications:', notificationError);
+      // Don't fail the request if notifications fail
+    }
+
     return NextResponse.json(updatedRequest);
   } catch (error) {
     console.error('[ERROR] Approve request error:', error);

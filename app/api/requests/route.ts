@@ -10,6 +10,7 @@ import { filterRequestsByVisibility } from '../../../lib/request-visibility';
 import { generateRequestId } from '../../../lib/id-generator';
 import mongoose from 'mongoose';
 import { approvalEngine } from '../../../lib/approval-engine';
+import { getNextApprovers, notifyApprovalPending } from '../../../lib/notification-service';
 
 // Function to get role-based filter for request visibility
 function getRoleBasedFilter(userRole: UserRole, userId: any, pendingOnly: boolean = false, isForDashboard: boolean = false) {
@@ -259,6 +260,23 @@ export async function POST(request: NextRequest) {
       title: validatedData.title,
       requester: user!.email
     });
+
+    // Send notifications to next approvers
+    try {
+      const nextApprovers = await getNextApprovers(newRequest._id.toString(), initialStatus);
+      for (const approverId of nextApprovers) {
+        await notifyApprovalPending(
+          approverId,
+          newRequest._id.toString(),
+          validatedData.title,
+          requesterUser.name
+        );
+      }
+      console.log('[DEBUG] Notifications sent to', nextApprovers.length, 'approvers');
+    } catch (notificationError) {
+      console.error('[ERROR] Failed to send notifications:', notificationError);
+      // Don't fail the request if notifications fail
+    }
 
     return NextResponse.json(populatedRequest, { status: 201 });
   } catch (error) {

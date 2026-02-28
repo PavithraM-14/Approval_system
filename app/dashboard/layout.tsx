@@ -13,7 +13,8 @@ import {
 import { UserRole } from '../../lib/types';
 import { AuthUser } from '../../lib/auth';
 import Image from "next/image";
-import SRMRMP_Logo from "../assets/SRMRMP_LOGO.png"; 
+import SRMRMP_Logo from "../assets/SRMRMP_LOGO.png";
+import NotificationBell from '../../components/NotificationBell'; 
 
 interface NavItem {
   name: string;
@@ -237,6 +238,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
           {/* RIGHT */}
           <div className="flex items-center gap-3">
+            {/* Notification Bell */}
+            <NotificationBell />
+            
             <div className="text-right">
               <div className="text-sm text-gray-700">
                 Welcome, <span className="font-medium">{user?.name}</span>

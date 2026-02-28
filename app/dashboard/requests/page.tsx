@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import QueryIndicator from '../../../components/QueryIndicator';
+import RequestSearch from '../../../components/RequestSearch';
 
 const fetcher = (url: string) => fetch(url, { credentials: 'include' }).then(res => res.json());
 
@@ -38,6 +39,14 @@ function RequestsPageContent() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchResults, setSearchResults] = useState<Request[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  // Extract unique values for search filters
+  const colleges = useMemo(() => [...new Set(requests.map(r => r.college))], [requests]);
+  const departments = useMemo(() => [...new Set(requests.map(r => r.department))], [requests]);
+  const expenseCategories = useMemo(() => [...new Set(requests.map(r => r.expenseCategory))], [requests]);
 
   const fetchCurrentUser = useCallback(async () => {
     try {
@@ -75,18 +84,51 @@ function RequestsPageContent() {
     }
   }, [statusFilter]);
 
+  const handleSearch = async (filters: any) => {
+    setSearchLoading(true);
+    try {
+      // Build query string
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.append(key, value as string);
+      });
+
+      const response = await fetch(`/api/requests/search?${params.toString()}`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.requests);
+        setSearchActive(true);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchActive(false);
+    setSearchResults([]);
+  };
+
   const filteredRequests = useMemo(() => {
+    // Use search results if search is active
+    const sourceRequests = searchActive ? searchResults : requests;
+
     if (activeFilter === 'all') {
-      return requests;
+      return sourceRequests;
     }
 
-    return requests.filter(request => {
+    return sourceRequests.filter(request => {
       if (activeFilter === 'pending') {
         return !['approved', 'rejected'].includes(request.status);
       }
       return request.status === activeFilter;
     });
-  }, [requests, activeFilter]);
+  }, [requests, searchResults, searchActive, activeFilter]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -243,6 +285,30 @@ function RequestsPageContent() {
           )}
         </div>
       </div>
+
+      {/* Search Component */}
+      <RequestSearch
+        onSearch={handleSearch}
+        onClear={handleClearSearch}
+        colleges={colleges}
+        departments={departments}
+        expenseCategories={expenseCategories}
+      />
+
+      {/* Search Results Indicator */}
+      {searchActive && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+          <span className="text-sm text-blue-700">
+            Showing search results ({filteredRequests.length} found)
+          </span>
+          <button
+            onClick={handleClearSearch}
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Clear search
+          </button>
+        </div>
+      )}
 
       {/* Filter Buttons */}
       <div className="mb-4 sm:mb-6 flex flex-wrap gap-2 sm:gap-3">
