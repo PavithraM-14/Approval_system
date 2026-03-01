@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    
+
     // Extract search parameters
     const query = searchParams.get('query') || '';
     const status = searchParams.get('status') || '';
@@ -56,12 +56,14 @@ export async function GET(request: NextRequest) {
     // Build MongoDB query
     let mongoQuery: any = {};
 
-    // Text search on title, purpose, and requestId
+    // Text search on title, purpose, requestId, department, and college
     if (query) {
       mongoQuery.$or = [
         { title: { $regex: query, $options: 'i' } },
         { purpose: { $regex: query, $options: 'i' } },
-        { requestId: { $regex: query, $options: 'i' } }
+        { requestId: { $regex: query, $options: 'i' } },
+        { department: { $regex: query, $options: 'i' } },
+        { college: { $regex: query, $options: 'i' } }
       ];
     }
 

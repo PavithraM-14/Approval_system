@@ -126,7 +126,7 @@ export default function CreateRequestPage() {
     }
 
     console.log('[DEBUG] Form submission attempt:', { data, uploadedFiles: uploadedFiles.length });
-    
+
     setError(null);
     let hasErrors = false;
 
@@ -185,7 +185,7 @@ export default function CreateRequestPage() {
       if (!response.ok) {
         const err = await response.json();
         console.error('[DEBUG] API error response:', err);
-        
+
         // Handle Zod validation errors from the server
         if (err.errors && Array.isArray(err.errors)) {
           const errorMessages = err.errors.map((e: any) => e.message).join(', ');
@@ -193,7 +193,7 @@ export default function CreateRequestPage() {
         } else {
           setError(err.error || 'Failed to create request');
         }
-        
+
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
@@ -329,11 +329,10 @@ export default function CreateRequestPage() {
                   setFieldError('title', { type: 'manual', message: 'Title must be at least 5 characters' });
                 }
               }}
-              className={`mt-1 w-full border-2 p-3 rounded transition-all focus:outline-none ${
-                errors.title
+              className={`mt-1 w-full border-2 p-3 rounded transition-all focus:outline-none ${errors.title
                   ? 'border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200'
                   : 'border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-              }`}
+                }`}
             />
             {errors.title && <p className={`${errorText} font-semibold`}>{errors.title.message}</p>}
           </div>
@@ -349,11 +348,10 @@ export default function CreateRequestPage() {
                   setFieldError('purpose', { type: 'manual', message: 'Purpose must be at least 10 characters' });
                 }
               }}
-              className={`mt-1 w-full border-2 p-3 rounded transition-all focus:outline-none ${
-                errors.purpose
+              className={`mt-1 w-full border-2 p-3 rounded transition-all focus:outline-none ${errors.purpose
                   ? 'border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200'
                   : 'border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-              }`}
+                }`}
             />
             {errors.purpose && <p className={`${errorText} font-semibold`}>{errors.purpose.message}</p>}
           </div>
@@ -408,8 +406,8 @@ export default function CreateRequestPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-gray-700">Expense Category</label>
-            <input {...register('expenseCategory')} className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500" />
+            <label className="text-sm font-medium text-gray-700">Type of Approval</label>
+            <input {...register('expenseCategory')} placeholder="e.g. Travel, Equipment, Consumables" className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500" />
           </div>
 
           <div className="sm:col-span-2">

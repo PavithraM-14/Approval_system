@@ -83,14 +83,14 @@ export default function RequestSearch({
           <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by title, purpose, request ID..."
+            placeholder="Search by title, purpose, ID, or department (e.g. CSE)..."
             value={filters.query}
             onChange={(e) => handleInputChange('query', e.target.value)}
             onKeyPress={handleKeyPress}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
-        
+
         <button
           onClick={handleSearch}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
@@ -101,9 +101,8 @@ export default function RequestSearch({
 
         <button
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className={`px-4 py-2 rounded-lg transition flex items-center gap-2 ${
-            showAdvanced ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
+          className={`px-4 py-2 rounded-lg transition flex items-center gap-2 ${showAdvanced ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
         >
           <FunnelIcon className="h-5 w-5" />
           <span className="hidden sm:inline">Filters</span>
@@ -132,8 +131,10 @@ export default function RequestSearch({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">All Statuses</option>
+              <option value="submitted">Submitted</option>
               <option value="manager_review">Manager Review</option>
               <option value="parallel_verification">Verification</option>
+              <option value="institution_verified">Institution Verified</option>
               <option value="vp_approval">VP Approval</option>
               <option value="hoi_approval">HOI Approval</option>
               <option value="dean_review">Dean Review</option>
@@ -142,6 +143,7 @@ export default function RequestSearch({
               <option value="chairman_approval">Chairman</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
+              <option value="query_required">Clarification Required</option>
             </select>
           </div>
 
@@ -179,10 +181,10 @@ export default function RequestSearch({
             </div>
           )}
 
-          {/* Expense Category Filter */}
+          {/* Approval Type Filter */}
           {expenseCategories.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Expense Category</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type of Approval</label>
               <select
                 value={filters.expenseCategory}
                 onChange={(e) => handleInputChange('expenseCategory', e.target.value)}
@@ -270,7 +272,7 @@ export default function RequestSearch({
           )}
           {filters.expenseCategory && (
             <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">
-              Category: {filters.expenseCategory}
+              Type: {filters.expenseCategory}
             </span>
           )}
           {(filters.minAmount || filters.maxAmount) && (

@@ -1,10 +1,11 @@
 'use client';
 
-import { ClipboardDocumentListIcon, ClockIcon, CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ClipboardDocumentListIcon, ClockIcon, CheckCircleIcon, ExclamationTriangleIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import QueryIndicator from '../../components/QueryIndicator';
+import RequestSearch from '../../components/RequestSearch';
 
 const fetcher = (url: string) =>
   fetch(url, { credentials: 'include' }).then((res) => res.json());
@@ -23,6 +24,17 @@ export default function DashboardPage() {
   const { data: stats, error } = useSWR<DashboardStats>('/api/dashboard/stats', fetcher);
   // Show a single, unified recent list for all roles
   const { data: recentRequests, isLoading: isLoadingRequests, mutate: mutateRecentRequests } = useSWR('/api/requests?limit=5', fetcher);
+
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  // For Search component
+  const { data: allRequestsData } = useSWR('/api/requests', fetcher);
+  const allRequests = allRequestsData?.requests || [];
+  const colleges = [...new Set(allRequests.map((r: any) => r.college))].filter(Boolean) as string[];
+  const departments = [...new Set(allRequests.map((r: any) => r.department))].filter(Boolean) as string[];
+  const expenseCategories = [...new Set(allRequests.map((r: any) => r.expenseCategory))].filter(Boolean) as string[];
 
   useEffect(() => {
     fetchCurrentUser();
@@ -45,16 +57,45 @@ export default function DashboardPage() {
     }
   };
 
+  const handleSearch = async (filters: any) => {
+    setSearchLoading(true);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.append(key, value as string);
+      });
+
+      const response = await fetch(`/api/requests/search?${params.toString()}`, {
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.requests);
+        setSearchActive(true);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchActive(false);
+    setSearchResults([]);
+  };
+
   const handleStatsCardClick = (cardName: string) => {
     // Route based on user role
     const isRequester = currentUser?.role === 'requester';
-    
+
     console.log('[DEBUG] Stats card clicked:', {
       cardName,
       userRole: currentUser?.role,
       isRequester
     });
-    
+
     switch (cardName) {
       case 'Total Requests':
         if (isRequester) {
@@ -63,7 +104,7 @@ export default function DashboardPage() {
           router.push('/dashboard/approvals?status=all');
         }
         break;
-        
+
       case 'Pending':
         if (isRequester) {
           router.push('/dashboard/requests?status=pending');
@@ -71,7 +112,7 @@ export default function DashboardPage() {
           router.push('/dashboard/approvals?status=pending');
         }
         break;
-        
+
       case 'Approved':
         if (isRequester) {
           router.push('/dashboard/requests?status=approved');
@@ -79,7 +120,7 @@ export default function DashboardPage() {
           router.push('/dashboard/approvals?status=approved');
         }
         break;
-        
+
       case 'Rejected':
         if (isRequester) {
           router.push('/dashboard/requests?status=rejected');
@@ -87,12 +128,12 @@ export default function DashboardPage() {
           router.push('/dashboard/approvals?status=rejected');
         }
         break;
-        
+
       case 'In Progress':
       case 'My Involvement':
         router.push('/dashboard/in-progress');
         break;
-        
+
       default:
         if (isRequester) {
           router.push('/dashboard/requests');
@@ -139,12 +180,12 @@ export default function DashboardPage() {
   ];
 
   // Add "In Progress" card for non-requesters
-  const statsCards = currentUser?.role === 'requester' 
-    ? baseStatsCards 
+  const statsCards = currentUser?.role === 'requester'
+    ? baseStatsCards
     : [
-        ...baseStatsCards.slice(0, 2), // Total and Pending
-        ...baseStatsCards.slice(2) // Approved and Rejected
-      ];
+      ...baseStatsCards.slice(0, 2), // Total and Pending
+      ...baseStatsCards.slice(2) // Approved and Rejected
+    ];
 
   if (error) {
     return (
@@ -205,86 +246,122 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* RECENT REQUESTS */}
+      {/* SEARCH SECTION */}
+      <div className="mt-8 sm:mt-12">
+        <div className="flex items-center gap-2 mb-4">
+          <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+          <h3 className="text-lg font-bold text-gray-900">Advanced Search</h3>
+        </div>
+        <RequestSearch
+          onSearch={handleSearch}
+          onClear={handleClearSearch}
+          colleges={colleges}
+          departments={departments}
+          expenseCategories={expenseCategories}
+        />
+      </div>
+
+      {/* SEARCH RESULTS OR RECENT REQUESTS */}
       <div className="mt-8 sm:mt-10 bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 lg:p-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-2">
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Recent Requests</h3>
-          {recentRequests?.requests?.length > 0 && (
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
+            {searchActive ? 'Search Results' : 'Recent Requests'}
+          </h3>
+          {(searchActive ? searchResults : recentRequests?.requests)?.length > 0 && (
             <p className="text-xs sm:text-sm text-gray-500">Click on any request to view details</p>
           )}
         </div>
 
-        {isLoadingRequests ? (
-          <div className="flex justify-center items-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-500">Loading recent requests...</span>
+        {searchActive && (
+          <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between animate-fadeIn">
+            <span className="text-sm text-blue-700 font-medium">
+              Found {searchResults.length} results matching your search criteria
+            </span>
+            <button
+              onClick={handleClearSearch}
+              className="text-sm text-blue-600 hover:text-blue-800 font-bold px-3 py-1 rounded-md hover:bg-blue-100 transition-colors"
+            >
+              Back to Recent
+            </button>
           </div>
-        ) : recentRequests?.requests?.length > 0 ? (
-          <ul className="divide-y divide-gray-200">
-            {recentRequests.requests
-              .filter((request: any) => request && request._id) // Filter out invalid requests
-              .map((request: any) => {
-              // Debug log to see request structure
-              if (!request.status) {
-                console.log('Request without status:', request);
-              }
-              return (
-              <li 
-                key={request._id} 
-                className="py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-gray-50 hover:scale-[1.01] transition-all cursor-pointer rounded-lg px-3 sm:px-4 -mx-3 sm:-mx-4 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2 active:scale-[0.99] gap-3 sm:gap-0"
-                onClick={() => router.push(`/dashboard/requests/${request._id}`)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    router.push(`/dashboard/requests/${request._id}`);
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-                aria-label={`View request: ${request.title || 'Untitled Request'}`}
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-base sm:text-lg font-semibold text-blue-700 hover:text-blue-800 transition-colors truncate">
-                    {request.title || 'Untitled Request'}
-                  </p>
-                  <p className="text-sm sm:text-base text-gray-700 font-medium mt-1 truncate">
-                    {request.college || 'Unknown'} • {request.department || 'Unknown'}
-                  </p>
-                  <p className="text-sm text-gray-600 font-medium mt-1">
-                    {request.costEstimate > 0 && `₹${request.costEstimate?.toLocaleString() || '0'} • `}{request.createdAt ? new Date(request.createdAt).toLocaleDateString('en-GB') : 'Unknown date'}
-                  </p>
-                </div>
+        )}
 
-                <div className="flex items-center justify-between sm:justify-end space-x-2 sm:space-x-3 flex-shrink-0">
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-2 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-semibold ${getStatusClass(request.status || 'unknown')} whitespace-nowrap`}>
-                      {request.status 
-                        ? (request.status === 'parallel_verification' 
-                            ? 'VERIFICATION' 
-                            : request.status.replace('_', ' ').toUpperCase())
-                        : 'UNKNOWN'}
-                    </span>
-                    {request.pendingQuery && request.queryLevel === currentUser?.role && (
-                      <QueryIndicator size="sm" showText={false} />
-                    )}
+        {searchLoading || isLoadingRequests ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+          </div>
+        ) : (searchActive ? searchResults : recentRequests?.requests)?.length > 0 ? (
+          <ul className="divide-y divide-gray-200">
+            {(searchActive ? searchResults : recentRequests.requests)
+              .filter((request: any) => request && request._id)
+              .map((request: any) => (
+                <li
+                  key={request._id}
+                  className="py-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-gray-50 hover:scale-[1.005] transition-all cursor-pointer rounded-xl px-4 -mx-4 focus-within:ring-2 focus-within:ring-blue-500 active:scale-[0.99] gap-3"
+                  onClick={() => router.push(`/dashboard/requests/${request._id}`)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-lg font-bold text-blue-600 hover:text-blue-700 transition-colors truncate">
+                      {request.title || 'Untitled Request'}
+                    </p>
+                    <div className="flex flex-wrap gap-2 mt-1 items-center">
+                      <span className="text-sm font-medium text-gray-900">{request.college || 'Unknown'}</span>
+                      <span className="text-gray-300">•</span>
+                      <span className="text-sm text-gray-600">{request.department || 'Unknown'}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 font-medium mt-1">
+                      {request.costEstimate > 0 ? `₹${request.costEstimate?.toLocaleString()} • ` : ''}
+                      {request.createdAt ? new Date(request.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Unknown date'}
+                    </p>
                   </div>
-                  <svg 
-                    className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </li>
-            );
-            })}
+
+                  <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSearch({ status: request.status });
+                        }}
+                        className={`px-4 py-1.5 rounded-full text-xs font-bold shadow-sm ${getStatusClass(request.status || 'unknown')} whitespace-nowrap hover:scale-110 transition-transform active:scale-95`}
+                        title={`Filter by ${request.status?.replace('_', ' ')}`}
+                      >
+                        {request.status
+                          ? (request.status === 'parallel_verification'
+                            ? 'VERIFICATION'
+                            : request.status.replace('_', ' ').toUpperCase())
+                          : 'UNKNOWN'}
+                      </button>
+                      {request.pendingQuery && request.queryLevel === currentUser?.role && (
+                        <QueryIndicator size="sm" showText={false} />
+                      )}
+                    </div>
+                    <svg
+                      className="w-5 h-5 text-gray-300 flex-shrink-0 group-hover:text-blue-500 transition-colors"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </li>
+              ))}
           </ul>
         ) : (
-          <p className="text-center text-gray-500 py-6">
-            {'No recent requests found.'}
-          </p>
+          <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+            <MagnifyingGlassIcon className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+            <p className="text-gray-500 font-medium">
+              {searchActive ? 'No results match your search criteria' : 'No recent requests found.'}
+            </p>
+            {searchActive && (
+              <button
+                onClick={handleClearSearch}
+                className="mt-4 text-blue-600 font-bold hover:underline"
+              >
+                Clear search and view recent
+              </button>
+            )}
+          </div>
         )}
 
         {/* View All Requests Link */}
@@ -309,7 +386,7 @@ export default function DashboardPage() {
 /* STATUS COLORS */
 function getStatusClass(status: string | undefined | null) {
   if (!status) return 'bg-gray-100 text-gray-700';
-  
+
   switch (status.toLowerCase()) {
     case 'approved':
       return 'bg-green-100 text-green-700';

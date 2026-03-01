@@ -4,8 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserRole } from '../../lib/types';
 import PasswordInput from '../../components/PasswordInput';
-import Image from 'next/image';
-import SRMRMP_Logo from '../assets/SRMRMP_LOGO.png';
 import OTPVerification from '../../components/OTPVerification';
 import InstitutionSelect from '../../components/InstitutionSelect';
 import NestedSelect from '../../components/NestedSelect';
@@ -51,9 +49,10 @@ export default function SignupPage() {
   const router = useRouter();
 
   const inputClass =
-    'mt-1 block w-full border border-gray-400 rounded-lg px-3 py-2 ' +
-    'bg-white shadow-sm placeholder-gray-500 text-gray-900 ' +
-    'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition';
+    'mt-1 block w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 ' +
+    'focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all';
+
+  const labelClass = 'block text-sm font-semibold text-slate-300 ml-1';
 
   const selectClass =
     'mt-1 block w-full border border-gray-300 rounded-lg px-4 py-3 ' +
@@ -222,33 +221,25 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 px-4 animate-fadeIn">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-12 relative overflow-hidden">
+      {/* Background Glows */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[10%] right-[10%] w-[30%] h-[30%] bg-blue-600/10 rounded-full blur-[100px]"></div>
+        <div className="absolute bottom-[10%] left-[10%] w-[30%] h-[30%] bg-purple-600/10 rounded-full blur-[100px]"></div>
+      </div>
 
+      <div className="max-w-xl w-full space-y-8 animate-fadeIn relative z-10">
         <div className="flex flex-col items-center text-center">
-          <Image
-            src={SRMRMP_Logo}
-            alt="SRM Logo"
-            width={100}
-            height={100}
-            className="mb-4"
-            priority
-          />
-          <h1 className="text-3xl font-extrabold text-gray-900 drop-shadow-sm">
-            SRM-RMP Approval System
-          </h1>
-        </div>
 
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900">
-            Create an account
+          <h2 className="text-4xl font-extrabold text-white tracking-tight">
+            Create S.E.A.D. Account
           </h2>
-          <p className="mt-1 text-gray-600 text-sm">
-            Sign up for SRM-RMP Institutional Approval System
+          <p className="mt-2 text-slate-400 font-medium">
+            Join the System for Enterprise Approval Digitalization
           </p>
         </div>
 
-        <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
+        <div className="bg-slate-800/50 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/10">
 
           {error && (
             <div className="bg-red-50 text-red-600 border border-red-200 p-3 rounded-md text-sm mb-4">
@@ -258,7 +249,7 @@ export default function SignupPage() {
 
           <form className="space-y-6" onSubmit={handleSignup} autoComplete="off">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Full Name *</label>
+              <label className={labelClass}>Full Name *</label>
               <input
                 type="text"
                 required
@@ -271,7 +262,7 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Employee ID *</label>
+              <label className={labelClass}>Employee ID *</label>
               <input
                 type="text"
                 required
@@ -284,7 +275,7 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Email Address *</label>
+              <label className={labelClass}>Email Address *</label>
               <input
                 type="email"
                 required
@@ -297,7 +288,7 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Contact Number *</label>
+              <label className={labelClass}>Contact Number *</label>
               <input
                 type="tel"
                 required
@@ -311,7 +302,7 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Password *</label>
+              <label className={labelClass}>Password *</label>
               <PasswordInput
                 value={password}
                 onChange={setPassword}
@@ -322,7 +313,7 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Confirm Password *</label>
+              <label className={labelClass}>Confirm Password *</label>
               <PasswordInput
                 value={confirmPassword}
                 onChange={setConfirmPassword}
@@ -333,7 +324,7 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Role *</label>
+              <label className={labelClass}>Role *</label>
               <select
                 value={selectedRole}
                 onChange={(e) => {
@@ -354,7 +345,7 @@ export default function SignupPage() {
 
             {!rolesWithoutCollege.includes(selectedRole) && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Institution *</label>
+                <label className={`${labelClass} mb-2`}>Institution *</label>
                 <div className="relative">
                   <div className="relative">
                     <InstitutionSelect
@@ -369,7 +360,7 @@ export default function SignupPage() {
 
             {rolesWithDepartment.includes(selectedRole) && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Department *</label>
+                <label className={`${labelClass} mb-2`}>Department *</label>
                 <div className="relative">
                   <NestedSelect
                     value={department}
@@ -393,18 +384,26 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-700 hover:bg-blue-800 text-white py-3 rounded-lg font-medium shadow-md transition disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Sending OTP...' : 'Continue'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </span>
+              ) : 'Continue to Verification'}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+          <div className="mt-8 text-center pt-8 border-t border-white/5">
+            <p className="text-sm text-slate-400 font-medium">
               Already have an account?{' '}
               <button
                 onClick={() => router.push('/login')}
-                className="text-blue-600 font-medium hover:text-blue-700"
+                className="text-blue-400 hover:text-blue-300 font-bold transition-colors ml-1"
               >
                 Sign in
               </button>

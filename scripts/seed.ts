@@ -1,16 +1,16 @@
-import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
+
+// Load environment variables from .env.local
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+
+import mongoose from 'mongoose';
 import connectDB from '../lib/mongodb';
 import User from '../models/User';
 import Request from '../models/Request';
 import BudgetRecord from '../models/BudgetRecord';
 import SOPRecord from '../models/SOPRecord';
 import { ActionType, RequestStatus, UserRole } from '../lib/types';
-
-
-// Load environment variables from .env.local
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 const colleges = ['EEC', 'Medicine', 'Business'];
 const departments = ['Computer Science', 'Mechanical', 'Electrical', 'Civil'];

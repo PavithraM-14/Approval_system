@@ -2,8 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import SRMRMP_Logo from '../app/assets/SRMRMP_LOGO.png';
 
 interface OTPVerificationProps {
   email: string;
@@ -55,7 +53,7 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     const pastedData = e.clipboardData.getData('text').slice(0, 6);
-    
+
     if (!/^\d+$/.test(pastedData)) return;
 
     const newOtp = pastedData.split('').concat(Array(6).fill('')).slice(0, 6);
@@ -76,10 +74,8 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
 
     try {
       if (onVerify) {
-        // Custom verification handler (for signup)
         await onVerify(otpCode);
       } else {
-        // Default verification (for forgot-password)
         const response = await fetch('/api/auth/verify-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -95,7 +91,6 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
           return;
         }
 
-        // For forgot-password, move to reset password step
         if (type === 'forgot-password') {
           router.push(`/reset-password?email=${encodeURIComponent(email)}&otp=${otpCode}`);
         }
@@ -115,10 +110,8 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
 
     try {
       if (onResend) {
-        // Custom resend handler (for signup)
         await onResend();
       } else {
-        // Default resend (for forgot-password)
         const response = await fetch('/api/auth/resend-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -136,7 +129,7 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
       setCountdown(60);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
-    } catch (err) {
+    } catch {
       setError('Failed to resend OTP. Please try again.');
     } finally {
       setResending(false);
@@ -144,57 +137,41 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100 px-4 animate-fadeIn">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 relative overflow-hidden">
+      {/* Background Glows */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[10%] right-[10%] w-[30%] h-[30%] bg-blue-600/10 rounded-full blur-[100px]"></div>
+        <div className="absolute bottom-[10%] left-[10%] w-[30%] h-[30%] bg-purple-600/10 rounded-full blur-[100px]"></div>
+      </div>
 
+      <div className="max-w-md w-full space-y-8 animate-fadeIn relative z-10">
         <div className="flex flex-col items-center text-center">
-          <Image
-            src={SRMRMP_Logo}
-            alt="SRM Logo"
-            width={100}
-            height={100}
-            className="mb-4"
-            priority
-          />
-          <h1 className="text-3xl font-extrabold text-gray-900 drop-shadow-sm">
-            SRM-RMP Approval System
+          <div className="w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl shadow-xl flex items-center justify-center mb-6 transform rotate-3">
+            <span className="text-white text-2xl font-black tracking-tighter">SE</span>
+          </div>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">
+            Security Verification
           </h1>
-        </div>
-
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900">
-            Verify Your Email
-          </h2>
-          <p className="mt-1 text-gray-600 text-sm">
-            We&apos;ve sent a 6-digit code to<br />
-            <span className="font-semibold text-gray-900">{email}</span>
+          <p className="mt-2 text-slate-400 font-medium">
+            Enter the 6-digit code sent to <span className="text-white font-bold">{email}</span>
           </p>
         </div>
 
-        <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
-
+        <div className="bg-slate-800/50 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/10">
           {error && (
-            <div className="bg-red-50 text-red-600 border border-red-200 p-3 rounded-md text-sm mb-6 flex items-center gap-2">
-              <svg
-                className="w-4 h-4 flex-shrink-0"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
+            <div className="bg-red-500/10 text-red-400 border border-red-500/20 p-4 rounded-xl text-sm mb-6 flex items-center gap-3">
+              <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
               {error}
             </div>
           )}
 
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-3 text-center">
-              Enter OTP
+          <div className="mb-8">
+            <label className="block text-sm font-semibold text-slate-300 mb-4 text-center">
+              OTP Code
             </label>
-            <div className="flex justify-center gap-2 mb-4">
+            <div className="flex justify-center gap-2">
               {otp.map((digit, index) => (
                 <input
                   key={index}
@@ -205,15 +182,13 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
                   onChange={(e) => handleChange(index, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(index, e)}
                   onPaste={index === 0 ? handlePaste : undefined}
-                  className={`w-12 h-14 text-center text-2xl font-bold border rounded-lg 
-                    bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 
-                    focus:border-blue-500 transition ${
-                    error
-                      ? 'border-red-400 bg-red-50'
+                  className={`w-12 h-14 text-center text-2xl font-bold rounded-xl border transition-all duration-200 outline-none
+                    ${error
+                      ? 'border-red-500/50 bg-red-500/10 text-red-400'
                       : digit
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-400'
-                  }`}
+                        ? 'border-blue-500 bg-blue-500/10 text-white'
+                        : 'border-slate-700 bg-slate-900/50 text-white focus:border-blue-500/50'}
+                  `}
                   disabled={loading}
                 />
               ))}
@@ -221,25 +196,25 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
           </div>
 
           {loading && (
-            <div className="text-center mb-6">
-              <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <p className="text-sm text-gray-600 mt-2">Verifying...</p>
+            <div className="text-center mb-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <p className="text-sm font-semibold text-blue-400 mt-3 uppercase tracking-wider">Verifying...</p>
             </div>
           )}
 
-          <div className="text-center mb-6">
-            <p className="text-sm text-gray-600 mb-2">Didn&apos;t receive the code?</p>
+          <div className="text-center mb-8">
+            <p className="text-sm text-slate-400 mb-2 font-medium">Didn&apos;t receive the code?</p>
             {countdown > 0 ? (
-              <p className="text-sm text-gray-500">
-                Resend OTP in <span className="font-semibold text-blue-700">{countdown}s</span>
+              <p className="text-sm font-bold text-slate-300">
+                Resend available in <span className="text-blue-400">{countdown}s</span>
               </p>
             ) : (
               <button
                 onClick={handleResendOTP}
                 disabled={resending}
-                className="text-blue-600 font-semibold hover:text-blue-700 disabled:opacity-50 text-sm"
+                className="text-blue-400 font-bold hover:text-blue-300 transition-colors disabled:opacity-50 text-sm flex items-center justify-center w-full gap-2"
               >
-                {resending ? 'Sending...' : 'Resend OTP'}
+                {resending ? 'Sending Code...' : 'Resend Verification Code'}
               </button>
             )}
           </div>
@@ -247,17 +222,16 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
           <button
             onClick={onBack}
             disabled={loading}
-            className="w-full border border-gray-400 bg-white hover:bg-gray-50 text-gray-900 py-3 rounded-lg font-medium shadow-sm transition disabled:opacity-50"
+            className="w-full bg-slate-900/50 border border-slate-700 hover:bg-slate-900 text-slate-300 py-4 rounded-xl font-bold transition-all disabled:opacity-50"
           >
             Back to {type === 'signup' ? 'Signup' : 'Login'}
           </button>
 
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-            <p className="text-xs text-gray-700 text-center">
-              This code expires in 1 minute. Keep this window open while checking your email.
+          <div className="mt-8 p-4 bg-blue-500/5 rounded-xl border border-blue-500/10">
+            <p className="text-xs text-blue-400/80 text-center leading-relaxed font-medium">
+              For security, this code will expire in 60 seconds. Please keep this screen open while checking your inbox.
             </p>
           </div>
-
         </div>
       </div>
     </div>

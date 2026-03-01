@@ -1,4 +1,4 @@
-# SRM-RMP Institutional Approval System
+# S.E.A.D. - System for Enterprise Approval Digitalization
 
 A comprehensive digital approval workflow system built with Next.js, TypeScript, MongoDB, and Tailwind CSS. This system streamlines institutional request approvals through a sophisticated role-based workflow with real-time tracking, enhanced UI/UX, and comprehensive audit capabilities.
 

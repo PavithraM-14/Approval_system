@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'SRM-RMP Institutional Approval',
-  description: 'Digital approval workflow system for institutional requests',
+  title: 'S.E.A.D. - Enterprise Approval System',
+  description: 'System for Enterprise Approval Digitalization - Efficient Workflow Management',
 };
 
 export default function RootLayout({
