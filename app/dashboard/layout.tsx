@@ -180,9 +180,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col flex-grow bg-gray-50 border-r border-gray-200 pt-5 pb-4">
           {/* Logo/Brand */}
           <div className="px-6 mb-6 flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-              <span className="text-white text-sm font-black">SE</span>
-            </div>
+            
             <h1 className="text-xl font-bold text-gray-800 tracking-tight">
               S.E.A.D.
             </h1>

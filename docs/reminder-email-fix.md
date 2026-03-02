@@ -1,12 +1,15 @@
 # Reminder Email Fix - One Email Per Day
 
 ## Problem
-The reminder email system was sending multiple emails per day for requests pending more than 3 days. This happened because there was no tracking of when the last reminder was sent.
+The reminder email system had two critical issues:
+1. It was sending multiple emails per day for requests pending more than 3 days (no tracking of when reminders were sent)
+2. **CRITICAL**: The automatic scheduler was running on every API call in the Next.js serverless environment, causing constant reminder emails
 
 ## Solution
-Added a `lastReminderSent` field to the Request model to track when the last reminder email was sent. The system now:
-1. Checks this field and only sends one reminder email per 24-hour period
-2. Resets the field when the request status changes (new approval stage = fresh reminder cycle)
+1. Added a `lastReminderSent` field to the Request model to track when the last reminder email was sent
+2. The system now checks this field and only sends one reminder email per 24-hour period
+3. Resets the field when the request status changes (new approval stage = fresh reminder cycle)
+4. **DISABLED automatic scheduler** - reminders now only run via manual script execution
 
 ## Changes Made
 
@@ -20,11 +23,44 @@ Added a `lastReminderSent` field to the Request model to track when the last rem
 
 ### 3. Notification Service (`lib/notification-service.ts`)
 - Updated automatic reminder scheduler with same 24-hour check logic
-- Updates `lastReminderSent` timestamp after sending reminder
+- **DISABLED auto-start on module import** (was causing reminders on every API call)
+- Scheduler function still available but must be manually started
+- Added clear comments explaining why it's disabled
 
 ### 4. Approve Route (`app/api/requests/[id]/approve/route.ts`)
 - Resets `lastReminderSent` to `null` when request status changes
 - This ensures reminders start fresh for each new approval stage
+
+## How to Run Reminders
+
+### Option 1: Manual Script (Recommended for Development)
+```bash
+npm run reminders
+```
+
+### Option 2: Scheduled Task (Recommended for Production)
+
+**Windows (Task Scheduler):**
+1. Open Task Scheduler
+2. Create Basic Task
+3. Set trigger: Daily at a specific time (e.g., 9:00 AM)
+4. Action: Start a program
+5. Program: `cmd.exe`
+6. Arguments: `/c cd /d "C:\path\to\your\project" && npm run reminders`
+
+**Linux/Mac (Cron):**
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line to run daily at 9:00 AM
+0 9 * * * cd /path/to/your/project && npm run reminders
+```
+
+**Render/Heroku (Cron Jobs):**
+- Use Render Cron Jobs or Heroku Scheduler add-on
+- Set command: `npm run reminders`
+- Set schedule: Daily
 
 ## How It Works
 
@@ -54,8 +90,10 @@ To test the fix:
 3. Run the script again immediately - all requests should be skipped (already sent within 24 hours)
 4. Wait 24 hours and run again - reminders should be sent again
 
-## Notes
+## Important Notes
+- **The automatic scheduler is DISABLED** to prevent reminders on every API call
+- Use the manual script with a proper scheduler (cron, Task Scheduler, etc.)
 - The 24-hour check is based on actual time elapsed, not calendar days
 - When a request status changes, `lastReminderSent` is reset to `null` (new status = new approval cycle)
-- The automatic scheduler runs every 24 hours by default (configurable via `REMINDER_DAYS` env var)
 - Each approval stage gets its own reminder cycle (e.g., reminders at MANAGER_REVIEW are separate from reminders at VP_APPROVAL)
+- The threshold is configurable via `REMINDER_DAYS` environment variable (default: 3 days)

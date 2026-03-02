@@ -754,8 +754,11 @@ export function startReminderScheduler(intervalMs: number = 24 * 60 * 60 * 1000)
   setInterval(runCheck, intervalMs);
 }
 
-// start scheduler on module import
-startReminderScheduler();
+// DISABLED: Auto-start scheduler on module import
+// In Next.js serverless environment, this would run on every API call
+// Use the manual script (npm run reminders) with cron/scheduler instead
+// Uncomment the line below only if running in a persistent Node.js server
+// startReminderScheduler();
 
 /**
  * Send notifications to all stakeholders when request status changes
