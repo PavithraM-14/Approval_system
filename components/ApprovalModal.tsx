@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { XMarkIcon, CheckCircleIcon, XCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 interface ApprovalModalProps {
@@ -19,6 +19,8 @@ interface ApprovalModalProps {
     budgetAvailable?: boolean;
   };
   userRole: string;
+  // allow caller to preselect an action when opening the modal (used by email links)
+  initialAction?: 'approve' | 'reject' | 'reject_with_clarification' | 'forward' | 'clarify' | 'send_to_dean' | 'send_to_vp' | 'send_to_chairman';
   onApprove: (notes: string, attachments: string[], sopReference?: string, budgetAvailable?: boolean, budgetData?: { allocated: number; spent: number; balance: number }) => void;
   onReject: (notes: string) => void;
   onRejectWithClarification: (queryRequest: string, attachments: string[]) => void;
@@ -35,6 +37,7 @@ export default function ApprovalModal({
   onClose,
   request,
   userRole,
+  initialAction,
   onApprove,
   onReject,
   onRejectWithClarification,
@@ -46,6 +49,9 @@ export default function ApprovalModal({
   loading = false
 }: ApprovalModalProps) {
   const [action, setAction] = useState<'approve' | 'reject' | 'reject_with_clarification' | 'forward' | 'clarify' | 'send_to_dean' | 'send_to_vp' | 'send_to_chairman'>(() => {
+    // if an initialAction was provided by the caller, use it first
+    if (initialAction) return initialAction;
+
     if (userRole === 'institution_manager' && request.status === 'manager_review') {
       return 'forward';
     }
@@ -58,6 +64,13 @@ export default function ApprovalModal({
     return 'approve';
   });
   const [notes, setNotes] = useState('');
+
+  // update action when parent changes initialAction after modal already opened
+  useEffect(() => {
+    if (initialAction) {
+      setAction(initialAction);
+    }
+  }, [initialAction]);
   const [attachments, setAttachments] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);

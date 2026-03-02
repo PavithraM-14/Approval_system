@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ApprovalModal from '../../../../components/ApprovalModal';
 import QueryModal from '../../../../components/QueryModal';
 import QueryIndicator from '../../../../components/QueryIndicator';
@@ -175,10 +175,12 @@ interface Request {
 
 export default function RequestDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [request, setRequest] = useState<Request | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [initialApprovalAction, setInitialApprovalAction] = useState<'approve' | 'reject' | null>(null);
   const [isQueryModalOpen, setIsQueryModalOpen] = useState(false);
   const [isDeanQueryModalOpen, setIsDeanQueryModalOpen] = useState(false);
   const [isDirectQueryModalOpen, setIsDirectQueryModalOpen] = useState(false);
@@ -259,6 +261,25 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
 
     initializeData();
   }, [params.id, fetchCurrentUser, fetchRequest]);
+
+  // open approval modal automatically when the email link includes ?action=
+  // automatically open the approval modal when coming from an email link
+  // but only if the logged-in user is actually allowed to approve/reject
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (!action || !request || !currentUser) return;
+
+    if (action === 'approve' || action === 'reject') {
+      // requester should never see the approval UI even if query param exists
+      if (currentUser.role === 'requester') return;
+
+      const requiredApprovers = approvalEngine.getRequiredApprover(request.status);
+      if (!requiredApprovers.includes(currentUser.role as UserRole)) return;
+
+      setInitialApprovalAction(action as 'approve' | 'reject');
+      setIsApprovalModalOpen(true);
+    }
+  }, [searchParams, request, currentUser]);
 
   const handleForward = async (notes: string, attachments: string[]) => {
     try {
@@ -1148,6 +1169,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
           budgetAvailable: request.budgetAvailable
         }}
         userRole={currentUser?.role || ''}
+        initialAction={initialApprovalAction || undefined}
         onApprove={handleApprove}
         onReject={handleReject}
         onRejectWithClarification={handleRejectWithClarification}

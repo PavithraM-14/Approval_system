@@ -12,7 +12,8 @@
     "lint": "next lint",
     "seed": "tsx scripts/seed.ts",
     "test": "jest --watch",
-    "test:ci": "jest"
+    "test:ci": "jest",
+    "reminders": "tsx scripts/sendReminders.ts"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",

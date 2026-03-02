@@ -63,7 +63,8 @@ Previously, all users could see all requests regardless of their role or workflo
 - **Can See**: 
   - **Only requests where they were specifically asked for query**
   - Requests at `department_checks` status where `queryTarget` matches their role
-  - Requests they've previously responded to
+
+The notification service also uses `queryTarget` to email the appropriate department user when a request enters this status.  - Requests they've previously responded to
 - **Pending Approvals**: Requests at `department_checks` status targeted to them only
 - **Special Filtering**: Additional post-processing to verify query target
 
