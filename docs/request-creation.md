@@ -1,7 +1,7 @@
 # Request Creation Feature
 
 ## Overview
-The request creation feature allows users with the "Requester" role to create new approval requests within the SRM-RMP Institutional Approval System. This feature provides a form-based interface for submitting requests with all necessary details.
+The request creation feature allows users with the "Requester" role to create new approval requests within the Approval System. This feature provides a form-based interface for submitting requests with all necessary details.
 
 ## Access
 - URL: `/dashboard/requests/create`

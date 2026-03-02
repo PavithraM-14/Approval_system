@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: srm-approval-system
+    name: approval-system
     runtime: node
     plan: free
     buildCommand: npm ci && npm run build
@@ -11,7 +11,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_APP_NAME
-        value: SRM-RMP Institutional Approval
+        value: Approval System
       - key: NEXT_PUBLIC_BASE_URL
         sync: false
       - key: MONGODB_URI

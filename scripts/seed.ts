@@ -16,11 +16,12 @@ const colleges = ['EEC', 'Medicine', 'Business'];
 const departments = ['Computer Science', 'Mechanical', 'Electrical', 'Civil'];
 const expenseCategories = ['Equipment', 'Software', 'Travel', 'Training', 'Infrastructure'];
 
+let requestIdCounter = 100000; // Start from 100000 to ensure 6 digits
+
 function generateRequestId(): string {
-  const now = new Date();
-  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-  const randomPart = Math.floor(1000 + Math.random() * 9000);
-  return `REQ-${datePart}-${randomPart}`;
+  const id = String(requestIdCounter);
+  requestIdCounter++;
+  return id;
 }
 
 async function seed() {

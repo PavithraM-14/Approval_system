@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System';
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Approval System';
 
 const hasSmtpConfig = () => {
   return Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASSWORD);
@@ -199,7 +199,7 @@ export async function sendOTPEmail(
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply.</p>
-              <p>&copy; ${new Date().getFullYear()} ${process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System'}. All rights reserved.</p>
+              <p>&copy; ${new Date().getFullYear()} ${process.env.NEXT_PUBLIC_APP_NAME || 'Approval System'}. All rights reserved.</p>
             </div>
           </div>
         </body>
@@ -349,7 +349,7 @@ export async function sendPasswordResetEmail(
             </div>
             <div class="footer">
               <p>This is an automated email. Please do not reply.</p>
-              <p>&copy; ${new Date().getFullYear()} ${process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System'}. All rights reserved.</p>
+              <p>&copy; ${new Date().getFullYear()} ${process.env.NEXT_PUBLIC_APP_NAME || 'Approval System'}. All rights reserved.</p>
             </div>
           </div>
         </body>

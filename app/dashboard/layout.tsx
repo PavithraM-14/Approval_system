@@ -8,6 +8,7 @@ import {
   DocumentPlusIcon,
   ClipboardDocumentListIcon,
   ClockIcon,
+  FolderIcon,
   ArrowRightStartOnRectangleIcon
 } from '@heroicons/react/24/outline';
 import { UserRole } from '../../lib/types';
@@ -26,6 +27,7 @@ const navigation: NavItem[] = [
   { name: 'My Requests', href: '/dashboard/requests', icon: ClipboardDocumentListIcon, roles: [UserRole.REQUESTER] },
   { name: 'Create Request', href: '/dashboard/requests/create', icon: DocumentPlusIcon, roles: [UserRole.REQUESTER] },
   { name: 'Queries', href: '/dashboard/queries', icon: ClockIcon, roles: [UserRole.REQUESTER, UserRole.DEAN] },
+  { name: 'Documents', href: '/dashboard/documents', icon: FolderIcon, roles: Object.values(UserRole) },
   {
     name: 'Pending Approvals',
     href: '/dashboard/requests?status=pending', // Redirect requesters to their pending requests
@@ -175,15 +177,21 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     <div className="h-screen flex overflow-hidden bg-gray-100">
       {/* Sidebar */}
       <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
-        <div className="flex flex-col flex-grow bg-slate-900 border-r border-white/5 pt-5 pb-4 shadow-xl">
-          <div className="px-6 mb-10 flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-              <span className="text-white text-xs font-black">SE</span>
+        <div className="flex flex-col flex-grow bg-gray-50 border-r border-gray-200 pt-5 pb-4">
+          {/* Logo/Brand */}
+          <div className="px-6 mb-6 flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
+              <span className="text-white text-sm font-black">SE</span>
             </div>
-            <h1 className="text-xl font-black text-white tracking-tighter">
+            <h1 className="text-xl font-bold text-gray-800 tracking-tight">
               S.E.A.D.
             </h1>
           </div>
+
+          {/* Divider Line */}
+          <div className="mx-4 mb-6 border-t border-gray-200"></div>
+
+          {/* Navigation */}
           <nav className="flex-1 px-4 space-y-1">
             {filteredNavigation.map(item => {
               const isActive = isActiveRoute(item.href);
@@ -191,16 +199,16 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`flex items-center px-3 py-2.5 text-sm font-semibold rounded-xl transition-all duration-200 ${isActive
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${isActive
+                    ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600 -ml-1 pl-3'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                     }`}
                 >
-                  <item.icon className={`h-5 w-5 mr-3 ${isActive ? 'text-white' : 'text-slate-500'
+                  <item.icon className={`h-5 w-5 mr-3 ${isActive ? 'text-blue-600' : 'text-gray-400'
                     }`} />
                   <span className="flex-1">{item.name}</span>
                   {item.name === 'Queries' && queryCount > 0 && (
-                    <span className="ml-2 bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="ml-2 bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
                       {queryCount}
                     </span>
                   )}

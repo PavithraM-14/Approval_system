@@ -22,10 +22,10 @@ Create a file named `.env.local` in the root directory with the following conten
 
 ```env
 # MongoDB Connection
-MONGODB_URI=mongodb+srv://pavi_28:srmeec12@cluster0.7ntfbrr.mongodb.net/?appName=Cluster0
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?appName=Cluster0
 
 # App Configuration
-NEXT_PUBLIC_APP_NAME=SRM-RMP Institutional Approval
+NEXT_PUBLIC_APP_NAME=Approval System
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 
 # JWT Secret for dev authentication
@@ -37,7 +37,7 @@ UPLOAD_DIR=./public/uploads
 # Email Configuration (MailerSend API)
 MAILERSEND_API_KEY=your-mailersend-api-key
 MAILERSEND_SENDER_EMAIL=info@domain.com
-MAILERSEND_SENDER_NAME=SRM-RMP Institutional Approval
+MAILERSEND_SENDER_NAME=Approval System
 ```
 
 **IMPORTANT:** OTP emails require valid `MAILERSEND_API_KEY` and `MAILERSEND_SENDER_EMAIL` values.
