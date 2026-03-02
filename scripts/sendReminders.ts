@@ -51,6 +51,18 @@ async function run() {
     const age = now.getTime() - new Date(lastEntry.timestamp).getTime();
     if (age < thresholdMs) continue;
 
+    // Check if a reminder was already sent today
+    if (req.lastReminderSent) {
+      const lastReminderDate = new Date(req.lastReminderSent);
+      const hoursSinceLastReminder = (now.getTime() - lastReminderDate.getTime()) / (60 * 60 * 1000);
+      
+      // Only send one reminder per day (24 hours)
+      if (hoursSinceLastReminder < 24) {
+        console.log(`Skipping reminder for request ${req.requestId} - already sent ${Math.floor(hoursSinceLastReminder)} hours ago`);
+        continue;
+      }
+    }
+
     // determine approvers for current status
     const approverIds = await getNextApprovers(req._id.toString(), req.status);
     for (const approverId of approverIds) {
@@ -61,6 +73,13 @@ async function run() {
         Math.floor(age / (24 * 60 * 60 * 1000))
       );
     }
+
+    // Update the lastReminderSent timestamp
+    await Request.findByIdAndUpdate(req._id, {
+      lastReminderSent: now
+    });
+    
+    console.log(`Sent reminder for request ${req.requestId} (pending for ${Math.floor(age / (24 * 60 * 60 * 1000))} days)`);
   }
 
   console.log(`Reminder run complete at ${new Date().toISOString()}`);

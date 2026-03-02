@@ -68,6 +68,7 @@ const requestSchema = new mongoose.Schema(
     },
     pendingQuery: { type: Boolean, default: false }, // Flag to indicate request is pending query
     queryLevel: { type: String }, // The level that needs to provide query
+    lastReminderSent: { type: Date }, // Track when the last reminder email was sent
     history: [approvalHistorySchema],
   },
   {

@@ -716,6 +716,18 @@ export function startReminderScheduler(intervalMs: number = 24 * 60 * 60 * 1000)
         if (!lastEntry) continue;
         const age = now.getTime() - new Date(lastEntry.timestamp).getTime();
         if (age < thresholdMs) continue;
+
+        // Check if a reminder was already sent today
+        if (req.lastReminderSent) {
+          const lastReminderDate = new Date(req.lastReminderSent);
+          const hoursSinceLastReminder = (now.getTime() - lastReminderDate.getTime()) / (60 * 60 * 1000);
+          
+          // Only send one reminder per day (24 hours)
+          if (hoursSinceLastReminder < 24) {
+            continue;
+          }
+        }
+
         const approvers = await getNextApprovers(req._id.toString(), req.status);
         for (const id of approvers) {
           await notifyApprovalReminder(
@@ -725,6 +737,11 @@ export function startReminderScheduler(intervalMs: number = 24 * 60 * 60 * 1000)
             Math.floor(age / (24 * 60 * 60 * 1000))
           );
         }
+
+        // Update the lastReminderSent timestamp
+        await Request.findByIdAndUpdate(req._id, {
+          lastReminderSent: now
+        });
       }
       console.log('[REMINDER] checked for stale approvals');
     } catch (error) {

@@ -524,7 +524,7 @@ export async function POST(
     };
 
     if (nextStatus !== previousStatus) {
-      updateData.$set = { status: nextStatus };
+      updateData.$set = { status: nextStatus, lastReminderSent: null };
     }
 
     // Handle query workflow updates
