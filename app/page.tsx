@@ -29,7 +29,7 @@ export default function HomePage() {
                   <span className="block text-white mb-3">
                     System for Enterprise
                   </span>
-                  <span className="block bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500">
+                  <span className="block bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 pb-2">
                     Approval Digitalization
                   </span>
                 </h1>
