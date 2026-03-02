@@ -4,7 +4,7 @@ import Request from '../models/Request';
 import { RequestStatus } from './types';
 import nodemailer from 'nodemailer';
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System';
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Approval System';
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
 // Email transporter setup
