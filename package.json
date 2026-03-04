@@ -29,6 +29,7 @@
     "next": "^14.0.4",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.13",
+    "pdf-lib": "^1.17.1",
     "puppeteer": "^24.33.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
