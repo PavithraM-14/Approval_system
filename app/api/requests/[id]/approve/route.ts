@@ -6,6 +6,7 @@ import { RequestStatus, ActionType, UserRole } from '../../../../../lib/types';
 import { approvalEngine } from '../../../../../lib/approval-engine';
 import { queryEngine } from '../../../../../lib/query-engine';
 import { notifyStatusChange } from '../../../../../lib/notification-service';
+import { setRenewalDate } from '../../../../../lib/renewal-service';
 
 export async function POST(
   request: NextRequest,
@@ -599,6 +600,17 @@ export async function POST(
       .populate('history.actor', 'name email empId role');
 
     console.log('[DEBUG] Request updated successfully');
+
+    // Set renewal date if this is a renewal request that was just approved
+    if (nextStatus === RequestStatus.APPROVED && updatedRequest.requestType === 'renewal') {
+      try {
+        await setRenewalDate(params.id);
+        console.log('[DEBUG] Renewal date set for approved renewal request');
+      } catch (renewalError) {
+        console.error('[ERROR] Failed to set renewal date:', renewalError);
+        // Don't fail the request if renewal date setting fails
+      }
+    }
 
     // Send notifications to stakeholders
     try {

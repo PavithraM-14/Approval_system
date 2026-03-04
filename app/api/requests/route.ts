@@ -190,9 +190,10 @@ export async function POST(request: NextRequest) {
       // Log to audit trail if user exists
       if (user) {
         await AuditLog.create({
-          requestId: null,
+          action: 'user_failed_login',
           userId: user.id,
-          action: 'unauthorized_request_creation_attempt',
+          targetType: 'user',
+          targetId: user.id,
           details: {
             userRole: user.role,
             userEmail: user.email,
@@ -246,9 +247,10 @@ export async function POST(request: NextRequest) {
 
     // Log audit
     await AuditLog.create({
-      requestId: newRequest._id,
+      action: 'request_create',
       userId: requesterUser._id,
-      action: 'create_request',
+      targetType: 'request',
+      targetId: newRequest._id,
       details: { requestData: validatedData },
     });
 

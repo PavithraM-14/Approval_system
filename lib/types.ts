@@ -56,6 +56,9 @@ export const CreateRequestSchema = z.object({
   department: z.string().min(1, 'Department is required'),
   costEstimate: z.number().optional(),
   expenseCategory: z.string().optional().or(z.literal('')),
+  requestType: z.enum(['one-time', 'renewal']).default('one-time'),
+  renewalPeriod: z.number().optional(), // Number of days/months for renewal
+  renewalPeriodUnit: z.enum(['days', 'months', 'years']).optional(),
   sopReference: z.string().optional(),
   attachments: z.array(z.string()).min(1, 'At least one document is required'),
 });
@@ -78,6 +81,12 @@ export interface Request {
   department: string;
   costEstimate: number;
   expenseCategory: string;
+  requestType: 'one-time' | 'renewal';
+  renewalPeriod?: number;
+  renewalPeriodUnit?: 'days' | 'months' | 'years';
+  renewalDate?: Date;
+  parentRequestId?: string;
+  isRenewalGenerated?: boolean;
   sopReference?: string;
   attachments: string[];
   requester: User;

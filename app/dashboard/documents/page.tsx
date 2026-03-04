@@ -49,9 +49,16 @@ interface Folder {
   color: string;
   createdAt: string;
 }
+interface FileMetadata {
+  _id: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+}
 
 export default function DocumentsPage() {
   const router = useRouter();
+  const [fileMetadata, setFileMetadata] = useState<Record<string, FileMetadata>>({});
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +67,7 @@ export default function DocumentsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+  const [convertingFiles, setConvertingFiles] = useState<Set<string>>(new Set());
 
   // Filters
   const [filters, setFilters] = useState({
@@ -99,7 +107,9 @@ export default function DocumentsPage() {
         credentials: 'include'
       });
       const docsData = await docsRes.json();
-      setDocuments(docsData.documents || []);
+      const docs = docsData.documents || [];
+      
+      setDocuments(docs);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -141,15 +151,126 @@ export default function DocumentsPage() {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  const getFileIcon = (fileType: string) => {
-    const type = fileType.toLowerCase();
+  const getFileIcon = (fileType: string, fileName?: string, filePath?: string) => {
+    const type = fileType ? fileType.toLowerCase() : '';
     if (['pdf'].includes(type)) return '📄';
     if (['doc', 'docx'].includes(type)) return '📝';
     if (['xls', 'xlsx'].includes(type)) return '📊';
     if (['ppt', 'pptx'].includes(type)) return '📽️';
     if (['jpg', 'jpeg', 'png', 'gif'].includes(type)) return '🖼️';
     if (['zip', 'rar'].includes(type)) return '📦';
+    
+    // Fallback: try fileName
+    if (fileName) {
+      const nameExt = fileName.split('.').pop()?.toLowerCase() || '';
+      if (['pdf'].includes(nameExt)) return '📄';
+      if (['doc', 'docx'].includes(nameExt)) return '📝';
+      if (['xls', 'xlsx'].includes(nameExt)) return '📊';
+      if (['ppt', 'pptx'].includes(nameExt)) return '📽️';
+      if (['jpg', 'jpeg', 'png', 'gif'].includes(nameExt)) return '🖼️';
+      if (['zip', 'rar'].includes(nameExt)) return '📦';
+    }
+    
+    // Fallback: try filePath
+    if (filePath) {
+      const pathExt = filePath.split('.').pop()?.toLowerCase() || '';
+      if (['pdf'].includes(pathExt)) return '📄';
+      if (['doc', 'docx'].includes(pathExt)) return '📝';
+      if (['xls', 'xlsx'].includes(pathExt)) return '📊';
+      if (['ppt', 'pptx'].includes(pathExt)) return '📽️';
+      if (['jpg', 'jpeg', 'png', 'gif'].includes(pathExt)) return '🖼️';
+      if (['zip', 'rar'].includes(pathExt)) return '📦';
+    }
+    
     return '📄';
+  };
+
+  const isEditableFile = (fileType: string, fileName?: string, filePath?: string) => {
+    if (!fileType && !fileName && !filePath) return false;
+
+    // First check if fileType is a mimeType (like AttachmentList does)
+    const editableMimeTypes = [
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ];
+
+    if (editableMimeTypes.includes(fileType)) {
+      return true;
+    }
+
+    // Normalize fileType to lowercase and remove leading dot if present
+    let type = fileType ? fileType.toLowerCase().replace(/^\./, '') : '';
+    
+    const editableTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+    
+    // Check if fileType directly matches an editable extension (handles both "pptx" and "PPTX")
+    if (editableTypes.includes(type)) {
+      return true;
+    }
+
+    // Fallback: extract extension from fileName if fileType didn't match
+    if (fileName) {
+      const fileNameExt = fileName.split('.').pop()?.toLowerCase() || '';
+      if (editableTypes.includes(fileNameExt)) {
+        return true;
+      }
+    }
+
+    // Fallback: extract extension from filePath 
+    if (filePath) {
+      const filePathExt = filePath.split('.').pop()?.toLowerCase() || '';
+      if (editableTypes.includes(filePathExt)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  const handleEditOnline = async (fileId: string) => {
+    setConvertingFiles(prev => new Set(prev).add(fileId));
+
+    try {
+      const response = await fetch('/api/documents/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ fileId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to convert document');
+      }
+
+      const data = await response.json();
+
+      // Open the editor immediately (whether newly converted or already converted)
+      window.open(data.editUrl, '_blank');
+
+      // Update file metadata to reflect it's now converted
+      setFileMetadata(prev => ({
+        ...prev,
+        [fileId]: {
+          ...prev[fileId],
+          googleFileId: data.googleFileId,
+          googleFileType: data.googleFileType,
+        } as any,
+      }));
+    } catch (error) {
+      console.error('Edit online error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to open editor');
+    } finally {
+      setConvertingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(fileId);
+        return newSet;
+      });
+    }
   };
 
   if (loading) {
@@ -195,9 +316,8 @@ export default function DocumentsPage() {
           </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`px-4 py-2 rounded-lg transition flex items-center gap-2 ${
-              showFilters ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
+            className={`px-4 py-2 rounded-lg transition flex items-center gap-2 ${showFilters ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
           >
             <FunnelIcon className="h-5 w-5" />
             Filters
@@ -318,18 +438,18 @@ export default function DocumentsPage() {
                   <tr key={doc._id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-start gap-3">
-                        <span className="text-2xl flex-shrink-0 mt-1">{getFileIcon(doc.fileType)}</span>
+                        <span className="text-2xl flex-shrink-0 mt-1">{getFileIcon(doc.fileType, doc.fileName, doc.filePath)}</span>
                         <div className="min-w-0 flex-1">
                           {/* Main Title - Request Name */}
                           <div className="text-base font-semibold text-gray-900 mb-1">
                             {doc.title}
                           </div>
-                          
+
                           {/* Filename */}
                           <div className="text-xs text-gray-500 mb-2">
                             {doc.fileName}
                           </div>
-                          
+
                           {/* Badges */}
                           {doc.isRequestAttachment && (
                             <div className="flex flex-wrap gap-1.5">
@@ -337,11 +457,10 @@ export default function DocumentsPage() {
                                 Request #{doc.requestId}
                               </span>
                               {doc.requestStatus && (
-                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium ${
-                                  doc.requestStatus === 'approved' ? 'bg-green-100 text-green-800' :
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium ${doc.requestStatus === 'approved' ? 'bg-green-100 text-green-800' :
                                   doc.requestStatus === 'rejected' ? 'bg-red-100 text-red-800' :
-                                  'bg-yellow-100 text-yellow-800'
-                                }`}>
+                                    'bg-yellow-100 text-yellow-800'
+                                  }`}>
                                   {doc.requestStatus}
                                 </span>
                               )}
@@ -351,17 +470,16 @@ export default function DocumentsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        doc.category === 'Equipment' ? 'bg-blue-100 text-blue-800' :
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${doc.category === 'Equipment' ? 'bg-blue-100 text-blue-800' :
                         doc.category === 'Software' ? 'bg-purple-100 text-purple-800' :
-                        doc.category === 'Travel' ? 'bg-green-100 text-green-800' :
-                        doc.category === 'Training' ? 'bg-yellow-100 text-yellow-800' :
-                        doc.category === 'Infrastructure' ? 'bg-indigo-100 text-indigo-800' :
-                        doc.category === 'Policy' ? 'bg-pink-100 text-pink-800' :
-                        doc.category === 'Report' ? 'bg-teal-100 text-teal-800' :
-                        doc.category === 'Leave' ? 'bg-orange-100 text-orange-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
+                          doc.category === 'Travel' ? 'bg-green-100 text-green-800' :
+                            doc.category === 'Training' ? 'bg-yellow-100 text-yellow-800' :
+                              doc.category === 'Infrastructure' ? 'bg-indigo-100 text-indigo-800' :
+                                doc.category === 'Policy' ? 'bg-pink-100 text-pink-800' :
+                                  doc.category === 'Report' ? 'bg-teal-100 text-teal-800' :
+                                    doc.category === 'Leave' ? 'bg-orange-100 text-orange-800' :
+                                      'bg-gray-100 text-gray-800'
+                        }`}>
                         {doc.category}
                       </span>
                     </td>
@@ -383,6 +501,31 @@ export default function DocumentsPage() {
                             >
                               View
                             </a>
+                            {/* Edit Online Button (for Word, Excel, PowerPoint) */}
+                            {isEditableFile(doc.fileType, doc.fileName, doc.filePath) && (
+                              <button
+                                onClick={() => handleEditOnline(doc.filePath)}
+                                disabled={convertingFiles.has(doc.filePath)}
+                                className="text-purple-600 hover:text-purple-800 transition-colors text-xs sm:text-sm font-medium px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 whitespace-nowrap flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {convertingFiles.has(doc.filePath) ? (
+                                  <>
+                                    <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Converting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                    Edit Online
+                                  </>
+                                )}
+                              </button>
+                            )}
                             <a
                               href={`/api/download?file=${encodeURIComponent(doc.filePath)}`}
                               className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
@@ -402,6 +545,30 @@ export default function DocumentsPage() {
                             >
                               View
                             </a>
+                            {isEditableFile(doc.fileType, doc.fileName, doc.filePath) && (
+                              <button
+                                onClick={() => handleEditOnline(doc._id)}
+                                disabled={convertingFiles.has(doc._id)}
+                                className="text-purple-600 hover:text-purple-800 transition-colors text-xs sm:text-sm font-medium px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 whitespace-nowrap flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {convertingFiles.has(doc._id) ? (
+                                  <>
+                                    <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Converting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                    Edit Online
+                                  </>
+                                )}
+                              </button>
+                            )}
                             <a
                               href={`/api/documents/${doc._id}?action=download`}
                               className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"

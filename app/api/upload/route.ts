@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
     const files = formData.getAll('files') as File[];
     const isQuery = formData.get('isQuery') === 'true';
     
+    console.log('[UPLOAD] Received files:', files.length);
+    
     if (!files || files.length === 0) {
       return NextResponse.json(
         { error: 'No files provided' },
@@ -28,9 +30,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Log file details for debugging
+    files.forEach((file, index) => {
+      console.log(`[UPLOAD] File ${index + 1}:`, {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+      });
+    });
+
     // Validate all files with query context
     const validationResult = validateFiles(files, isQuery);
     if (!validationResult.isValid) {
+      console.error('[UPLOAD] Validation failed:', validationResult.error);
       return NextResponse.json(
         { error: validationResult.error },
         { status: 400 }

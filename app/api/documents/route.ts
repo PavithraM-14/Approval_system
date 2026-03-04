@@ -7,6 +7,7 @@ import { getCurrentUser } from '../../../lib/auth';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { existsSync } from 'fs';
+import mongoose from 'mongoose';
 
 /**
  * GET /api/documents - List documents with filtering and search
@@ -95,36 +96,63 @@ export async function GET(request: NextRequest) {
         .lean();
 
       // Transform request attachments into document format
-      const requestAttachments = requests.flatMap((req: any) => 
-        req.attachments.map((attachment: string) => {
-          const fileName = path.basename(attachment);
-          const fileExt = path.extname(fileName).substring(1).toUpperCase() || 'UNKNOWN';
-          
-          return {
-            _id: `req_${req._id}_${fileName}`,
-            title: req.title, // Use request title as document name
-            description: `Attachment from Request #${req.requestId}`,
-            fileName: fileName,
-            filePath: attachment,
-            fileSize: 0, // Unknown for request attachments
-            fileType: fileExt,
-            department: req.department,
-            category: req.expenseCategory || 'Other', // Use request's expense category
-            tags: ['request', req.requestId],
-            status: 'active',
-            uploadedBy: req.requester,
-            createdAt: req.createdAt,
-            downloadCount: 0,
-            viewCount: 0,
-            isRequestAttachment: true,
-            requestId: req.requestId,
-            requestMongoId: req._id, // Add MongoDB _id for routing
-            requestStatus: req.status
-          };
+      const requestAttachments = await Promise.all(
+        requests.flatMap(async (req: any) => {
+          return Promise.all(
+            req.attachments.map(async (fileId: string) => {
+              // Fetch file metadata to get original filename and MIME type
+              let fileName = fileId;
+              let fileExt = 'UNKNOWN';
+              let mimeType = 'application/octet-stream';
+              
+              try {
+                // Try to find the file document
+                const File = mongoose.model('File');
+                const fileDoc = await File.findById(fileId).lean();
+                
+                if (fileDoc) {
+                  fileName = fileDoc.originalName;
+                  mimeType = fileDoc.mimeType;
+                  // Extract extension from originalName
+                  const ext = path.extname(fileName).substring(1);
+                  fileExt = ext.toUpperCase() || 'UNKNOWN';
+                } else {
+                  // Fallback if file document not found
+                  fileExt = 'UNKNOWN';
+                }
+              } catch (error) {
+                console.error(`Failed to fetch file metadata for ${fileId}:`, error);
+                fileExt = 'UNKNOWN';
+              }
+
+              return {
+                _id: `req_${req._id}_${fileId}`,
+                title: req.title, // Use request title as document name
+                description: `Attachment from Request #${req.requestId}`,
+                fileName: fileName,
+                filePath: fileId,
+                fileSize: 0, // Unknown for request attachments
+                fileType: fileExt,
+                mimeType: mimeType,
+                department: req.department,
+                category: req.expenseCategory || 'Other', // Use request's expense category
+                tags: ['request', req.requestId],
+                status: 'active',
+                uploadedBy: req.requester,
+                createdAt: req.createdAt,
+                downloadCount: 0,
+                viewCount: 0,
+                isRequestAttachment: true,
+                requestId: req.requestId,
+                requestMongoId: req._id, // Add MongoDB _id for routing
+                requestStatus: req.status
+              };
+            })
+          );
         })
       );
 
-      allDocuments = [...allDocuments, ...requestAttachments];
+      allDocuments = [...allDocuments, ...requestAttachments.flat()];
     }
 
     // Apply search filter to combined results if needed

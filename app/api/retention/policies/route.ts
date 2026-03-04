@@ -1,0 +1,111 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../../auth/[...nextauth]/route';
+import connectDB from '../../../../lib/mongodb';
+import {
+  getRetentionPolicies,
+  createRetentionPolicy,
+  checkUpcomingRetentions,
+} from '../../../../lib/retention-service';
+import { UserRole } from '../../../../lib/types';
+import { RetentionAction } from '../../../../models/RetentionPolicy';
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Only admins can view retention policies
+    if (session.user.role !== UserRole.CHAIRMAN && session.user.role !== UserRole.CHIEF_DIRECTOR) {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
+    }
+
+    await connectDB();
+
+    const { searchParams } = new URL(request.url);
+    const activeOnly = searchParams.get('activeOnly') === 'true';
+    const upcoming = searchParams.get('upcoming') === 'true';
+
+    if (upcoming) {
+      const upcomingRetentions = await checkUpcomingRetentions();
+      return NextResponse.json({ upcomingRetentions });
+    }
+
+    const policies = await getRetentionPolicies(activeOnly);
+    return NextResponse.json({ policies });
+  } catch (error) {
+    console.error('Error fetching retention policies:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch retention policies' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Only chairman can create retention policies
+    if (session.user.role !== UserRole.CHAIRMAN) {
+      return NextResponse.json({ error: 'Forbidden: Only Chairman can create retention policies' }, { status: 403 });
+    }
+
+    await connectDB();
+
+    const body = await request.json();
+    const {
+      name,
+      description,
+      documentType,
+      category,
+      retentionPeriodDays,
+      action,
+      notifyBeforeDays,
+    } = body;
+
+    if (!name || !retentionPeriodDays || !action) {
+      return NextResponse.json(
+        { error: 'Name, retention period, and action are required' },
+        { status: 400 }
+      );
+    }
+
+    if (!Object.values(RetentionAction).includes(action)) {
+      return NextResponse.json(
+        { error: 'Invalid action. Must be: archive, delete, or notify' },
+        { status: 400 }
+      );
+    }
+
+    const policy = await createRetentionPolicy({
+      name,
+      description,
+      documentType,
+      category,
+      retentionPeriodDays,
+      action,
+      notifyBeforeDays,
+      createdBy: session.user.id,
+    });
+
+    return NextResponse.json({
+      success: true,
+      policy,
+      message: 'Retention policy created successfully',
+    });
+  } catch (error) {
+    console.error('Error creating retention policy:', error);
+    return NextResponse.json(
+      { error: 'Failed to create retention policy' },
+      { status: 500 }
+    );
+  }
+}

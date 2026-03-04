@@ -9,6 +9,7 @@ import DeanQueryModal from '../../../../components/DeanQueryModal';
 import ApprovalHistory from '../../../../components/ApprovalHistory';
 import ApprovalWorkflow from '../../../../components/ApprovalWorkflow';
 import AttachmentList from '../../../../components/AttachmentList';
+import IntegrationLinks from '../../../../components/IntegrationLinks';
 import { RequestStatus, ActionType, UserRole } from '../../../../lib/types';
 import { approvalEngine } from '../../../../lib/approval-engine';
 import { queryEngine } from '../../../../lib/query-engine';
@@ -187,6 +188,47 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showApprovalHistory, setShowApprovalHistory] = useState(false);
   const [processingApproval, setProcessingApproval] = useState(false);
+
+  // Helper function to generate external URLs
+  const getExternalUrl = (type: string, id: string): string => {
+    switch (type) {
+      case 'odoo_po':
+        return `${process.env.NEXT_PUBLIC_ODOO_URL || 'http://localhost:8069'}/web#id=${id}&model=purchase.order`;
+      case 'odoo_invoice':
+        return `${process.env.NEXT_PUBLIC_ODOO_URL || 'http://localhost:8069'}/web#id=${id}&model=account.move`;
+      case 'crm_contact':
+        return `${process.env.NEXT_PUBLIC_SUITECRM_URL || 'http://localhost:8080'}/index.php?module=Contacts&action=DetailView&record=${id}`;
+      case 'hrm_employee':
+        return `${process.env.NEXT_PUBLIC_ORANGEHRM_URL || 'http://localhost:8081'}/index.php/pim/viewEmployee/empNumber/${id}`;
+      default:
+        return '';
+    }
+  };
+
+  // Handle linking to external systems
+  const handleLinkToExternal = async (type: string, externalId: string) => {
+    try {
+      const response = await fetch(`/api/requests/${params.id}/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          externalId,
+          externalUrl: getExternalUrl(type, externalId)
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to link');
+      }
+
+      alert('Successfully linked to external system!');
+      await fetchRequest();
+    } catch (error) {
+      console.error('Link error:', error);
+      alert('Failed to link to external system');
+    }
+  };
 
   const fetchCurrentUser = useCallback(async () => {
     try {
@@ -922,6 +964,14 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
               className="mt-4 sm:mt-6"
             />
           )}
+
+          {/* Integration Links - Link to Odoo/CRM/HRM */}
+          <div className="mt-4 sm:mt-6">
+            <IntegrationLinks 
+              requestId={params.id}
+              onLink={handleLinkToExternal}
+            />
+          </div>
 
           
 
