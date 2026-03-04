@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { XMarkIcon, CheckCircleIcon, XCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, CheckCircleIcon, XCircleIcon, ExclamationTriangleIcon, PencilIcon } from '@heroicons/react/24/outline';
+import { User } from '../lib/types';
 
 interface ApprovalModalProps {
   isOpen: boolean;
@@ -18,8 +19,8 @@ interface ApprovalModalProps {
     budgetBalance?: number;
     budgetAvailable?: boolean;
   };
-  userRole: string;
-  onApprove: (notes: string, attachments: string[], sopReference?: string, budgetAvailable?: boolean, budgetData?: { allocated: number; spent: number; balance: number }) => void;
+  user: User | null;
+  onApprove: (notes: string, attachments: string[], signature?: string, sopReference?: string, budgetAvailable?: boolean, budgetData?: { allocated: number; spent: number; balance: number }) => void;
   onReject: (notes: string) => void;
   onRejectWithClarification: (queryRequest: string, attachments: string[]) => void;
   onForward?: (notes: string, attachments: string[]) => void;
@@ -34,7 +35,7 @@ export default function ApprovalModal({
   isOpen,
   onClose,
   request,
-  userRole,
+  user,
   onApprove,
   onReject,
   onRejectWithClarification,
@@ -45,6 +46,16 @@ export default function ApprovalModal({
   onSendToChairman,
   loading = false
 }: ApprovalModalProps) {
+  const userRole = user?.role?.name.toLowerCase().replace(/ /g, '_') || '';
+  const permissions = user?.role?.permissions || {
+    canView: true,
+    canEdit: false,
+    canShare: false,
+    canApprove: false,
+    canManageBudget: false,
+    canRaiseQueries: false,
+  };
+
   const [action, setAction] = useState<'approve' | 'reject' | 'reject_with_clarification' | 'forward' | 'clarify' | 'send_to_dean' | 'send_to_vp' | 'send_to_chairman'>(() => {
     if (userRole === 'institution_manager' && request.status === 'manager_review') {
       return 'forward';
@@ -58,6 +69,7 @@ export default function ApprovalModal({
     return 'approve';
   });
   const [notes, setNotes] = useState('');
+  const [signature, setSignature] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
   const [urlInput, setUrlInput] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -196,11 +208,22 @@ export default function ApprovalModal({
       return;
     }
 
+    if (action === 'approve' && permissions.canApprove) {
+      if (!signature.trim()) {
+        alert('Please enter your full name as e-signature');
+        return;
+      }
+      if (signature.trim().toLowerCase() !== user?.name.toLowerCase()) {
+        alert(`Signature must exactly match your name: ${user?.name}`);
+        return;
+      }
+    }
+
     // For other roles and actions, handle different actions
     switch (action) {
       case 'approve':
       case 'forward':
-        onApprove(notes, attachments, undefined, undefined);
+        onApprove(notes, attachments, signature, undefined, undefined);
         break;
       case 'reject':
         if (!notes.trim()) {
@@ -233,6 +256,7 @@ export default function ApprovalModal({
   const resetForm = () => {
     setAction('approve');
     setNotes('');
+    setSignature('');
     setAttachments([]);
     setUrlInput('');
     setShowUrlInput(false);
@@ -1109,6 +1133,27 @@ export default function ApprovalModal({
               </p>
             )}
           </div>
+
+          {/* E-Signature Section */}
+          {action === 'approve' && permissions.canApprove && (
+            <div className="mt-6 border-t border-gray-100 pt-6">
+              <div className="flex items-center gap-2 mb-3">
+                <PencilIcon className="w-5 h-5 text-blue-600" />
+                <h4 className="text-lg font-medium text-gray-900">E-Signature Required</h4>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Please type your full name <strong className="text-blue-600 underline decoration-dotted">{user?.name}</strong> exactly as shown to authorize this approval with your e-signature.
+              </p>
+              <input
+                type="text"
+                value={signature}
+                onChange={(e) => setSignature(e.target.value)}
+                placeholder={`Type "${user?.name}" to sign`}
+                className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-serif italic text-lg text-blue-900 bg-blue-50/30 placeholder:text-blue-200"
+                disabled={loading}
+              />
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">

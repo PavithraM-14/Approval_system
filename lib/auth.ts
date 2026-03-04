@@ -1,13 +1,16 @@
 import { cookies } from 'next/headers';
-import { UserRole } from './types';
+import { Role as IRole } from './types';
 import { jwtVerify } from 'jose';
+import connectDB from './mongodb';
+import User from '../models/User';
+import Role from '../models/Role'; // This registers the model
 
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
   empId?: string;
-  role: UserRole;
+  role: IRole;
   college?: string;
   department?: string;
 }
@@ -29,83 +32,69 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     if (authToken) {
       try {
         const secret = getJwtSecret();
-        
         const { payload } = await jwtVerify(authToken.value, secret);
         
+        await connectDB();
+        
+        // Ensure models are registered by referencing them
+        // This is a common pattern to fix MissingSchemaError in Next.js dev mode
+        const user = await User.findById(payload.id)
+          .populate({
+            path: 'role',
+            model: Role
+          })
+          .lean();
+        
+        if (!user || !user.role) {
+          console.error('User or role not found in DB for payload:', payload.id);
+          return null;
+        }
+
         return {
-          id: payload.id as string,
-          email: payload.email as string,
-          name: payload.name as string,
-          empId: payload.empId as string | undefined,
-          role: payload.role as UserRole,
-          college: payload.college as string | undefined,
-          department: payload.department as string | undefined,
+          id: user._id.toString(),
+          email: user.email,
+          name: user.name,
+          empId: user.empId,
+          role: user.role as unknown as IRole,
+          college: user.college,
+          department: user.department,
         };
       } catch (jwtError) {
-        // JWT verification failed
+        console.error('JWT/DB Auth Error:', jwtError);
         return null;
       }
     }
     
     return null;
   } catch (error) {
+    console.error('getCurrentUser global error:', error);
     return null;
   }
 }
 
-export function hasPermission(userRole: UserRole, requiredRoles: UserRole[]): boolean {
+export function hasPermission(userRole: string, requiredRoles: string[]): boolean {
   return requiredRoles.includes(userRole);
 }
 
-export function canApproveRequest(userRole: UserRole, requestStatus: string): boolean {
-  const approvalMatrix: Record<string, UserRole[]> = {
-    'submitted': [UserRole.INSTITUTION_MANAGER],
-    'manager_review': [UserRole.INSTITUTION_MANAGER, UserRole.ACCOUNTANT],
-    'budget_check': [UserRole.ACCOUNTANT],
-    'vp_approval': [UserRole.VP],
-    'hoi_approval': [UserRole.HEAD_OF_INSTITUTION],
-    'dean_review': [UserRole.DEAN],
-    'department_checks': [UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT],
-    'dean_verification': [UserRole.DEAN],
-    'chief_director_approval': [UserRole.CHIEF_DIRECTOR],
-    'chairman_approval': [UserRole.CHAIRMAN],
+// These helper functions might need refactoring later to use permission flags
+// but keeping them for now to maintain compatibility with existing code
+export function canApproveRequest(userRole: string, requestStatus: string): boolean {
+  const approvalMatrix: Record<string, string[]> = {
+    'submitted': ['institution_manager'],
+    'manager_review': ['institution_manager', 'accountant'],
+    'budget_check': ['accountant'],
+    'vp_approval': ['vp'],
+    'hoi_approval': ['head_of_institution'],
+    'dean_review': ['dean'],
+    'department_checks': ['mma', 'hr', 'audit', 'it'],
+    'dean_verification': ['dean'],
+    'chief_director_approval': ['chief_director'],
+    'chairman_approval': ['chairman'],
   };
 
   return approvalMatrix[requestStatus]?.includes(userRole) || false;
 }
 
-export function canCreateRequest(userRole: UserRole): boolean {
-  return userRole === UserRole.REQUESTER;
-}
-
-export function validateUserAction(user: AuthUser | null, action: 'create_request' | 'approve_request', context?: any): { allowed: boolean; reason?: string } {
-  if (!user) {
-    return { allowed: false, reason: 'User not authenticated' };
-  }
-
-  switch (action) {
-    case 'create_request':
-      if (!canCreateRequest(user.role)) {
-        return { 
-          allowed: false, 
-          reason: `User role '${user.role}' is not authorized to create requests. Only requesters can create requests.` 
-        };
-      }
-      return { allowed: true };
-      
-    case 'approve_request':
-      if (!context?.requestStatus) {
-        return { allowed: false, reason: 'Request status required for approval validation' };
-      }
-      if (!canApproveRequest(user.role, context.requestStatus)) {
-        return { 
-          allowed: false, 
-          reason: `User role '${user.role}' is not authorized to approve requests in status '${context.requestStatus}'` 
-        };
-      }
-      return { allowed: true };
-      
-    default:
-      return { allowed: false, reason: 'Unknown action' };
-  }
+export function canCreateRequest(userRole: string): boolean {
+  return userRole === 'requester';
 }

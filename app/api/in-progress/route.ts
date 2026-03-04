@@ -16,8 +16,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Requesters don't have in-progress approvals
-    if (user.role === UserRole.REQUESTER) {
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+    const permissions = {
+      ...user.role.permissions,
+      isSystemAdmin: user.role.isSystemAdmin
+    };
+
+    // Requesters don't have in-progress approvals (but admins do)
+    if (permissions.canCreate && !permissions.isSystemAdmin) {
       return NextResponse.json({
         requests: [],
         pagination: { page: 1, limit: 10, total: 0, pages: 0 }
@@ -50,9 +56,10 @@ export async function GET(request: NextRequest) {
     // Apply role-based visibility filtering - show both in-progress and approved requests
     const visibleRequests = filterRequestsByVisibility(
       allRequests,
-      user.role as UserRole,
+      userRoleName,
       dbUser._id.toString(),
-      dbUser.college
+      dbUser.college,
+      permissions
       // No category filter - get all visible requests
     );
 

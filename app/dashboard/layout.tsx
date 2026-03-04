@@ -8,7 +8,8 @@ import {
   DocumentPlusIcon,
   ClipboardDocumentListIcon,
   ClockIcon,
-  ArrowRightStartOnRectangleIcon
+  ArrowRightStartOnRectangleIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 import { UserRole } from '../../lib/types';
 import { AuthUser } from '../../lib/auth';
@@ -18,25 +19,25 @@ interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<any>;
-  roles: UserRole[];
+  check: (user: AuthUser) => boolean;
 }
 
 const navigation: NavItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: Object.values(UserRole) },
-  { name: 'My Requests', href: '/dashboard/requests', icon: ClipboardDocumentListIcon, roles: [UserRole.REQUESTER] },
-  { name: 'Create Request', href: '/dashboard/requests/create', icon: DocumentPlusIcon, roles: [UserRole.REQUESTER] },
-  { name: 'Queries', href: '/dashboard/queries', icon: ClockIcon, roles: [UserRole.REQUESTER, UserRole.DEAN] },
-  {
-    name: 'Pending Approvals',
-    href: '/dashboard/requests?status=pending', // Redirect requesters to their pending requests
-    icon: ClipboardDocumentListIcon,
-    roles: [UserRole.REQUESTER] // Only for requesters
-  },
+  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, check: (user) => user.role.permissions.canView },
+  { name: 'My Requests', href: '/dashboard/requests', icon: ClipboardDocumentListIcon, check: (user) => user.role.permissions.canCreate },
+  { name: 'Create Request', href: '/dashboard/requests/create', icon: DocumentPlusIcon, check: (user) => user.role.permissions.canCreate },
+  { name: 'Queries', href: '/dashboard/queries', icon: ClockIcon, check: (user) => user.role.permissions.canCreate || user.role.name.toLowerCase().includes('dean') },
   {
     name: 'Pending Approvals',
     href: '/dashboard/approvals',
     icon: ClipboardDocumentListIcon,
-    roles: [UserRole.INSTITUTION_MANAGER, UserRole.SOP_VERIFIER, UserRole.ACCOUNTANT, UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN] // All non-requester roles
+    check: (user) => user.role.permissions.canApprove
+  },
+  {
+    name: 'Role Management',
+    href: '/dashboard/admin/roles',
+    icon: ShieldCheckIcon,
+    check: (user) => user.role.isSystemAdmin
   }
 ];
 
@@ -62,9 +63,11 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const shouldShowDepartment = !!(user?.department && user?.role && rolesWithDepartments.has(user.role));
+  const userRoleName = user?.role?.name.toLowerCase().replace(/ /g, '_') || '';
+  const isSystemAdmin = user?.role?.isSystemAdmin || false;
+  const shouldShowDepartment = !!(user?.department && userRoleName === 'requester' && !isSystemAdmin);
   const formattedDepartment = shouldShowDepartment ? formatLabel(user?.department).toUpperCase() : '';
-  const formattedRole = user?.role ? formatLabel(user.role).toUpperCase() : '';
+  const formattedRole = user?.role ? formatLabel(user.role.name).toUpperCase() : '';
 
   // Function to check if navigation item is active
   const isActiveRoute = (href: string) => {
@@ -146,7 +149,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   }, [checkAuth]);
 
   useEffect(() => {
-    if (user && (user.role === 'requester' || user.role === 'dean')) {
+    if (user && (userRoleName === 'requester' || userRoleName === 'dean')) {
       fetchClarificationCount();
       // Set up interval to refresh count every 30 seconds
       const interval = setInterval(fetchClarificationCount, 30000);
@@ -160,7 +163,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   };
 
   const filteredNavigation = navigation.filter(
-    item => user && item.roles.includes(user.role)
+    item => user && item.check(user)
   );
 
   if (loading) {
@@ -236,9 +239,11 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 Welcome, <span className="font-medium">{user?.name}</span>
               </div>
               <div className="text-xs text-gray-500">
-                {user?.role === 'requester' && user?.department
-                  ? `${user.department.toUpperCase()} - ${user.role.replace(/_/g, ' ').toUpperCase()}`
-                  : user?.role?.replace(/_/g, ' ').toUpperCase()
+                {isSystemAdmin 
+                  ? 'SYSTEM ADMINISTRATOR'
+                  : (userRoleName === 'requester' && user?.department
+                    ? `${user.department.toUpperCase()} - ${user.role.name.replace(/_/g, ' ').toUpperCase()}`
+                    : user?.role?.name.replace(/_/g, ' ').toUpperCase())
                 }
               </div>
             </div>

@@ -97,7 +97,7 @@ export default function CreateRequestPage() {
         if (!res.ok) return router.push('/login');
 
         const userData = await res.json();
-        if (userData.role !== UserRole.REQUESTER) {
+        if (!userData.role.permissions.canCreate) {
           router.push('/dashboard');
           return;
         }

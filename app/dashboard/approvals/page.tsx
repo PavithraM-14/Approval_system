@@ -65,8 +65,8 @@ function ApprovalsPageContent() {
         console.log('[DEBUG] Current user in approvals page:', userData);
         setCurrentUser(userData);
         
-        // Redirect requesters to their pending requests page
-        if (userData.role === 'requester') {
+        // Redirect requesters to their pending requests page (Admins can access both)
+        if (userData.role.permissions.canCreate && !userData.role.isSystemAdmin) {
           router.push('/dashboard/requests?status=pending');
           return;
         }
@@ -215,10 +215,12 @@ function ApprovalsPageContent() {
     );
   }
 
-  // Redirect requesters
-  if (currentUser.role === 'requester') {
+  // Redirect requesters (Admins can bypass)
+  if (currentUser.role.permissions.canCreate && !currentUser.role.isSystemAdmin) {
     return null; // Will redirect in useEffect
   }
+
+  const userRoleName = currentUser.role.name.toLowerCase().replace(/ /g, '_');
 
   return (
     <div className="max-w-6xl mx-auto p-4 sm:p-6">
@@ -233,7 +235,7 @@ function ApprovalsPageContent() {
           </p>
           {currentUser && (
             <p className="text-xs sm:text-sm text-gray-500 mt-1">
-              Role: <span className="font-medium">{currentUser.role?.replace('_', ' ').toUpperCase()}</span>
+              Role: <span className="font-medium">{currentUser.role.name.toUpperCase()}</span>
             </p>
           )}
         </div>
@@ -396,7 +398,7 @@ function ApprovalsPageContent() {
                         <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${getStatusBadgeClass(request.status)}`}>
                           {getStatusDisplayName(request.status)}
                         </span>
-                        {request.pendingQuery && request.queryLevel === currentUser?.role && (
+                        {request.pendingQuery && request.queryLevel === userRoleName && (
                           <QueryIndicator size="sm" showText={false} />
                         )}
                         {/* Explicit action button to process the request */}

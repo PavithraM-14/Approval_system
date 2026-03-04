@@ -13,25 +13,46 @@ export interface RequestVisibility {
  */
 export function analyzeRequestVisibility(
   request: any,
-  userRole: UserRole,
+  userRole: string,
   userId: string,
-  userCollege?: string
+  userCollege?: string,
+  permissions?: { canCreate: boolean; isSystemAdmin?: boolean } // Add isSystemAdmin
 ): RequestVisibility {
+
+  // System Admins can see everything
+  if (permissions?.isSystemAdmin) {
+    return {
+      canSee: true,
+      category: request.status === RequestStatus.APPROVED ? 'approved' : 
+                request.status === RequestStatus.REJECTED ? 'completed' : 'in_progress',
+      reason: 'System Administrator Access'
+    };
+  }
+
+  // Requesters can always see their own requests
+  if (permissions?.canCreate) {
+    if (request.requester._id?.toString() === userId || request.requester.toString() === userId) {
+      return {
+        canSee: true,
+        category: getRequesterCategory(request.status, request.pendingQuery, request.queryLevel),
+        reason: 'Own request'
+      };
+    }
+    // If they can create but it's not their request, they generally shouldn't see it 
+    // unless they have other permissions (like an admin)
+    return { canSee: false, category: 'completed', reason: 'Not own request' };
+  }
 
   // Apply institutional isolation for roles up to Head of Institution
   const institutionalRoles = [
-    // UserRole.REQUESTER, // REMOVED: Requesters are filtered by ID, so college check is redundant and can hide legitimate requests
-    UserRole.INSTITUTION_MANAGER,
-    UserRole.SOP_VERIFIER,
-    UserRole.ACCOUNTANT,
-    UserRole.VP,
-    UserRole.HEAD_OF_INSTITUTION
+    'institution_manager',
+    'sop_verifier',
+    'accountant',
+    'vp',
+    'head_of_institution'
   ];
 
   if (institutionalRoles.includes(userRole)) {
-    // If it's an institutional role, they can only see requests from their college
-    // Note: Requesters are already limited to their own requests below, 
-    // but this adds an extra layer of security.
     const requestCollege = request.college;
     if (userCollege && requestCollege && userCollege !== requestCollege) {
       return {
@@ -40,18 +61,6 @@ export function analyzeRequestVisibility(
         reason: `Restricted to institution: ${userCollege}`
       };
     }
-  }
-
-  // Requesters can always see their own requests
-  if (userRole === UserRole.REQUESTER) {
-    if (request.requester._id?.toString() === userId || request.requester.toString() === userId) {
-      return {
-        canSee: true,
-        category: getRequesterCategory(request.status, request.pendingQuery, request.queryLevel),
-        reason: 'Own request'
-      };
-    }
-    return { canSee: false, category: 'completed', reason: 'Not own request' };
   }
 
   // For approvers, check if request has reached their level through proper workflow
@@ -68,24 +77,20 @@ function getRequesterCategory(
       return 'approved';
     case RequestStatus.REJECTED:
       // If request is rejected but pending response from requester, show as pending
-      if (pendingQuery && queryLevel === UserRole.REQUESTER) {
+      if (pendingQuery && queryLevel === 'requester') {
         return 'pending';
       }
       return 'completed';
     case RequestStatus.SUBMITTED:
-      // If request is back to submitted status due to queries, show as pending
-      if (pendingQuery && queryLevel === UserRole.REQUESTER) {
-        return 'pending';
-      }
       return 'pending';
     default:
-      return 'pending'; // All other statuses are "in progress" for requester
+      return 'pending'; 
   }
 }
 
 function analyzeApproverVisibility(
   request: any,
-  userRole: UserRole,
+  userRole: string,
   userId: string
 ): RequestVisibility {
 
@@ -104,7 +109,7 @@ function analyzeApproverVisibility(
   const hasReachedUserLevel = hasRequestReachedUserLevel(request, userRole, history);
 
   // Special handling for Dean - can see requests they sent for department queries
-  const deanCanSeeClariRequest = userRole === UserRole.DEAN &&
+  const deanCanSeeClariRequest = userRole === 'dean' &&
     request.status === RequestStatus.DEPARTMENT_CHECKS &&
     history.some((h: any) =>
       h.action === ActionType.CLARIFY &&
@@ -112,12 +117,6 @@ function analyzeApproverVisibility(
       (h.actor?._id?.toString() === userId || h.actor?.toString() === userId)
     );
 
-  // User can see request if:
-  // 1. They have been involved in any way (approved, rejected, or responded to queries), OR
-  // 2. It currently needs their approval, OR
-  // 3. It needs response from them, OR
-  // 4. The request has reached their level in the workflow (and wasn't rejected before reaching them), OR
-  // 5. (Dean only) They sent it for department queries
   const canSee = userInvolvement.hasBeenInvolved || needsCurrentApproval || needsClarification || hasReachedUserLevel || deanCanSeeClariRequest;
 
   if (!canSee) {
@@ -146,7 +145,7 @@ interface UserInvolvement {
 
 function analyzeUserInvolvement(
   history: any[],
-  userRole: UserRole,
+  userRole: string,
   userId: string
 ): UserInvolvement {
 
@@ -185,7 +184,7 @@ function analyzeUserInvolvement(
  */
 function hasRequestReachedUserLevel(
   request: any,
-  userRole: UserRole,
+  userRole: string,
   history: any[]
 ): boolean {
 
@@ -197,9 +196,9 @@ function hasRequestReachedUserLevel(
   }
 
   // Special handling for department checks - only show to targeted department
-  if (currentStatus === RequestStatus.DEPARTMENT_CHECKS &&
-      [UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT].includes(userRole)) {
-    
+  const deptRoles = ['mma', 'hr', 'audit', 'it'];
+  if (currentStatus === RequestStatus.DEPARTMENT_CHECKS && deptRoles.includes(userRole)) {
+
     // Find the latest clarification request from Dean
     const latestClarification = history
       .filter((h: any) => h.action === ActionType.CLARIFY && h.queryTarget)
@@ -208,8 +207,7 @@ function hasRequestReachedUserLevel(
     // Only show to the department that was specifically targeted
     if (latestClarification) {
       const targetedRole = latestClarification.queryTarget; // e.g., 'hr', 'mma'
-      const currentUserRole = userRole.toLowerCase(); // Convert UserRole.HR to 'hr'
-      return targetedRole === currentUserRole;
+      return targetedRole === userRole;
     }
 
     return false; // No clarification found, don't show to any department
@@ -232,10 +230,6 @@ function hasRequestReachedUserLevel(
     return true;
   }
 
-  // For non-rejected requests, check if they've reached the user's workflow level
-  // This is more restrictive and only shows requests that have actually progressed to their level
-  return false;
-
   return false;
 }
 
@@ -244,7 +238,7 @@ function hasRequestReachedUserLevel(
  */
 function hasRequestReachedUserLevelBeforeRejection(
   request: any,
-  userRole: UserRole,
+  userRole: string,
   history: any[]
 ): boolean {
 
@@ -277,7 +271,7 @@ function hasRequestReachedUserLevelBeforeRejection(
  */
 function doesRequestNeedUserApproval(
   request: any,
-  userRole: UserRole,
+  userRole: string,
   userId: string,
   history: any[]
 ): boolean {
@@ -285,8 +279,8 @@ function doesRequestNeedUserApproval(
   const currentStatus = request.status;
 
   // Special handling for department queries
-  if (currentStatus === RequestStatus.DEPARTMENT_CHECKS &&
-    [UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT].includes(userRole)) {
+  const deptRoles = ['mma', 'hr', 'audit', 'it'];
+  if (currentStatus === RequestStatus.DEPARTMENT_CHECKS && deptRoles.includes(userRole)) {
 
     // Find the latest queries request from Dean
     const latestClarification = history
@@ -295,17 +289,16 @@ function doesRequestNeedUserApproval(
 
     // Only show to the department that was specifically targeted
     if (latestClarification) {
-      const targetedRole = latestClarification.queryTarget; // e.g., 'hr', 'mma'
-      const currentUserRole = userRole.toLowerCase(); // Convert UserRole.HR to 'hr'
-      return targetedRole === currentUserRole;
+      const targetedRole = latestClarification.queryTarget; 
+      return targetedRole === userRole;
     }
 
-    return false; // No queries found, don't show to any department
+    return false;
   }
 
   // Check if current status requires this user's role
   const requiredApprovers = approvalEngine.getRequiredApprover(currentStatus);
-  if (!requiredApprovers.includes(userRole)) {
+  if (!requiredApprovers.includes(userRole as UserRole)) {
     return false;
   }
 
@@ -325,35 +318,35 @@ function doesRequestNeedUserApproval(
   return !hasActedAfterStatusChange;
 }
 
-function getAllStatusesForRole(userRole: UserRole): RequestStatus[] {
-  const statusMap: Record<UserRole, RequestStatus[]> = {
-    [UserRole.REQUESTER]: [],
-    [UserRole.INSTITUTION_MANAGER]: [
+function getAllStatusesForRole(userRole: string): RequestStatus[] {
+  const statusMap: Record<string, RequestStatus[]> = {
+    'requester': [],
+    'institution_manager': [
       RequestStatus.MANAGER_REVIEW,
       RequestStatus.PARALLEL_VERIFICATION,
       RequestStatus.INSTITUTION_VERIFIED
     ],
-    [UserRole.SOP_VERIFIER]: [
+    'sop_verifier': [
       RequestStatus.SOP_VERIFICATION,
       RequestStatus.PARALLEL_VERIFICATION,
       RequestStatus.SOP_COMPLETED,
       RequestStatus.BUDGET_COMPLETED
     ],
-    [UserRole.ACCOUNTANT]: [
+    'accountant': [
       RequestStatus.BUDGET_CHECK,
       RequestStatus.PARALLEL_VERIFICATION,
       RequestStatus.BUDGET_COMPLETED,
       RequestStatus.SOP_COMPLETED
     ],
-    [UserRole.VP]: [RequestStatus.VP_APPROVAL],
-    [UserRole.HEAD_OF_INSTITUTION]: [RequestStatus.HOI_APPROVAL],
-    [UserRole.DEAN]: [RequestStatus.DEAN_REVIEW, RequestStatus.DEAN_VERIFICATION],
-    [UserRole.MMA]: [RequestStatus.DEPARTMENT_CHECKS],
-    [UserRole.HR]: [RequestStatus.DEPARTMENT_CHECKS],
-    [UserRole.AUDIT]: [RequestStatus.DEPARTMENT_CHECKS],
-    [UserRole.IT]: [RequestStatus.DEPARTMENT_CHECKS],
-    [UserRole.CHIEF_DIRECTOR]: [RequestStatus.CHIEF_DIRECTOR_APPROVAL],
-    [UserRole.CHAIRMAN]: [RequestStatus.CHAIRMAN_APPROVAL]
+    'vp': [RequestStatus.VP_APPROVAL],
+    'head_of_institution': [RequestStatus.HOI_APPROVAL],
+    'dean': [RequestStatus.DEAN_REVIEW, RequestStatus.DEAN_VERIFICATION],
+    'mma': [RequestStatus.DEPARTMENT_CHECKS],
+    'hr': [RequestStatus.DEPARTMENT_CHECKS],
+    'audit': [RequestStatus.DEPARTMENT_CHECKS],
+    'it': [RequestStatus.DEPARTMENT_CHECKS],
+    'chief_director': [RequestStatus.CHIEF_DIRECTOR_APPROVAL],
+    'chairman': [RequestStatus.CHAIRMAN_APPROVAL]
   };
 
   return statusMap[userRole] || [];
@@ -361,7 +354,7 @@ function getAllStatusesForRole(userRole: UserRole): RequestStatus[] {
 
 function categorizeRequestForUser(
   request: any,
-  userRole: UserRole,
+  userRole: string,
   userId: string,
   involvement: UserInvolvement
 ): { category: 'pending' | 'approved' | 'in_progress' | 'completed'; reason: string; userAction?: 'approve' | 'clarify' | 'reject' | null } {
@@ -386,9 +379,7 @@ function categorizeRequestForUser(
   }
 
   // Special handling for queries workflow states
-  // Requests pending response should show as "rejected" to the original rejector until response is provided
   if (request.pendingQuery) {
-    // Find the latest rejection with queries
     const latestRejectionWithClarification = request.history
       ?.filter((h: any) => h.action === ActionType.REJECT_WITH_CLARIFICATION)
       ?.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
@@ -396,24 +387,20 @@ function categorizeRequestForUser(
     if (latestRejectionWithClarification) {
       const rejectorId = latestRejectionWithClarification.actor?._id?.toString() || latestRejectionWithClarification.actor?.toString();
 
-      // If this user is the original rejector
       if (rejectorId === userId) {
-        // Check if requester has provided query yet
         const requesterClarificationProvided = request.history?.some((h: any) =>
           h.action === ActionType.CLARIFY_AND_REAPPROVE &&
-          h.actor?.role === 'requester' &&
+          h.actor?.role?.name.toLowerCase().includes('requester') &&
           new Date(h.timestamp) > new Date(latestRejectionWithClarification.timestamp)
         );
 
         if (requesterClarificationProvided) {
-          // Requester has provided query - show as pending for original rejector
           return {
             category: 'pending',
             reason: 'Requester provided query - review needed',
             userAction: 'clarify'
           };
         } else {
-          // Clarification still pending from requester - show as rejected
           return {
             category: 'completed',
             reason: 'You rejected this request - awaiting requester query',
@@ -424,33 +411,25 @@ function categorizeRequestForUser(
     }
   }
 
-  // Check if request needs query from this user
-  // IMPORTANT: Only REQUESTERS can provide query responses
   if (request.pendingQuery && request.queryLevel === userRole) {
-    if (userRole === UserRole.REQUESTER) {
-      // Only requesters can provide query responses
-      return {
-        category: 'pending',
-        reason: 'Needs query from you',
-        userAction: 'clarify'
-      };
-    }
-
-    // For all other roles (VP, Manager, Dean, etc.), they should NOT be able to respond to their own query requests
-    // They should see it as rejected/completed until requester responds
+    // Check if user is a requester by name since we don't have permissions object here easily
+    // or just assume if queryLevel matches userRole, it's pending for them
+    return {
+      category: 'pending',
+      reason: 'Needs query from you',
+      userAction: 'clarify'
+    };
   }
 
   // Check if user needs to act on this request now
   const requiredApprovers = approvalEngine.getRequiredApprover(currentStatus);
-  const needsUserAction = requiredApprovers.includes(userRole);
+  const needsUserAction = requiredApprovers.includes(userRole as UserRole);
 
   if (needsUserAction) {
-    // Find when the request was last set to the current status
     const lastStatusChange = request.history
       ?.filter((h: any) => h.newStatus === currentStatus)
       ?.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
 
-    // Check if user has acted AFTER the request was set to current status
     const hasActedAfterStatusChange = lastStatusChange && request.history?.some((h: any) =>
       (h.actor?._id?.toString() === userId || h.actor?.toString() === userId) &&
       new Date(h.timestamp) > new Date(lastStatusChange.timestamp) &&
@@ -466,11 +445,8 @@ function categorizeRequestForUser(
     }
   }
 
-  // User has been involved but request is still in progress
   if (involvement.hasBeenInvolved) {
     if (involvement.hasApproved) {
-      // For managers and other approvers, show approved requests that are still in workflow as "approved"
-      // This ensures they appear in the "approved" count in dashboard stats
       return {
         category: 'approved',
         reason: 'You approved this request',
@@ -478,22 +454,19 @@ function categorizeRequestForUser(
       };
     }
     if (involvement.hasRejected) {
-      // Check if this was a rejection with query that now has a response
       const userRejectionWithClarification = request.history?.find((h: any) =>
         (h.actor?._id?.toString() === userId || h.actor?.toString() === userId) &&
         h.action === ActionType.REJECT_WITH_CLARIFICATION
       );
 
       if (userRejectionWithClarification) {
-        // Check if requester has provided query after this rejection
         const requesterClarificationProvided = request.history?.some((h: any) =>
           h.action === ActionType.CLARIFY_AND_REAPPROVE &&
-          h.actor?.role === 'requester' &&
+          h.actor?.role?.name.toLowerCase().includes('requester') &&
           new Date(h.timestamp) > new Date(userRejectionWithClarification.timestamp)
         );
 
         if (requesterClarificationProvided && request.pendingQuery === false) {
-          // Requester provided query and it's back for review
           return {
             category: 'pending',
             reason: 'Requester provided query - review needed',
@@ -517,8 +490,6 @@ function categorizeRequestForUser(
     }
   }
 
-  // Request has reached user's level but they haven't acted yet
-  // Check if it's at a status they can handle
   const userStatuses = getAllStatusesForRole(userRole);
   if (userStatuses.includes(currentStatus)) {
     return {
@@ -528,7 +499,6 @@ function categorizeRequestForUser(
     };
   }
 
-  // Request is visible but at a different workflow stage
   return {
     category: 'in_progress',
     reason: 'Request in workflow',
@@ -536,21 +506,18 @@ function categorizeRequestForUser(
   };
 }
 
-/**
- * Filter requests based on user role and involvement
- */
 export function filterRequestsByVisibility(
   requests: any[],
-  userRole: UserRole,
+  userRole: string,
   userId: string,
   userCollege?: string,
+  permissions?: { canCreate: boolean; isSystemAdmin?: boolean },
   categoryFilter?: 'pending' | 'approved' | 'in_progress' | 'completed'
 ): any[] {
 
   return requests
-    .filter(request => request && request._id) // Filter out invalid requests
+    .filter(request => request && request._id) 
     .map(request => {
-      // Ensure request has required properties
       const safeRequest = {
         _id: request._id,
         title: request.title || 'Untitled Request',
@@ -561,8 +528,8 @@ export function filterRequestsByVisibility(
         createdAt: request.createdAt || new Date(),
         requester: request.requester || { name: 'Unknown', email: 'unknown' },
         history: request.history || [],
-        ...request, // Spread original request to preserve other properties
-        _visibility: analyzeRequestVisibility(request, userRole, userId, userCollege)
+        ...request, 
+        _visibility: analyzeRequestVisibility(request, userRole, userId, userCollege, permissions)
       };
       return safeRequest;
     })

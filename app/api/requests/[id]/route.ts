@@ -24,46 +24,26 @@ export async function GET(
       return NextResponse.json({ error: 'Request not found' }, { status: 404 });
     }
 
-    // Allowed roles to view request
-    const allowedRoles = [
-      UserRole.REQUESTER,
-      UserRole.INSTITUTION_MANAGER,
-      UserRole.SOP_VERIFIER,
-      UserRole.ACCOUNTANT,
-      UserRole.VP,
-      UserRole.HEAD_OF_INSTITUTION,
-      UserRole.DEAN,
-      UserRole.MMA,
-      UserRole.HR,
-      UserRole.AUDIT,
-      UserRole.IT,
-      UserRole.CHIEF_DIRECTOR,
-      UserRole.CHAIRMAN
-    ];
-
-    const canViewByRole = allowedRoles.includes(user.role);
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+    const permissions = user.role.permissions;
     const isOwnRequest = requestRecord.requester._id.toString() === user.id;
 
-    if (!canViewByRole && !isOwnRequest) {
+    if (!permissions.canView && !isOwnRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Institutional isolation check
     const institutionalRoles = [
-      UserRole.REQUESTER,
-      UserRole.INSTITUTION_MANAGER,
-      UserRole.SOP_VERIFIER,
-      UserRole.ACCOUNTANT,
-      UserRole.VP,
-      UserRole.HEAD_OF_INSTITUTION
+      'institution_manager',
+      'sop_verifier',
+      'accountant',
+      'vp',
+      'head_of_institution'
     ];
 
-    if (institutionalRoles.includes(user.role)) {
-      // If it's an institutional role, they can only see requests from their college
+    if (institutionalRoles.includes(userRoleName)) {
       if (user.college && requestRecord.college && user.college !== requestRecord.college) {
-        // Special case: Requester can see their own requests even if college mismatch 
-        // (though college should theoretically match)
-        if (!(user.role === UserRole.REQUESTER && isOwnRequest)) {
+        if (!(permissions.canCreate && isOwnRequest)) {
           return NextResponse.json({
             error: `Access Denied: This request belongs to ${requestRecord.college}, but you are assigned to ${user.college}.`
           }, { status: 403 });
@@ -93,9 +73,9 @@ export async function PUT(
     const body = await request.json();
 
     // --------------------------------------------
-    // ✅ Only accountants can update budget fields
+    // ✅ Only users with canManageBudget can update budget fields
     // --------------------------------------------
-    if (user.role === UserRole.ACCOUNTANT) {
+    if (user.role.permissions.canManageBudget) {
       const updateFields: any = {};
 
       if (typeof body.budgetAllocated === "number") {
