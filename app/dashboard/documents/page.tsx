@@ -9,7 +9,8 @@ import {
   PlusIcon,
   ArrowUpTrayIcon,
   FunnelIcon,
-  XMarkIcon
+  XMarkIcon,
+  ShareIcon
 } from '@heroicons/react/24/outline';
 import { FolderIcon as FolderIconSolid } from '@heroicons/react/24/solid';
 
@@ -68,6 +69,9 @@ export default function DocumentsPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [convertingFiles, setConvertingFiles] = useState<Set<string>>(new Set());
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [shareLink, setShareLink] = useState('');
 
   // Filters
   const [filters, setFilters] = useState({
@@ -151,6 +155,47 @@ export default function DocumentsPage() {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
+  const handleShare = async (doc: Document, expiryHours: number) => {
+    try {
+      const payload = doc.isRequestAttachment
+        ? {
+            requestAttachment: {
+              filePath: doc.filePath,
+              fileName: doc.fileName,
+              requestId: doc.requestId
+            },
+            expiryHours,
+            watermarkEnabled: true,
+            allowDownload: true
+          }
+        : {
+            documentId: doc._id,
+            expiryHours,
+            watermarkEnabled: true,
+            allowDownload: true
+          };
+
+      const response = await fetch('/api/share/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setShareLink(data.shareLink.url);
+        return data.shareLink.url;
+      } else {
+        alert(data.error || 'Failed to create share link');
+      }
+    } catch (error) {
+      console.error('Share error:', error);
+      alert('Failed to create share link');
+    }
+  };
+
   const getFileIcon = (fileType: string, fileName?: string, filePath?: string) => {
     const type = fileType ? fileType.toLowerCase() : '';
     if (['pdf'].includes(type)) return '📄';
@@ -159,6 +204,31 @@ export default function DocumentsPage() {
     if (['ppt', 'pptx'].includes(type)) return '📽️';
     if (['jpg', 'jpeg', 'png', 'gif'].includes(type)) return '🖼️';
     if (['zip', 'rar'].includes(type)) return '📦';
+    
+    // Fallback: try fileName
+    if (fileName) {
+      const nameExt = fileName.split('.').pop()?.toLowerCase() || '';
+      if (['pdf'].includes(nameExt)) return '📄';
+      if (['doc', 'docx'].includes(nameExt)) return '📝';
+      if (['xls', 'xlsx'].includes(nameExt)) return '📊';
+      if (['ppt', 'pptx'].includes(nameExt)) return '📽️';
+      if (['jpg', 'jpeg', 'png', 'gif'].includes(nameExt)) return '🖼️';
+      if (['zip', 'rar'].includes(nameExt)) return '📦';
+    }
+    
+    // Fallback: try filePath
+    if (filePath) {
+      const pathExt = filePath.split('.').pop()?.toLowerCase() || '';
+      if (['pdf'].includes(pathExt)) return '📄';
+      if (['doc', 'docx'].includes(pathExt)) return '📝';
+      if (['xls', 'xlsx'].includes(pathExt)) return '📊';
+      if (['ppt', 'pptx'].includes(pathExt)) return '📽️';
+      if (['jpg', 'jpeg', 'png', 'gif'].includes(pathExt)) return '🖼️';
+      if (['zip', 'rar'].includes(pathExt)) return '📦';
+    }
+    
+    return '📄';
+  };
     
     // Fallback: try fileName
     if (fileName) {
@@ -495,7 +565,7 @@ export default function DocumentsPage() {
                           <>
                             <a
                               href={`/api/view?file=${encodeURIComponent(doc.filePath)}`}
-                              className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium"
+                              className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium text-xs"
                               target="_blank"
                               rel="noopener noreferrer"
                             >
@@ -528,18 +598,28 @@ export default function DocumentsPage() {
                             )}
                             <a
                               href={`/api/download?file=${encodeURIComponent(doc.filePath)}`}
-                              className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                              className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-xs"
                               target="_blank"
                               rel="noopener noreferrer"
                             >
                               Download
                             </a>
+                            <button
+                              onClick={() => {
+                                setSelectedDocument(doc);
+                                setShowShareModal(true);
+                              }}
+                              className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium text-xs"
+                            >
+                              <ShareIcon className="h-4 w-4 mr-1" />
+                              Share
+                            </button>
                           </>
                         ) : (
                           <>
                             <a
                               href={`/api/documents/${doc._id}?action=view`}
-                              className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium"
+                              className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium text-xs"
                               target="_blank"
                               rel="noopener noreferrer"
                             >
@@ -571,10 +651,20 @@ export default function DocumentsPage() {
                             )}
                             <a
                               href={`/api/documents/${doc._id}?action=download`}
-                              className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                              className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-xs"
                             >
                               Download
                             </a>
+                            <button
+                              onClick={() => {
+                                setSelectedDocument(doc);
+                                setShowShareModal(true);
+                              }}
+                              className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium text-xs"
+                            >
+                              <ShareIcon className="h-4 w-4 mr-1" />
+                              Share
+                            </button>
                           </>
                         )}
                       </div>
@@ -585,6 +675,136 @@ export default function DocumentsPage() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Share Modal */}
+      {showShareModal && selectedDocument && (
+        <ShareModal
+          document={selectedDocument}
+          onClose={() => {
+            setShowShareModal(false);
+            setSelectedDocument(null);
+            setShareLink('');
+          }}
+          onShare={handleShare}
+          shareLink={shareLink}
+        />
+      )}
+    </div>
+  );
+}
+
+/* Share Modal Component */
+interface ShareModalProps {
+  document: Document;
+  onClose: () => void;
+  onShare: (doc: Document, expiryHours: number) => Promise<string | undefined>;
+  shareLink: string;
+}
+
+function ShareModal({ document, onClose, onShare, shareLink }: ShareModalProps) {
+  const [expiryHours, setExpiryHours] = useState(24);
+  const [loading, setLoading] = useState(false);
+  const [generatedLink, setGeneratedLink] = useState(shareLink);
+
+  const handleGenerate = async () => {
+    setLoading(true);
+    const link = await onShare(document, expiryHours);
+    if (link) {
+      setGeneratedLink(link);
+    }
+    setLoading(false);
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(generatedLink);
+    alert('Link copied to clipboard!');
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Share Document</h3>
+        </div>
+
+        <div className="px-6 py-4">
+          <div className="mb-4">
+            <p className="text-sm font-medium text-gray-700 mb-1">Document:</p>
+            <p className="text-sm text-gray-600">{document.title}</p>
+          </div>
+
+          {!generatedLink ? (
+            <>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Link Expiry
+                </label>
+                <select
+                  value={expiryHours}
+                  onChange={(e) => setExpiryHours(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={1}>1 Hour</option>
+                  <option value={24}>24 Hours</option>
+                  <option value={168}>7 Days</option>
+                  <option value={720}>30 Days</option>
+                </select>
+              </div>
+
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-xs text-blue-800">
+                  <strong>Note:</strong> The shared document will be watermarked with access information for security.
+                </p>
+              </div>
+
+              <button
+                onClick={handleGenerate}
+                disabled={loading}
+                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Generating...' : 'Generate Share Link'}
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Share Link (Expires in {expiryHours} hours)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={generatedLink}
+                    readOnly
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm"
+                  />
+                  <button
+                    onClick={copyToClipboard}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-xs text-green-800">
+                  ✓ Share link generated successfully! Anyone with this link can access the document until it expires.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
