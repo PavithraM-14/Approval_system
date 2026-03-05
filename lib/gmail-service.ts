@@ -244,10 +244,6 @@ export async function sendEmail(
     throw new Error(`Failed to send email: ${error.message}`);
   }
 }
-  });
-
-  return response.data;
-}
 
 /**
  * Create RFC 2822 formatted email message
