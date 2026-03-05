@@ -9,7 +9,8 @@ import {
   ClipboardDocumentListIcon,
   ClockIcon,
   FolderIcon,
-  ArrowRightStartOnRectangleIcon
+  ArrowRightStartOnRectangleIcon,
+  Cog6ToothIcon
 } from '@heroicons/react/24/outline';
 import { UserRole } from '../../lib/types';
 import { AuthUser } from '../../lib/auth';
@@ -39,7 +40,8 @@ const navigation: NavItem[] = [
     href: '/dashboard/approvals',
     icon: ClipboardDocumentListIcon,
     roles: [UserRole.INSTITUTION_MANAGER, UserRole.SOP_VERIFIER, UserRole.ACCOUNTANT, UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN] // All non-requester roles
-  }
+  },
+  { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, roles: Object.values(UserRole) }
 ];
 
 const rolesWithDepartments = new Set<UserRole>([
