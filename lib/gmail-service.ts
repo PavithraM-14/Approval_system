@@ -208,6 +208,7 @@ export async function sendEmail(
     to: string;
     subject: string;
     body: string;
+    from?: string;
     attachments?: Array<{
       filename: string;
       content: Buffer;
@@ -215,19 +216,34 @@ export async function sendEmail(
     }>;
   }
 ) {
-  const oauth2Client = getOAuth2Client();
-  setCredentials(oauth2Client, accessToken, refreshToken);
+  try {
+    const oauth2Client = getOAuth2Client();
+    setCredentials(oauth2Client, accessToken, refreshToken);
 
-  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-  // Create email message
-  const message = createEmailMessage(options);
+    // Create email message
+    const message = createEmailMessage(options);
 
-  const response = await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: {
-      raw: message,
-    },
+    console.log('[Gmail Service] Sending email to:', options.to);
+    console.log('[Gmail Service] Message size:', message.length, 'characters');
+
+    const response = await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: message,
+      },
+    });
+
+    console.log('[Gmail Service] Email sent successfully. Message ID:', response.data.id);
+
+    return response.data;
+  } catch (error: any) {
+    console.error('[Gmail Service] Error sending email:', error);
+    console.error('[Gmail Service] Error details:', error.response?.data || error.message);
+    throw new Error(`Failed to send email: ${error.message}`);
+  }
+}
   });
 
   return response.data;
@@ -240,6 +256,7 @@ function createEmailMessage(options: {
   to: string;
   subject: string;
   body: string;
+  from?: string;
   attachments?: Array<{
     filename: string;
     content: Buffer;
@@ -250,6 +267,7 @@ function createEmailMessage(options: {
   const nl = '\r\n';
 
   let message = [
+    options.from ? `From: ${options.from}` : '',
     `To: ${options.to}`,
     `Subject: ${options.subject}`,
     'MIME-Version: 1.0',
@@ -259,7 +277,7 @@ function createEmailMessage(options: {
     'Content-Type: text/html; charset=UTF-8',
     '',
     options.body,
-  ].join(nl);
+  ].filter(line => line !== '').join(nl);
 
   // Add attachments
   if (options.attachments && options.attachments.length > 0) {

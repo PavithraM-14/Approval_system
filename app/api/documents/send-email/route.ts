@@ -172,10 +172,15 @@ export async function POST(request: NextRequest) {
     `;
 
     // Send email via Gmail
-    await sendEmail(
+    console.log('[Send Email] Attempting to send email to:', to);
+    console.log('[Send Email] Subject:', subject);
+    console.log('[Send Email] Attachment:', fileName, 'Size:', fileSize);
+    
+    const result = await sendEmail(
       userDoc.gmailAccessToken,
       userDoc.gmailRefreshToken,
       {
+        from: user.email,
         to,
         subject,
         body: emailBody,
@@ -189,10 +194,13 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    console.log('[Send Email] Gmail API response:', result);
+
     return NextResponse.json({
       success: true,
       message: 'Document sent successfully',
       sentTo: to,
+      messageId: result.id,
       document: {
         id: document?._id,
         title: document?.title || fileName,
