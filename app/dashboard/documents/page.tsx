@@ -270,8 +270,19 @@ export default function DocumentsPage() {
   }
 
   const isEditableFile = (doc: Document) => {
-    // Check mimeType first (most reliable)
-    if (doc.mimeType) {
+    const editableTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+    
+    // Priority 1: Check fileName extension (most reliable for our case)
+    if (doc.fileName) {
+      const fileNameExt = doc.fileName.split('.').pop()?.toLowerCase() || '';
+      if (editableTypes.includes(fileNameExt)) {
+        console.log('✅ Editable file detected (fileName):', doc.fileName, fileNameExt);
+        return true;
+      }
+    }
+
+    // Priority 2: Check mimeType
+    if (doc.mimeType && doc.mimeType !== 'application/octet-stream') {
       const editableMimeTypes = [
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -286,24 +297,16 @@ export default function DocumentsPage() {
       }
     }
 
-    // Check fileType
-    const type = doc.fileType ? doc.fileType.toLowerCase().replace(/^\./, '') : '';
-    const editableTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
-    if (editableTypes.includes(type)) {
-      console.log('✅ Editable file detected (fileType):', doc.fileName, type);
-      return true;
-    }
-
-    // Fallback: extract extension from fileName
-    if (doc.fileName) {
-      const fileNameExt = doc.fileName.split('.').pop()?.toLowerCase() || '';
-      if (editableTypes.includes(fileNameExt)) {
-        console.log('✅ Editable file detected (fileName):', doc.fileName, fileNameExt);
+    // Priority 3: Check fileType (if not UNKNOWN)
+    if (doc.fileType && doc.fileType !== 'UNKNOWN') {
+      const type = doc.fileType.toLowerCase().replace(/^\./, '');
+      if (editableTypes.includes(type)) {
+        console.log('✅ Editable file detected (fileType):', doc.fileName, type);
         return true;
       }
     }
 
-    console.log('❌ Not editable:', doc.fileName, { mimeType: doc.mimeType, fileType: doc.fileType });
+    console.log('❌ Not editable:', doc.fileName);
     return false;
   };
 

@@ -16,7 +16,8 @@
     "reminders": "tsx scripts/sendReminders.ts",
     "retention": "tsx scripts/applyRetention.ts",
     "backup": "tsx scripts/createBackup.ts",
-    "renewals": "tsx scripts/processRenewals.ts"
+    "renewals": "tsx scripts/processRenewals.ts",
+    "clear-db": "tsx scripts/clear-database.ts"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",

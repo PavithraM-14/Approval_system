@@ -11,8 +11,6 @@ import ApprovalWorkflow from '../../../../components/ApprovalWorkflow';
 import AttachmentList from '../../../../components/AttachmentList';
 import SendRequestAttachmentsButton from '../../../../components/SendRequestAttachmentsButton';
 import IntegrationLinks from '../../../../components/IntegrationLinks';
-import SendEmailModal from '../../../../components/SendEmailModal';
-import DocumentVersionsModal from '../../../../components/DocumentVersionsModal';
 import { RequestStatus, ActionType, UserRole } from '../../../../lib/types';
 import { approvalEngine } from '../../../../lib/approval-engine';
 import { queryEngine } from '../../../../lib/query-engine';
@@ -191,10 +189,6 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showApprovalHistory, setShowApprovalHistory] = useState(false);
   const [processingApproval, setProcessingApproval] = useState(false);
-  const [showSendEmail, setShowSendEmail] = useState(false);
-  const [selectedAttachmentForEmail, setSelectedAttachmentForEmail] = useState<any>(null);
-  const [showVersionsModal, setShowVersionsModal] = useState(false);
-  const [selectedAttachmentForVersions, setSelectedAttachmentForVersions] = useState<any>(null);
 
   // Helper function to generate external URLs
   const getExternalUrl = (type: string, id: string): string => {
@@ -967,17 +961,8 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
           {request.attachments?.length > 0 && (
             <AttachmentList 
               attachments={request.attachments}
-              requestId={params.id}
               title="Attachments"
               className="mt-4 sm:mt-6"
-              onEmailClick={(attachment) => {
-                setSelectedAttachmentForEmail(attachment);
-                setShowSendEmail(true);
-              }}
-              onVersionHistoryClick={(attachment) => {
-                setSelectedAttachmentForVersions(attachment);
-                setShowVersionsModal(true);
-              }}
             />
           )}
 
@@ -1012,18 +997,9 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             return (
               <AttachmentList 
                 attachments={files}
-                requestId={params.id}
                 title="Query Response Attachments"
                 className="mt-4 sm:mt-6"
                 highlightColor="green"
-                onEmailClick={(attachment) => {
-                  setSelectedAttachmentForEmail(attachment);
-                  setShowSendEmail(true);
-                }}
-                onVersionHistoryClick={(attachment) => {
-                  setSelectedAttachmentForVersions(attachment);
-                  setShowVersionsModal(true);
-                }}
               />
             );
           })()}
@@ -1382,31 +1358,6 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         }}
         onSubmit={handleRejectWithClarification}
         loading={processingApproval}
-      />
-
-      {/* Send Email Modal */}
-      <SendEmailModal
-        isOpen={showSendEmail}
-        onClose={() => {
-          setShowSendEmail(false);
-          setSelectedAttachmentForEmail(null);
-        }}
-        documentId={selectedAttachmentForEmail?.filePath || ''}
-        documentTitle={selectedAttachmentForEmail?.fileName || ''}
-      />
-
-      {/* Document Versions Modal */}
-      <DocumentVersionsModal
-        isOpen={showVersionsModal}
-        onClose={() => {
-          setShowVersionsModal(false);
-          setSelectedAttachmentForVersions(null);
-        }}
-        documentId={selectedAttachmentForVersions?.filePath || ''}
-        documentTitle={selectedAttachmentForVersions?.fileName || ''}
-        currentFileName={selectedAttachmentForVersions?.fileName || ''}
-        currentVersion={selectedAttachmentForVersions?.version || 1}
-        onVersionUploaded={() => fetchRequest()}
       />
 
     </div>
