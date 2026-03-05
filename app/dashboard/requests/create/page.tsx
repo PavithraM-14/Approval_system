@@ -12,6 +12,7 @@ import InstitutionSelect from '../../../../components/InstitutionSelect';
 import NestedSelect from '../../../../components/NestedSelect';
 import { Controller } from 'react-hook-form';
 import { DENTAL_DEPARTMENTS, ENGINEERING_DEPARTMENTS, FSH_DEPARTMENTS, EEC_DEPARTMENTS, MANAGEMENT_DEPARTMENTS } from '../../../../lib/constants';
+import GmailImportModal from '../../../../components/GmailImportModal';
 
 type CreateRequestFormData = z.infer<typeof CreateRequestSchema>;
 
@@ -42,6 +43,7 @@ export default function CreateRequestPage() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [showGmailImport, setShowGmailImport] = useState(false);
 
   const {
     register,
@@ -501,25 +503,37 @@ export default function CreateRequestPage() {
 
         {/* DOCUMENTS */}
         <div>
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center mb-2">
             <label className={`text-sm font-medium ${errors.attachments ? 'text-red-600' : 'text-gray-700'}`}>
               Documents <span className="text-red-600">*</span>
             </label>
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt,.csv"
-              multiple
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="text-blue-600 text-sm hover:underline font-medium"
-            >
-              + Add Files
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowGmailImport(true)}
+                className="text-green-600 text-sm hover:underline font-medium flex items-center gap-1"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                </svg>
+                Import from Gmail
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt,.csv"
+                multiple
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-blue-600 text-sm hover:underline font-medium"
+              >
+                + Add Files
+              </button>
+            </div>
           </div>
 
           {errors.attachments && (
@@ -568,6 +582,27 @@ export default function CreateRequestPage() {
         </div>
 
       </form>
+
+      {/* Gmail Import Modal */}
+      <GmailImportModal
+        isOpen={showGmailImport}
+        onClose={() => setShowGmailImport(false)}
+        onImportComplete={(importedDocs) => {
+          // Add imported documents to uploaded files
+          if (importedDocs && importedDocs.length > 0) {
+            const newFiles = importedDocs.map((doc: any) => ({
+              url: doc.filePath || doc.url,
+              filename: doc.filename || doc.fileName,
+              size: doc.size || 0
+            }));
+            setUploadedFiles(prev => {
+              const updated = [...prev, ...newFiles];
+              setValue('attachments', updated.map(f => f.url), { shouldValidate: true });
+              return updated;
+            });
+          }
+        }}
+      />
     </div>
   );
 }

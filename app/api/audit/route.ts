@@ -1,20 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../auth/[...nextauth]/route';
+import { getCurrentUser } from '../../../lib/auth';
 import connectDB from '../../../lib/mongodb';
 import { getAuditLogs, getAuditStats } from '../../../lib/audit-service';
 import { UserRole } from '../../../lib/types';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const user = await getCurrentUser();
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Only admins and chairman can view audit logs
-    if (session.user.role !== UserRole.CHAIRMAN && session.user.role !== UserRole.CHIEF_DIRECTOR) {
+    if (user.role !== UserRole.CHAIRMAN && user.role !== UserRole.CHIEF_DIRECTOR) {
       return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

@@ -252,7 +252,7 @@ export default function RequestSearch({
           <span className="text-sm text-gray-600">Active filters:</span>
           {filters.query && (
             <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">
-              Search: "{filters.query}"
+              Search: &quot;{filters.query}&quot;
             </span>
           )}
           {filters.status && (

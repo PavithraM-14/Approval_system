@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { getCurrentUser } from '../../../../lib/auth';
 import connectDB from '../../../../lib/mongodb';
 import {
   getRetentionPolicies,
@@ -12,14 +11,14 @@ import { RetentionAction } from '../../../../models/RetentionPolicy';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const user = await getCurrentUser();
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Only admins can view retention policies
-    if (session.user.role !== UserRole.CHAIRMAN && session.user.role !== UserRole.CHIEF_DIRECTOR) {
+    if (user.role !== UserRole.CHAIRMAN && user.role !== UserRole.CHIEF_DIRECTOR) {
       return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -93,7 +92,7 @@ export async function POST(request: NextRequest) {
       retentionPeriodDays,
       action,
       notifyBeforeDays,
-      createdBy: session.user.id,
+      createdBy: user.id,
     });
 
     return NextResponse.json({

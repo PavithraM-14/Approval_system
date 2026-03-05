@@ -47,29 +47,50 @@ export async function GET(
       }, { status: 403 });
     }
 
-    // If action is download, serve the file
-    if (action === 'download') {
+    // If action is download or view, serve the file
+    if (action === 'download' || action === 'view') {
       try {
-        const filePath = path.join(process.cwd(), 'public', document.filePath);
+        // Check if file path starts with 'uploads/' (not in public folder)
+        let filePath;
+        if (document.filePath.startsWith('uploads/')) {
+          // File is in uploads directory (e.g., gmail-imports)
+          filePath = path.join(process.cwd(), document.filePath);
+        } else {
+          // File is in public directory
+          filePath = path.join(process.cwd(), 'public', document.filePath);
+        }
+        
         const fileBuffer = await readFile(filePath);
 
-        // Update download count
-        await Document.findByIdAndUpdate(params.id, {
-          $inc: { downloadCount: 1 },
-          lastAccessedAt: new Date()
-        });
+        // Update download count for downloads, view count for views
+        if (action === 'download') {
+          await Document.findByIdAndUpdate(params.id, {
+            $inc: { downloadCount: 1 },
+            lastAccessedAt: new Date()
+          });
+        } else {
+          await Document.findByIdAndUpdate(params.id, {
+            $inc: { viewCount: 1 },
+            lastAccessedAt: new Date()
+          });
+        }
 
-        return new NextResponse(fileBuffer, {
+        const disposition = action === 'download' 
+          ? `attachment; filename="${document.fileName}"`
+          : `inline; filename="${document.fileName}"`;
+
+        return new NextResponse(new Uint8Array(fileBuffer), {
           headers: {
             'Content-Type': document.mimeType,
-            'Content-Disposition': `attachment; filename="${document.fileName}"`,
+            'Content-Disposition': disposition,
             'Content-Length': document.fileSize.toString()
           }
         });
       } catch (error) {
         console.error('File read error:', error);
         return NextResponse.json({ 
-          error: 'Failed to read file' 
+          error: 'Failed to read file',
+          details: error instanceof Error ? error.message : 'Unknown error'
         }, { status: 500 });
       }
     }

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { getCurrentUser } from '../../../../lib/auth';
 import connectDB from '../../../../lib/mongodb';
 import { exportUserData, createAuditLog } from '../../../../lib/audit-service';
 import { AuditAction } from '../../../../models/AuditLog';
+import { UserRole } from '../../../../lib/types';
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const user = await getCurrentUser();
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const { userId } = body;
 
     // Users can export their own data, or admins can export any user's data
-    if (userId !== session.user.id && session.user.role !== 'chairman') {
+    if (userId !== user.id && user.role !== UserRole.CHAIRMAN) {
       return NextResponse.json({ error: 'Forbidden: Cannot export other user data' }, { status: 403 });
     }
 
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     // Log the export
     await createAuditLog({
       action: AuditAction.DATA_EXPORT,
-      userId: session.user.id,
+      userId: user.id,
       targetType: 'user',
       targetId: userId,
       details: { reason: 'GDPR data export request' },

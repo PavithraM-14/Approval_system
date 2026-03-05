@@ -9,6 +9,7 @@ import DeanQueryModal from '../../../../components/DeanQueryModal';
 import ApprovalHistory from '../../../../components/ApprovalHistory';
 import ApprovalWorkflow from '../../../../components/ApprovalWorkflow';
 import AttachmentList from '../../../../components/AttachmentList';
+import SendRequestAttachmentsButton from '../../../../components/SendRequestAttachmentsButton';
 import IntegrationLinks from '../../../../components/IntegrationLinks';
 import { RequestStatus, ActionType, UserRole } from '../../../../lib/types';
 import { approvalEngine } from '../../../../lib/approval-engine';
@@ -965,15 +966,24 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             />
           )}
 
-          {/* Integration Links - Link to Odoo/CRM/HRM */}
+          {/* Integration Links and Send Email Button */}
           <div className="mt-4 sm:mt-6">
-            <IntegrationLinks 
-              requestId={params.id}
-              onLink={handleLinkToExternal}
-            />
+            <div className="flex flex-col sm:flex-row gap-2">
+              <IntegrationLinks 
+                requestId={params.id}
+                onLink={handleLinkToExternal}
+              />
+              
+              {/* Send Request Attachments via Gmail */}
+              {request.attachments?.length > 0 && (
+                <SendRequestAttachmentsButton
+                  requestId={request._id}
+                  requestTitle={request.title}
+                  attachments={request.attachments}
+                />
+              )}
+            </div>
           </div>
-
-          
 
           {/* Query Response Attachments (latest) */}
           {(() => {

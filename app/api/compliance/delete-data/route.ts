@@ -1,20 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { getCurrentUser } from '../../../../lib/auth';
 import connectDB from '../../../../lib/mongodb';
 import { deleteUserData } from '../../../../lib/audit-service';
 import { UserRole } from '../../../../lib/types';
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const user = await getCurrentUser();
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Only chairman can delete user data
-    if (session.user.role !== UserRole.CHAIRMAN) {
+    if (user.role !== UserRole.CHAIRMAN) {
       return NextResponse.json({ error: 'Forbidden: Only Chairman can delete user data' }, { status: 403 });
     }
 
@@ -27,7 +26,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    const result = await deleteUserData(userId, session.user.id);
+    const result = await deleteUserData(userId, user.id);
 
     return NextResponse.json({
       success: true,

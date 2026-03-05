@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../auth/[...nextauth]/route';
+import { getCurrentUser } from '../../../lib/auth';
 import connectDB from '../../../lib/mongodb';
 import {
   createFullBackup,
@@ -11,14 +10,14 @@ import { UserRole } from '../../../lib/types';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const user = await getCurrentUser();
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Only chairman can view backups
-    if (session.user.role !== UserRole.CHAIRMAN) {
+    if (user.role !== UserRole.CHAIRMAN) {
       return NextResponse.json({ error: 'Forbidden: Only Chairman can view backups' }, { status: 403 });
     }
 
@@ -41,14 +40,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const user = await getCurrentUser();
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Only chairman can create backups
-    if (session.user.role !== UserRole.CHAIRMAN) {
+    if (user.role !== UserRole.CHAIRMAN) {
       return NextResponse.json({ error: 'Forbidden: Only Chairman can create backups' }, { status: 403 });
     }
 
@@ -69,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Default: create full backup
-    const result = await createFullBackup(session.user.id);
+    const result = await createFullBackup(user.id);
 
     return NextResponse.json({
       success: true,

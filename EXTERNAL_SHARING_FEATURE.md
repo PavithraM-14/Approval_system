@@ -23,17 +23,22 @@ Users can set expiry time when generating links:
 - No access to document after expiration
 
 ### 3. ✅ Automatic Watermarking
-When accessed through share link, PDFs are watermarked with:
-- **"CONFIDENTIAL"** - Large, centered text
+When accessed through share link, documents are watermarked with:
+- **"S.E.A.D."** - Large, centered text
 - **Access Date/Time** - When the document was accessed
-- **"Shared via S.E.A.D."** - Branding
-- **Footer** - "CONFIDENTIAL - Shared Document"
+
+**Supported Document Types:**
+- PDF files - Watermark applied directly to PDF
+- Word documents (.doc, .docx) - Converted to PDF with watermark
+- Excel spreadsheets (.xls, .xlsx) - Converted to PDF with watermark
+- PowerPoint presentations (.ppt, .pptx) - Converted to PDF with watermark
 
 **Watermark Features:**
 - Applied dynamically (original file unchanged)
 - Semi-transparent background
-- Red text for visibility
+- Gray text for visibility
 - Multiple watermarks per page
+- Office documents are converted to PDF format for consistent watermarking
 
 ### 4. ✅ Additional Security Features
 - **Access Logging** - Tracks IP address, user agent, timestamp
@@ -271,8 +276,12 @@ Located in Documents table Actions column:
 5. **Test Watermark**
    - Access PDF through share link
    - Verify watermark contains:
-     - "CONFIDENTIAL"
+     - "S.E.A.D."
      - Current date/time
+   - Test with Word document (.docx)
+   - Verify it's converted to PDF with watermark
+   - Test with Excel (.xlsx) and PowerPoint (.pptx)
+   - Verify all Office documents show watermark
      - "Shared via S.E.A.D."
 
 ## File Structure
@@ -314,8 +323,9 @@ NEXT_PUBLIC_BASE_URL=https://yourdomain.com
 ## Dependencies
 
 - **pdf-lib**: For PDF watermarking
+- **puppeteer**: For converting Office documents to PDF
   ```bash
-  npm install pdf-lib
+  npm install pdf-lib puppeteer
   ```
 
 ## Future Enhancements (Optional)
@@ -325,19 +335,19 @@ NEXT_PUBLIC_BASE_URL=https://yourdomain.com
 3. **Analytics** - Detailed access analytics
 4. **Bulk Sharing** - Share multiple documents at once
 5. **Custom Watermarks** - User-defined watermark text
-6. **Image Watermarking** - Watermark images, not just PDFs
-7. **Link Management** - View/manage all created links
-8. **Revoke Links** - Manually revoke active links
+6. **Link Management** - View/manage all created links
+7. **Revoke Links** - Manually revoke active links
 9. **Access Restrictions** - IP whitelist/blacklist
 10. **Two-Factor** - SMS/Email verification for access
 
 ## Troubleshooting
 
 ### Watermark Not Showing
-- Check if file is PDF
-- Verify pdf-lib is installed
+- Check if file type is supported (PDF, Word, Excel, PowerPoint)
+- Verify pdf-lib and puppeteer are installed
 - Check console for errors
 - Ensure watermarkEnabled is true
+- For Office documents, check if Puppeteer can launch (may need additional dependencies on Linux)
 
 ### Link Not Working
 - Verify token is correct

@@ -5,7 +5,12 @@ import Document from '../../../../models/Document';
 import File from '../../../../models/File';
 import { readFile } from 'fs/promises';
 import path from 'path';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { 
+  applyPdfWatermark, 
+  convertOfficeToPdfWithWatermark, 
+  supportsWatermark, 
+  isOfficeDocument 
+} from '../../../../lib/watermark';
 
 /**
  * GET /api/share/[token] - Access shared document
@@ -64,9 +69,17 @@ export async function GET(
       if (!document) {
         return NextResponse.json({ error: 'Document not found' }, { status: 404 });
       }
-      // Remove leading slash if present to avoid double slashes
-      const cleanPath = document.filePath.startsWith('/') ? document.filePath.substring(1) : document.filePath;
-      filePath = path.join(process.cwd(), 'public', cleanPath);
+      
+      // Check if file path starts with 'uploads/' (not in public folder)
+      if (document.filePath.startsWith('uploads/')) {
+        // File is in uploads directory (e.g., gmail-imports)
+        filePath = path.join(process.cwd(), document.filePath);
+      } else {
+        // File is in public directory
+        const cleanPath = document.filePath.startsWith('/') ? document.filePath.substring(1) : document.filePath;
+        filePath = path.join(process.cwd(), 'public', cleanPath);
+      }
+      
       fileName = document.fileName;
       fileBuffer = await readFile(filePath);
     } else if (shareLink.requestAttachment) {
@@ -104,19 +117,33 @@ export async function GET(
     }
     const fileExt = path.extname(fileName).toLowerCase();
 
-    // Apply watermark if enabled and file is PDF (for both view and download)
-    if (shareLink.watermarkEnabled && fileExt === '.pdf') {
+    // Apply watermark if enabled and convert Office documents to PDF
+    if (shareLink.watermarkEnabled && supportsWatermark(fileExt)) {
       try {
-        const watermarkedPdf = await applyWatermark(fileBuffer);
+        let watermarkedBuffer: Buffer;
+        let outputFileName = fileName;
+        let contentType = 'application/pdf';
+
+        if (fileExt === '.pdf') {
+          // Apply watermark directly to PDF
+          watermarkedBuffer = await applyPdfWatermark(fileBuffer);
+        } else if (isOfficeDocument(fileExt)) {
+          // Convert Office document to PDF with watermark
+          watermarkedBuffer = await convertOfficeToPdfWithWatermark(fileBuffer, fileName, fileExt);
+          // Change filename to .pdf
+          outputFileName = fileName.replace(fileExt, '.pdf');
+        } else {
+          throw new Error('Unsupported file type for watermarking');
+        }
         
-        const disposition = action === 'download' ? 'attachment' : 'inline';
-        
-        return new NextResponse(watermarkedPdf, {
+        // Always use inline disposition to open in browser
+        return new NextResponse(watermarkedBuffer, {
           headers: {
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `${disposition}; filename="${fileName}"`,
+            'Content-Type': contentType,
+            'Content-Disposition': `inline; filename="${outputFileName}"`,
             'Cache-Control': 'no-store, no-cache, must-revalidate',
-            'X-Watermarked': 'true'
+            'X-Watermarked': 'true',
+            'X-Original-Type': fileExt
           }
         });
       } catch (error) {
@@ -125,14 +152,13 @@ export async function GET(
       }
     }
 
-    // Return file without watermark
+    // Return file without watermark (always inline, never download)
     const contentType = getContentType(fileExt);
-    const disposition = action === 'download' ? 'attachment' : 'inline';
 
     return new NextResponse(fileBuffer, {
       headers: {
         'Content-Type': contentType,
-        'Content-Disposition': `${disposition}; filename="${fileName}"`,
+        'Content-Disposition': `inline; filename="${fileName}"`,
         'Cache-Control': 'no-store, no-cache, must-revalidate'
       }
     });
@@ -143,75 +169,6 @@ export async function GET(
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
-}
-
-/**
- * Apply watermark to PDF
- */
-async function applyWatermark(pdfBuffer: Buffer): Promise<Buffer> {
-  const pdfDoc = await PDFDocument.load(pdfBuffer);
-  const pages = pdfDoc.getPages();
-  const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-  const now = new Date();
-  const dateStr = now.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-
-  for (const page of pages) {
-    const { width, height } = page.getSize();
-    
-    // Main watermark text - LARGER and MORE VISIBLE
-    const mainText = 'S.E.A.D.';
-    const dateText = `Accessed: ${dateStr}`;
-    
-    const mainFontSize = 100; // Increased from 60 to 100
-    const dateFontSize = 20;  // Increased from 12 to 20
-    
-    // Calculate center position
-    const centerX = width / 2;
-    const centerY = height / 2;
-    
-    // Calculate text width for centering
-    const mainTextWidth = font.widthOfTextAtSize(mainText, mainFontSize);
-    const dateTextWidth = font.widthOfTextAtSize(dateText, dateFontSize);
-    
-    // Draw main watermark (S.E.A.D.) in center at 45-degree angle
-    // More visible with darker color and higher opacity
-    page.drawText(mainText, {
-      x: centerX - mainTextWidth / 2,
-      y: centerY,
-      size: mainFontSize,
-      font: font,
-      color: rgb(0.7, 0.7, 0.7), // Darker gray (was 0.85)
-      opacity: 0.5, // Higher opacity (was 0.3)
-      rotate: {
-        angle: 45, // 45-degree slant
-        type: 'degrees'
-      }
-    });
-    
-    // Draw date text below main text (also slanted)
-    page.drawText(dateText, {
-      x: centerX - dateTextWidth / 2,
-      y: centerY - 60, // Adjusted spacing
-      size: dateFontSize,
-      font: font,
-      color: rgb(0.65, 0.65, 0.65), // Darker gray (was 0.75)
-      opacity: 0.5, // Higher opacity (was 0.3)
-      rotate: {
-        angle: 45, // Same angle as main text
-        type: 'degrees'
-      }
-    });
-  }
-
-  const watermarkedPdfBytes = await pdfDoc.save();
-  return Buffer.from(watermarkedPdfBytes);
 }
 
 /**

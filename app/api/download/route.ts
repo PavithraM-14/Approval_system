@@ -51,7 +51,16 @@ export async function GET(request: NextRequest) {
     } else {
       // Handle filesystem file
       const cleanPath = fileParam.startsWith('/') ? fileParam.substring(1) : fileParam;
-      const filePath = path.join(process.cwd(), 'public', cleanPath);
+      
+      // Check if file path starts with 'uploads/' (not in public folder)
+      let filePath;
+      if (cleanPath.startsWith('uploads/')) {
+        // File is in uploads directory (e.g., gmail-imports)
+        filePath = path.join(process.cwd(), cleanPath);
+      } else {
+        // File is in public directory
+        filePath = path.join(process.cwd(), 'public', cleanPath);
+      }
 
       if (!existsSync(filePath)) {
         return NextResponse.json(

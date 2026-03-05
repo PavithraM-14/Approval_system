@@ -10,9 +10,18 @@ import {
   ArrowUpTrayIcon,
   FunnelIcon,
   XMarkIcon,
-  ShareIcon
+  ShareIcon,
+  DocumentTextIcon,
+  TableCellsIcon,
+  PresentationChartBarIcon,
+  PhotoIcon,
+  ArchiveBoxIcon,
+  EnvelopeIcon,
+  ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 import { FolderIcon as FolderIconSolid } from '@heroicons/react/24/solid';
+import GmailImportModal from '../../../components/GmailImportModal';
+import SendEmailModal from '../../../components/SendEmailModal';
 
 interface Document {
   _id: string;
@@ -22,6 +31,7 @@ interface Document {
   filePath: string;
   fileSize: number;
   fileType: string;
+  mimeType?: string;
   department: string;
   project?: string;
   category: string;
@@ -72,6 +82,9 @@ export default function DocumentsPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [shareLink, setShareLink] = useState('');
+  const [showGmailImport, setShowGmailImport] = useState(false);
+  const [showSendEmail, setShowSendEmail] = useState(false);
+  const [selectedDocForEmail, setSelectedDocForEmail] = useState<Document | null>(null);
 
   // Filters
   const [filters, setFilters] = useState({
@@ -196,104 +209,88 @@ export default function DocumentsPage() {
     }
   };
 
-  const getFileIcon = (fileType: string, fileName?: string, filePath?: string) => {
-    const type = fileType ? fileType.toLowerCase() : '';
-    if (['pdf'].includes(type)) return '📄';
-    if (['doc', 'docx'].includes(type)) return '📝';
-    if (['xls', 'xlsx'].includes(type)) return '📊';
-    if (['ppt', 'pptx'].includes(type)) return '📽️';
-    if (['jpg', 'jpeg', 'png', 'gif'].includes(type)) return '🖼️';
-    if (['zip', 'rar'].includes(type)) return '📦';
-    
-    // Fallback: try fileName
-    if (fileName) {
-      const nameExt = fileName.split('.').pop()?.toLowerCase() || '';
-      if (['pdf'].includes(nameExt)) return '📄';
-      if (['doc', 'docx'].includes(nameExt)) return '📝';
-      if (['xls', 'xlsx'].includes(nameExt)) return '📊';
-      if (['ppt', 'pptx'].includes(nameExt)) return '📽️';
-      if (['jpg', 'jpeg', 'png', 'gif'].includes(nameExt)) return '🖼️';
-      if (['zip', 'rar'].includes(nameExt)) return '📦';
-    }
-    
-    // Fallback: try filePath
-    if (filePath) {
-      const pathExt = filePath.split('.').pop()?.toLowerCase() || '';
-      if (['pdf'].includes(pathExt)) return '📄';
-      if (['doc', 'docx'].includes(pathExt)) return '📝';
-      if (['xls', 'xlsx'].includes(pathExt)) return '📊';
-      if (['ppt', 'pptx'].includes(pathExt)) return '📽️';
-      if (['jpg', 'jpeg', 'png', 'gif'].includes(pathExt)) return '🖼️';
-      if (['zip', 'rar'].includes(pathExt)) return '📦';
-    }
-    
-    return '📄';
-  };
-    
-    // Fallback: try fileName
-    if (fileName) {
-      const nameExt = fileName.split('.').pop()?.toLowerCase() || '';
-      if (['pdf'].includes(nameExt)) return '📄';
-      if (['doc', 'docx'].includes(nameExt)) return '📝';
-      if (['xls', 'xlsx'].includes(nameExt)) return '📊';
-      if (['ppt', 'pptx'].includes(nameExt)) return '📽️';
-      if (['jpg', 'jpeg', 'png', 'gif'].includes(nameExt)) return '🖼️';
-      if (['zip', 'rar'].includes(nameExt)) return '📦';
-    }
-    
-    // Fallback: try filePath
-    if (filePath) {
-      const pathExt = filePath.split('.').pop()?.toLowerCase() || '';
-      if (['pdf'].includes(pathExt)) return '📄';
-      if (['doc', 'docx'].includes(pathExt)) return '📝';
-      if (['xls', 'xlsx'].includes(pathExt)) return '📊';
-      if (['ppt', 'pptx'].includes(pathExt)) return '📽️';
-      if (['jpg', 'jpeg', 'png', 'gif'].includes(pathExt)) return '🖼️';
-      if (['zip', 'rar'].includes(pathExt)) return '📦';
-    }
-    
-    return '📄';
-  };
+  const getFileIcon = (doc: Document) => {
+      // Check mimeType first (most reliable)
+      if (doc.mimeType) {
+        if (doc.mimeType === 'application/pdf') 
+          return <DocumentIcon className="w-6 h-6 text-red-500" />;
+        if (doc.mimeType === 'application/msword' || 
+            doc.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') 
+          return <DocumentTextIcon className="w-6 h-6 text-blue-500" />;
+        if (doc.mimeType === 'application/vnd.ms-excel' || 
+            doc.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') 
+          return <TableCellsIcon className="w-6 h-6 text-green-500" />;
+        if (doc.mimeType === 'application/vnd.ms-powerpoint' || 
+            doc.mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') 
+          return <PresentationChartBarIcon className="w-6 h-6 text-orange-500" />;
+        if (doc.mimeType.startsWith('image/')) 
+          return <PhotoIcon className="w-6 h-6 text-purple-500" />;
+        if (doc.mimeType === 'application/zip' || doc.mimeType === 'application/x-rar-compressed') 
+          return <ArchiveBoxIcon className="w-6 h-6 text-gray-500" />;
+      }
 
-  const isEditableFile = (fileType: string, fileName?: string, filePath?: string) => {
-    if (!fileType && !fileName && !filePath) return false;
+      // Check fileType
+      const type = doc.fileType ? doc.fileType.toLowerCase() : '';
+      if (['pdf'].includes(type)) 
+        return <DocumentIcon className="w-6 h-6 text-red-500" />;
+      if (['doc', 'docx'].includes(type)) 
+        return <DocumentTextIcon className="w-6 h-6 text-blue-500" />;
+      if (['xls', 'xlsx'].includes(type)) 
+        return <TableCellsIcon className="w-6 h-6 text-green-500" />;
+      if (['ppt', 'pptx'].includes(type)) 
+        return <PresentationChartBarIcon className="w-6 h-6 text-orange-500" />;
+      if (['jpg', 'jpeg', 'png', 'gif'].includes(type)) 
+        return <PhotoIcon className="w-6 h-6 text-purple-500" />;
+      if (['zip', 'rar'].includes(type)) 
+        return <ArchiveBoxIcon className="w-6 h-6 text-gray-500" />;
 
-    // First check if fileType is a mimeType (like AttachmentList does)
-    const editableMimeTypes = [
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    ];
+      // Fallback: try fileName
+      if (doc.fileName) {
+        const nameExt = doc.fileName.split('.').pop()?.toLowerCase() || '';
+        if (['pdf'].includes(nameExt)) 
+          return <DocumentIcon className="w-6 h-6 text-red-500" />;
+        if (['doc', 'docx'].includes(nameExt)) 
+          return <DocumentTextIcon className="w-6 h-6 text-blue-500" />;
+        if (['xls', 'xlsx'].includes(nameExt)) 
+          return <TableCellsIcon className="w-6 h-6 text-green-500" />;
+        if (['ppt', 'pptx'].includes(nameExt)) 
+          return <PresentationChartBarIcon className="w-6 h-6 text-orange-500" />;
+        if (['jpg', 'jpeg', 'png', 'gif'].includes(nameExt)) 
+          return <PhotoIcon className="w-6 h-6 text-purple-500" />;
+        if (['zip', 'rar'].includes(nameExt)) 
+          return <ArchiveBoxIcon className="w-6 h-6 text-gray-500" />;
+      }
 
-    if (editableMimeTypes.includes(fileType)) {
-      return true;
+      return <DocumentIcon className="w-6 h-6 text-gray-400" />;
     }
 
-    // Normalize fileType to lowercase and remove leading dot if present
-    let type = fileType ? fileType.toLowerCase().replace(/^\./, '') : '';
-    
-    const editableTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
-    
-    // Check if fileType directly matches an editable extension (handles both "pptx" and "PPTX")
-    if (editableTypes.includes(type)) {
-      return true;
-    }
-
-    // Fallback: extract extension from fileName if fileType didn't match
-    if (fileName) {
-      const fileNameExt = fileName.split('.').pop()?.toLowerCase() || '';
-      if (editableTypes.includes(fileNameExt)) {
+  const isEditableFile = (doc: Document) => {
+    // Check mimeType first (most reliable)
+    if (doc.mimeType) {
+      const editableMimeTypes = [
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      ];
+      if (editableMimeTypes.includes(doc.mimeType)) {
         return true;
       }
     }
 
-    // Fallback: extract extension from filePath 
-    if (filePath) {
-      const filePathExt = filePath.split('.').pop()?.toLowerCase() || '';
-      if (editableTypes.includes(filePathExt)) {
+    // Check fileType
+    const type = doc.fileType ? doc.fileType.toLowerCase().replace(/^\./, '') : '';
+    const editableTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+    if (editableTypes.includes(type)) {
+      return true;
+    }
+
+    // Fallback: extract extension from fileName
+    if (doc.fileName) {
+      const fileNameExt = doc.fileName.split('.').pop()?.toLowerCase() || '';
+      if (editableTypes.includes(fileNameExt)) {
         return true;
       }
     }
@@ -391,6 +388,14 @@ export default function DocumentsPage() {
           >
             <FunnelIcon className="h-5 w-5" />
             Filters
+          </button>
+          <button
+            onClick={() => setShowGmailImport(true)}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+            title="Import documents from Gmail"
+          >
+            <ArrowDownTrayIcon className="h-5 w-5" />
+            Import from Gmail
           </button>
         </div>
 
@@ -508,7 +513,7 @@ export default function DocumentsPage() {
                   <tr key={doc._id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-start gap-3">
-                        <span className="text-2xl flex-shrink-0 mt-1">{getFileIcon(doc.fileType, doc.fileName, doc.filePath)}</span>
+                        <span className="flex-shrink-0 mt-1">{getFileIcon(doc)}</span>
                         <div className="min-w-0 flex-1">
                           {/* Main Title - Request Name */}
                           <div className="text-base font-semibold text-gray-900 mb-1">
@@ -572,7 +577,7 @@ export default function DocumentsPage() {
                               View
                             </a>
                             {/* Edit Online Button (for Word, Excel, PowerPoint) */}
-                            {isEditableFile(doc.fileType, doc.fileName, doc.filePath) && (
+                            {isEditableFile(doc) && (
                               <button
                                 onClick={() => handleEditOnline(doc.filePath)}
                                 disabled={convertingFiles.has(doc.filePath)}
@@ -614,6 +619,17 @@ export default function DocumentsPage() {
                               <ShareIcon className="h-4 w-4 mr-1" />
                               Share
                             </button>
+                            <button
+                              onClick={() => {
+                                setSelectedDocForEmail(doc);
+                                setShowSendEmail(true);
+                              }}
+                              className="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium text-xs"
+                              title="Send via Gmail"
+                            >
+                              <EnvelopeIcon className="h-4 w-4 mr-1" />
+                              Email
+                            </button>
                           </>
                         ) : (
                           <>
@@ -625,7 +641,7 @@ export default function DocumentsPage() {
                             >
                               View
                             </a>
-                            {isEditableFile(doc.fileType, doc.fileName, doc.filePath) && (
+                            {isEditableFile(doc) && (
                               <button
                                 onClick={() => handleEditOnline(doc._id)}
                                 disabled={convertingFiles.has(doc._id)}
@@ -665,6 +681,17 @@ export default function DocumentsPage() {
                               <ShareIcon className="h-4 w-4 mr-1" />
                               Share
                             </button>
+                            <button
+                              onClick={() => {
+                                setSelectedDocForEmail(doc);
+                                setShowSendEmail(true);
+                              }}
+                              className="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium text-xs"
+                              title="Send via Gmail"
+                            >
+                              <EnvelopeIcon className="h-4 w-4 mr-1" />
+                              Email
+                            </button>
                           </>
                         )}
                       </div>
@@ -690,6 +717,24 @@ export default function DocumentsPage() {
           shareLink={shareLink}
         />
       )}
+
+      {/* Gmail Import Modal */}
+      <GmailImportModal
+        isOpen={showGmailImport}
+        onClose={() => setShowGmailImport(false)}
+        onImportComplete={() => fetchData()}
+      />
+
+      {/* Send Email Modal */}
+      <SendEmailModal
+        isOpen={showSendEmail}
+        onClose={() => {
+          setShowSendEmail(false);
+          setSelectedDocForEmail(null);
+        }}
+        documentId={selectedDocForEmail?._id || ''}
+        documentTitle={selectedDocForEmail?.title || ''}
+      />
     </div>
   );
 }
@@ -754,7 +799,7 @@ function ShareModal({ document, onClose, onShare, shareLink }: ShareModalProps) 
 
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-xs text-blue-800">
-                  <strong>Note:</strong> The shared document will be watermarked with access information for security.
+                  <strong>Note:</strong> The shared document will be watermarked with access information for security. Office documents (Word, Excel, PowerPoint) will be converted to PDF with watermark applied.
                 </p>
               </div>
 

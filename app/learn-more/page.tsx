@@ -54,7 +54,7 @@ export default function LearnMorePage() {
               </span>
             </h1>
             <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">
-              Transform your organization's document management and approval workflows with our comprehensive digital solution.
+              Transform your organization&apos;s document management and approval workflows with our comprehensive digital solution.
             </p>
           </div>
 
@@ -202,7 +202,7 @@ export default function LearnMorePage() {
           <div className="text-center bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-12">
             <h2 className="text-3xl font-bold text-white mb-4">Ready to Get Started?</h2>
             <p className="text-lg text-slate-300 mb-8 max-w-2xl mx-auto">
-              Transform your organization's approval workflows today with S.E.A.D.
+              Transform your organization&apos;s approval workflows today with S.E.A.D.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link

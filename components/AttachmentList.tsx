@@ -33,10 +33,43 @@ export default function AttachmentList({
 
       for (const fileId of attachments) {
         try {
-          const response = await fetch(`/api/files/${fileId}`);
-          if (response.ok) {
-            const data = await response.json();
-            metadata[fileId] = data;
+          // Check if this is a file path (contains slashes) or a MongoDB ID
+          const isFilePath = fileId.includes('/') || fileId.includes('\\');
+          
+          if (isFilePath) {
+            // Extract filename from path
+            const fileName = fileId.split('/').pop() || fileId.split('\\').pop() || fileId;
+            const fileExt = fileName.split('.').pop()?.toLowerCase() || '';
+            
+            // Create metadata from file path
+            const mimeTypes: Record<string, string> = {
+              'pdf': 'application/pdf',
+              'doc': 'application/msword',
+              'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              'xls': 'application/vnd.ms-excel',
+              'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'ppt': 'application/vnd.ms-powerpoint',
+              'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+              'jpg': 'image/jpeg',
+              'jpeg': 'image/jpeg',
+              'png': 'image/png',
+              'gif': 'image/gif',
+              'txt': 'text/plain',
+            };
+            
+            metadata[fileId] = {
+              _id: fileId,
+              originalName: fileName,
+              mimeType: mimeTypes[fileExt] || 'application/octet-stream',
+              size: 0, // Size unknown for file paths
+            };
+          } else {
+            // Fetch from MongoDB
+            const response = await fetch(`/api/files/${fileId}`);
+            if (response.ok) {
+              const data = await response.json();
+              metadata[fileId] = data;
+            }
           }
         } catch (error) {
           console.error(`Failed to fetch metadata for ${fileId}:`, error);

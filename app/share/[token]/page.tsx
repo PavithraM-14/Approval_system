@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { DocumentIcon, ClockIcon, UserIcon, LockClosedIcon, EyeIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { DocumentIcon, ClockIcon, UserIcon, LockClosedIcon, EyeIcon } from '@heroicons/react/24/outline';
 
 interface ShareInfo {
   token: string;
@@ -14,7 +14,6 @@ interface ShareInfo {
   isActive: boolean;
   accessCount: number;
   maxAccessCount: number | null;
-  allowDownload: boolean;
   watermarkEnabled: boolean;
   requiresPassword: boolean;
 }
@@ -54,11 +53,6 @@ export default function SharePage() {
 
   const handleView = () => {
     const url = `/api/share/${token}?action=view${password ? `&password=${encodeURIComponent(password)}` : ''}`;
-    window.open(url, '_blank');
-  };
-
-  const handleDownload = () => {
-    const url = `/api/share/${token}?action=download${password ? `&password=${encodeURIComponent(password)}` : ''}`;
     window.open(url, '_blank');
   };
 
@@ -191,21 +185,18 @@ export default function SharePage() {
             <button
               onClick={handleView}
               disabled={showPasswordInput && !password}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               <EyeIcon className="h-5 w-5" />
               View Document
             </button>
-            {shareInfo.allowDownload && (
-              <button
-                onClick={handleDownload}
-                disabled={showPasswordInput && !password}
-                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                <ArrowDownTrayIcon className="h-5 w-5" />
-                Download
-              </button>
-            )}
+          </div>
+
+          {/* Info about viewing */}
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-800">
+              <strong>Note:</strong> The document will open in your browser. Office documents (Word, Excel, PowerPoint) will be converted to PDF for viewing.
+            </p>
           </div>
         </div>
 
