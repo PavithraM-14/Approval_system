@@ -172,7 +172,12 @@ export default function SignupPage() {
       const data = await response.json();
 
       if (response.ok) {
-        router.push('/login?message=Account created successfully! Please login.');
+        // If Google auth is required, redirect to Google OAuth
+        if (data.requiresGoogleAuth && data.googleAuthUrl) {
+          window.location.href = data.googleAuthUrl;
+        } else {
+          router.push('/login?message=Account created successfully! Please login.');
+        }
       } else {
         throw new Error(data.error || 'Verification failed');
       }

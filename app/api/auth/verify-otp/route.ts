@@ -67,6 +67,10 @@ export async function POST(req: NextRequest) {
         isVerified: true, // Mark as verified since OTP was confirmed
       });
 
+      // Generate Google OAuth URL for automatic connection
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+      const googleAuthUrl = `${baseUrl}/api/auth/google-connect?userId=${newUser._id}`;
+
       return NextResponse.json({
         message: 'Account created successfully',
         user: {
@@ -74,6 +78,8 @@ export async function POST(req: NextRequest) {
           email: newUser.email,
           name: newUser.name,
         },
+        googleAuthUrl,
+        requiresGoogleAuth: true,
       });
 
     } else if (type === 'forgot-password') {
