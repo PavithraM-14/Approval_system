@@ -44,6 +44,30 @@ export default function SettingsPage() {
     }
   };
 
+  const handleTestEmail = async () => {
+    const email = prompt('Enter email address to send test email:');
+    if (!email) return;
+
+    try {
+      const response = await fetch('/api/gmail/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(`Test email sent successfully to ${email}!\nMessage ID: ${data.messageId}`);
+      } else {
+        alert(`Failed to send test email: ${data.error}\n${data.details || ''}`);
+      }
+    } catch (error) {
+      console.error('Error sending test email:', error);
+      alert('Failed to send test email');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -157,6 +181,24 @@ export default function SettingsPage() {
               </button>
               <p className="text-sm text-gray-500 mt-2 text-center">
                 This will enable Gmail and Google Drive features
+              </p>
+            </div>
+          )}
+
+          {/* Test Email Button */}
+          {user?.gmailEnabled && (
+            <div className="pt-4">
+              <button
+                onClick={handleTestEmail}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Send Test Email
+              </button>
+              <p className="text-sm text-gray-500 mt-2 text-center">
+                Test your Gmail connection by sending a test email
               </p>
             </div>
           )}
