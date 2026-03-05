@@ -38,9 +38,26 @@ export async function POST(request: NextRequest) {
 
     // If documentId is provided, verify document exists
     if (documentId) {
-      const document = await Document.findById(documentId);
+      console.log('[Share Create] Looking for document:', documentId);
+      
+      // Try Document collection first
+      let document = await Document.findById(documentId);
+      
+      // If not found in Document collection, try File collection (GridFS)
       if (!document) {
-        return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+        console.log('[Share Create] Not found in Document collection, checking File collection');
+        const File = (await import('../../../../models/File')).default;
+        const file = await File.findById(documentId);
+        
+        if (!file) {
+          console.log('[Share Create] Document not found in either collection');
+          return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+        }
+        
+        console.log('[Share Create] Found in File collection:', file.originalName);
+        // File exists in GridFS, we can proceed
+      } else {
+        console.log('[Share Create] Found in Document collection:', document.title);
       }
     }
 

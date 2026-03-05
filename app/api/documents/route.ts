@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    
+
     // Filters
     const department = searchParams.get('department');
     const project = searchParams.get('project');
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const folderId = searchParams.get('folderId');
     const search = searchParams.get('search');
     const includeRequestAttachments = searchParams.get('includeRequestAttachments') !== 'false'; // Default true
-    
+
     // Pagination
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
@@ -104,12 +104,12 @@ export async function GET(request: NextRequest) {
               let fileName = fileId;
               let fileExt = 'UNKNOWN';
               let mimeType = 'application/octet-stream';
-              
+
               try {
                 // Try to find the file document
                 const File = mongoose.model('File');
-                const fileDoc = await File.findById(fileId).lean();
-                
+                const fileDoc = await File.findById(fileId).lean() as any;
+
                 if (fileDoc) {
                   fileName = fileDoc.originalName;
                   mimeType = fileDoc.mimeType;
@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
     // Apply search filter to combined results if needed
     if (search) {
       const searchLower = search.toLowerCase();
-      allDocuments = allDocuments.filter(doc => 
+      allDocuments = allDocuments.filter(doc =>
         doc.title?.toLowerCase().includes(searchLower) ||
         doc.description?.toLowerCase().includes(searchLower) ||
         doc.fileName?.toLowerCase().includes(searchLower) ||
@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Sort by date (newest first)
-    allDocuments.sort((a, b) => 
+    allDocuments.sort((a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    
+
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
@@ -321,7 +321,7 @@ export async function DELETE(request: NextRequest) {
     // Check permissions
     const isOwner = document.uploadedBy.toString() === user.id;
     const hasDeletePermission = document.sharedWith.some(
-      (share: any) => 
+      (share: any) =>
         (share.userId?.toString() === user.id || share.role === user.role) &&
         share.permissions.includes('delete')
     );

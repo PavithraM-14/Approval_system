@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     let fileName;
     let fileSize = 0;
     let mimeType = 'application/octet-stream';
+    let fileBuffer: Buffer;
 
     if (documentId) {
       // Get document from database
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
     } else if (filePath) {
       // Use provided file path (for request attachments)
       filePathToUse = filePath;
-      fileName = filePath.split('/').pop() || 'attachment';
+      fileName = filePath.split('/').pop() || filePath.split('\\').pop() || 'attachment';
       // Try to determine mime type from extension
       const ext = fileName.split('.').pop()?.toLowerCase();
       const mimeTypes: Record<string, string> = {
@@ -101,11 +102,40 @@ export async function POST(request: NextRequest) {
       mimeType = mimeTypes[ext || ''] || 'application/octet-stream';
     }
 
-    // Read file
-    const fullPath = path.join(process.cwd(), filePathToUse);
-    const fileBuffer = await readFile(fullPath);
-    if (fileBuffer.length > 0) {
-      fileSize = fileBuffer.length;
+    // Read file - check if it's a MongoDB ID or file path
+    const isMongoId = filePathToUse && !filePathToUse.includes('/') && !filePathToUse.includes('\\') && filePathToUse.length === 24;
+    
+    if (isMongoId) {
+      // File is stored in MongoDB GridFS
+      console.log('[Send Email] Reading from GridFS:', filePathToUse);
+      const File = (await import('../../../../models/File')).default;
+      const fileDoc = await File.findById(filePathToUse);
+      
+      if (!fileDoc) {
+        return NextResponse.json({ error: 'File not found in database' }, { status: 404 });
+      }
+      
+      fileBuffer = fileDoc.data;
+      fileName = fileDoc.originalName;
+      mimeType = fileDoc.mimeType;
+      fileSize = fileDoc.size;
+    } else {
+      // File is on filesystem
+      console.log('[Send Email] Reading from filesystem:', filePathToUse);
+      
+      // Check if file path starts with 'uploads/' (not in public folder)
+      let fullPath;
+      if (filePathToUse.startsWith('uploads/')) {
+        fullPath = path.join(process.cwd(), filePathToUse);
+      } else {
+        const cleanPath = filePathToUse.startsWith('/') ? filePathToUse.substring(1) : filePathToUse;
+        fullPath = path.join(process.cwd(), 'public', cleanPath);
+      }
+      
+      fileBuffer = await readFile(fullPath);
+      if (fileBuffer.length > 0) {
+        fileSize = fileBuffer.length;
+      }
     }
 
     // Prepare email body

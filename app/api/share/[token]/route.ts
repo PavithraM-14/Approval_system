@@ -65,23 +65,39 @@ export async function GET(
     let fileBuffer: Buffer;
 
     if (shareLink.documentId) {
-      const document = await Document.findById(shareLink.documentId);
-      if (!document) {
-        return NextResponse.json({ error: 'Document not found' }, { status: 404 });
-      }
+      // Try Document collection first
+      let document = await Document.findById(shareLink.documentId);
       
-      // Check if file path starts with 'uploads/' (not in public folder)
-      if (document.filePath.startsWith('uploads/')) {
-        // File is in uploads directory (e.g., gmail-imports)
-        filePath = path.join(process.cwd(), document.filePath);
+      if (document) {
+        // Found in Document collection
+        console.log('[Share Token] Found in Document collection:', document.title);
+        
+        // Check if file path starts with 'uploads/' (not in public folder)
+        if (document.filePath.startsWith('uploads/')) {
+          // File is in uploads directory (e.g., gmail-imports)
+          filePath = path.join(process.cwd(), document.filePath);
+        } else {
+          // File is in public directory
+          const cleanPath = document.filePath.startsWith('/') ? document.filePath.substring(1) : document.filePath;
+          filePath = path.join(process.cwd(), 'public', cleanPath);
+        }
+        
+        fileName = document.fileName;
+        fileBuffer = await readFile(filePath);
       } else {
-        // File is in public directory
-        const cleanPath = document.filePath.startsWith('/') ? document.filePath.substring(1) : document.filePath;
-        filePath = path.join(process.cwd(), 'public', cleanPath);
+        // Try File collection (GridFS)
+        console.log('[Share Token] Not in Document collection, trying File collection');
+        const fileDoc = await File.findById(shareLink.documentId);
+        
+        if (!fileDoc) {
+          console.log('[Share Token] Document not found in either collection');
+          return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+        }
+        
+        console.log('[Share Token] Found in File collection:', fileDoc.originalName);
+        fileBuffer = fileDoc.data;
+        fileName = fileDoc.originalName;
       }
-      
-      fileName = document.fileName;
-      fileBuffer = await readFile(filePath);
     } else if (shareLink.requestAttachment) {
       const attachmentPath = shareLink.requestAttachment.filePath;
       fileName = shareLink.requestAttachment.fileName;

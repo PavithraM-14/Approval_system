@@ -17,11 +17,13 @@ import {
   PhotoIcon,
   ArchiveBoxIcon,
   EnvelopeIcon,
-  ArrowDownTrayIcon
+  ArrowDownTrayIcon,
+  ClockIcon
 } from '@heroicons/react/24/outline';
 import { FolderIcon as FolderIconSolid } from '@heroicons/react/24/solid';
 import GmailImportModal from '../../../components/GmailImportModal';
 import SendEmailModal from '../../../components/SendEmailModal';
+import DocumentVersionsModal from '../../../components/DocumentVersionsModal';
 
 interface Document {
   _id: string;
@@ -48,6 +50,7 @@ interface Document {
   requestId?: string;
   requestMongoId?: string;
   requestStatus?: string;
+  version?: number;
 }
 
 interface Folder {
@@ -85,6 +88,8 @@ export default function DocumentsPage() {
   const [showGmailImport, setShowGmailImport] = useState(false);
   const [showSendEmail, setShowSendEmail] = useState(false);
   const [selectedDocForEmail, setSelectedDocForEmail] = useState<Document | null>(null);
+  const [showVersionsModal, setShowVersionsModal] = useState(false);
+  const [selectedDocForVersions, setSelectedDocForVersions] = useState<Document | null>(null);
 
   // Filters
   const [filters, setFilters] = useState({
@@ -125,7 +130,7 @@ export default function DocumentsPage() {
       });
       const docsData = await docsRes.json();
       const docs = docsData.documents || [];
-      
+
       setDocuments(docs);
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -172,21 +177,21 @@ export default function DocumentsPage() {
     try {
       const payload = doc.isRequestAttachment
         ? {
-            requestAttachment: {
-              filePath: doc.filePath,
-              fileName: doc.fileName,
-              requestId: doc.requestId
-            },
-            expiryHours,
-            watermarkEnabled: true,
-            allowDownload: true
-          }
+          requestAttachment: {
+            filePath: doc.filePath,
+            fileName: doc.fileName,
+            requestId: doc.requestId
+          },
+          expiryHours,
+          watermarkEnabled: true,
+          allowDownload: true
+        }
         : {
-            documentId: doc._id,
-            expiryHours,
-            watermarkEnabled: true,
-            allowDownload: true
-          };
+          documentId: doc._id,
+          expiryHours,
+          watermarkEnabled: true,
+          allowDownload: true
+        };
 
       const response = await fetch('/api/share/create', {
         method: 'POST',
@@ -210,59 +215,59 @@ export default function DocumentsPage() {
   };
 
   const getFileIcon = (doc: Document) => {
-      // Check mimeType first (most reliable)
-      if (doc.mimeType) {
-        if (doc.mimeType === 'application/pdf') 
-          return <DocumentIcon className="w-6 h-6 text-red-500" />;
-        if (doc.mimeType === 'application/msword' || 
-            doc.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') 
-          return <DocumentTextIcon className="w-6 h-6 text-blue-500" />;
-        if (doc.mimeType === 'application/vnd.ms-excel' || 
-            doc.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') 
-          return <TableCellsIcon className="w-6 h-6 text-green-500" />;
-        if (doc.mimeType === 'application/vnd.ms-powerpoint' || 
-            doc.mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') 
-          return <PresentationChartBarIcon className="w-6 h-6 text-orange-500" />;
-        if (doc.mimeType.startsWith('image/')) 
-          return <PhotoIcon className="w-6 h-6 text-purple-500" />;
-        if (doc.mimeType === 'application/zip' || doc.mimeType === 'application/x-rar-compressed') 
-          return <ArchiveBoxIcon className="w-6 h-6 text-gray-500" />;
-      }
-
-      // Check fileType
-      const type = doc.fileType ? doc.fileType.toLowerCase() : '';
-      if (['pdf'].includes(type)) 
+    // Check mimeType first (most reliable)
+    if (doc.mimeType) {
+      if (doc.mimeType === 'application/pdf')
         return <DocumentIcon className="w-6 h-6 text-red-500" />;
-      if (['doc', 'docx'].includes(type)) 
+      if (doc.mimeType === 'application/msword' ||
+        doc.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         return <DocumentTextIcon className="w-6 h-6 text-blue-500" />;
-      if (['xls', 'xlsx'].includes(type)) 
+      if (doc.mimeType === 'application/vnd.ms-excel' ||
+        doc.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         return <TableCellsIcon className="w-6 h-6 text-green-500" />;
-      if (['ppt', 'pptx'].includes(type)) 
+      if (doc.mimeType === 'application/vnd.ms-powerpoint' ||
+        doc.mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation')
         return <PresentationChartBarIcon className="w-6 h-6 text-orange-500" />;
-      if (['jpg', 'jpeg', 'png', 'gif'].includes(type)) 
+      if (doc.mimeType.startsWith('image/'))
         return <PhotoIcon className="w-6 h-6 text-purple-500" />;
-      if (['zip', 'rar'].includes(type)) 
+      if (doc.mimeType === 'application/zip' || doc.mimeType === 'application/x-rar-compressed')
         return <ArchiveBoxIcon className="w-6 h-6 text-gray-500" />;
-
-      // Fallback: try fileName
-      if (doc.fileName) {
-        const nameExt = doc.fileName.split('.').pop()?.toLowerCase() || '';
-        if (['pdf'].includes(nameExt)) 
-          return <DocumentIcon className="w-6 h-6 text-red-500" />;
-        if (['doc', 'docx'].includes(nameExt)) 
-          return <DocumentTextIcon className="w-6 h-6 text-blue-500" />;
-        if (['xls', 'xlsx'].includes(nameExt)) 
-          return <TableCellsIcon className="w-6 h-6 text-green-500" />;
-        if (['ppt', 'pptx'].includes(nameExt)) 
-          return <PresentationChartBarIcon className="w-6 h-6 text-orange-500" />;
-        if (['jpg', 'jpeg', 'png', 'gif'].includes(nameExt)) 
-          return <PhotoIcon className="w-6 h-6 text-purple-500" />;
-        if (['zip', 'rar'].includes(nameExt)) 
-          return <ArchiveBoxIcon className="w-6 h-6 text-gray-500" />;
-      }
-
-      return <DocumentIcon className="w-6 h-6 text-gray-400" />;
     }
+
+    // Check fileType
+    const type = doc.fileType ? doc.fileType.toLowerCase() : '';
+    if (['pdf'].includes(type))
+      return <DocumentIcon className="w-6 h-6 text-red-500" />;
+    if (['doc', 'docx'].includes(type))
+      return <DocumentTextIcon className="w-6 h-6 text-blue-500" />;
+    if (['xls', 'xlsx'].includes(type))
+      return <TableCellsIcon className="w-6 h-6 text-green-500" />;
+    if (['ppt', 'pptx'].includes(type))
+      return <PresentationChartBarIcon className="w-6 h-6 text-orange-500" />;
+    if (['jpg', 'jpeg', 'png', 'gif'].includes(type))
+      return <PhotoIcon className="w-6 h-6 text-purple-500" />;
+    if (['zip', 'rar'].includes(type))
+      return <ArchiveBoxIcon className="w-6 h-6 text-gray-500" />;
+
+    // Fallback: try fileName
+    if (doc.fileName) {
+      const nameExt = doc.fileName.split('.').pop()?.toLowerCase() || '';
+      if (['pdf'].includes(nameExt))
+        return <DocumentIcon className="w-6 h-6 text-red-500" />;
+      if (['doc', 'docx'].includes(nameExt))
+        return <DocumentTextIcon className="w-6 h-6 text-blue-500" />;
+      if (['xls', 'xlsx'].includes(nameExt))
+        return <TableCellsIcon className="w-6 h-6 text-green-500" />;
+      if (['ppt', 'pptx'].includes(nameExt))
+        return <PresentationChartBarIcon className="w-6 h-6 text-orange-500" />;
+      if (['jpg', 'jpeg', 'png', 'gif'].includes(nameExt))
+        return <PhotoIcon className="w-6 h-6 text-purple-500" />;
+      if (['zip', 'rar'].includes(nameExt))
+        return <ArchiveBoxIcon className="w-6 h-6 text-gray-500" />;
+    }
+
+    return <DocumentIcon className="w-6 h-6 text-gray-400" />;
+  }
 
   const isEditableFile = (doc: Document) => {
     // Check mimeType first (most reliable)
@@ -276,6 +281,7 @@ export default function DocumentsPage() {
         'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       ];
       if (editableMimeTypes.includes(doc.mimeType)) {
+        console.log('✅ Editable file detected (mimeType):', doc.fileName, doc.mimeType);
         return true;
       }
     }
@@ -284,6 +290,7 @@ export default function DocumentsPage() {
     const type = doc.fileType ? doc.fileType.toLowerCase().replace(/^\./, '') : '';
     const editableTypes = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
     if (editableTypes.includes(type)) {
+      console.log('✅ Editable file detected (fileType):', doc.fileName, type);
       return true;
     }
 
@@ -291,10 +298,12 @@ export default function DocumentsPage() {
     if (doc.fileName) {
       const fileNameExt = doc.fileName.split('.').pop()?.toLowerCase() || '';
       if (editableTypes.includes(fileNameExt)) {
+        console.log('✅ Editable file detected (fileName):', doc.fileName, fileNameExt);
         return true;
       }
     }
 
+    console.log('❌ Not editable:', doc.fileName, { mimeType: doc.mimeType, fileType: doc.fileType });
     return false;
   };
 
@@ -564,8 +573,8 @@ export default function DocumentsPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {new Date(doc.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                      <div className="flex items-center justify-center gap-2">
+                    <td className="px-6 py-4 text-sm text-center">
+                      <div className="flex flex-wrap items-center justify-center gap-2 max-w-sm md:max-w-md lg:max-w-lg">
                         {doc.isRequestAttachment ? (
                           <>
                             <a
@@ -581,11 +590,11 @@ export default function DocumentsPage() {
                               <button
                                 onClick={() => handleEditOnline(doc.filePath)}
                                 disabled={convertingFiles.has(doc.filePath)}
-                                className="text-purple-600 hover:text-purple-800 transition-colors text-xs sm:text-sm font-medium px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 whitespace-nowrap flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {convertingFiles.has(doc.filePath) ? (
                                   <>
-                                    <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                    <svg className="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24">
                                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
@@ -593,7 +602,7 @@ export default function DocumentsPage() {
                                   </>
                                 ) : (
                                   <>
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                     Edit Online
@@ -630,6 +639,22 @@ export default function DocumentsPage() {
                               <EnvelopeIcon className="h-4 w-4 mr-1" />
                               Email
                             </button>
+                            <button
+                              onClick={() => {
+                                console.log('Opening version history for request attachment:', {
+                                  id: doc._id,
+                                  title: doc.title,
+                                  isRequestAttachment: doc.isRequestAttachment
+                                });
+                                setSelectedDocForVersions(doc);
+                                setShowVersionsModal(true);
+                              }}
+                              className="inline-flex items-center px-3 py-1.5 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors font-medium text-xs"
+                              title="Version History"
+                            >
+                              <ClockIcon className="h-4 w-4 mr-1" />
+                              v{doc.version || 1}
+                            </button>
                           </>
                         ) : (
                           <>
@@ -645,11 +670,11 @@ export default function DocumentsPage() {
                               <button
                                 onClick={() => handleEditOnline(doc._id)}
                                 disabled={convertingFiles.has(doc._id)}
-                                className="text-purple-600 hover:text-purple-800 transition-colors text-xs sm:text-sm font-medium px-2 py-1 rounded bg-purple-50 hover:bg-purple-100 whitespace-nowrap flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {convertingFiles.has(doc._id) ? (
                                   <>
-                                    <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                    <svg className="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24">
                                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
@@ -657,7 +682,7 @@ export default function DocumentsPage() {
                                   </>
                                 ) : (
                                   <>
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                     Edit Online
@@ -692,6 +717,17 @@ export default function DocumentsPage() {
                               <EnvelopeIcon className="h-4 w-4 mr-1" />
                               Email
                             </button>
+                            <button
+                              onClick={() => {
+                                setSelectedDocForVersions(doc);
+                                setShowVersionsModal(true);
+                              }}
+                              className="inline-flex items-center px-3 py-1.5 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors font-medium text-xs"
+                              title="Version History"
+                            >
+                              <ClockIcon className="h-4 w-4 mr-1" />
+                              v{doc.version || 1}
+                            </button>
                           </>
                         )}
                       </div>
@@ -725,7 +761,6 @@ export default function DocumentsPage() {
         onImportComplete={() => fetchData()}
       />
 
-      {/* Send Email Modal */}
       <SendEmailModal
         isOpen={showSendEmail}
         onClose={() => {
@@ -734,6 +769,20 @@ export default function DocumentsPage() {
         }}
         documentId={selectedDocForEmail?._id || ''}
         documentTitle={selectedDocForEmail?.title || ''}
+      />
+
+      {/* Document Versions Modal */}
+      <DocumentVersionsModal
+        isOpen={showVersionsModal}
+        onClose={() => {
+          setShowVersionsModal(false);
+          setSelectedDocForVersions(null);
+        }}
+        documentId={selectedDocForVersions?._id || ''}
+        documentTitle={selectedDocForVersions?.title || ''}
+        currentFileName={selectedDocForVersions?.fileName || ''}
+        currentVersion={selectedDocForVersions?.version || 1}
+        onVersionUploaded={() => fetchData()}
       />
     </div>
   );
