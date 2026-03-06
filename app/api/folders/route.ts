@@ -23,19 +23,24 @@ export async function GET(request: NextRequest) {
     // Build query
     let query: any = {};
 
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+
     // Access control
-    if (user.role === 'requester') {
+    if (user.role.isSystemAdmin) {
+      // Admins see everything
+      query = {};
+    } else if (user.role.permissions.canCreate) {
       query.$or = [
         { createdBy: user.id },
         { isPublic: true },
         { 'sharedWith.userId': user.id },
-        { 'sharedWith.role': user.role },
+        { 'sharedWith.role': userRoleName },
         { 'sharedWith.department': user.department }
       ];
     } else {
       query.$or = [
         { isPublic: true },
-        { 'sharedWith.role': user.role },
+        { 'sharedWith.role': userRoleName },
         { 'sharedWith.department': user.department },
         { createdBy: user.id }
       ];
@@ -165,15 +170,17 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Folder not found' }, { status: 404 });
     }
 
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+
     // Check permissions
     const isOwner = folder.createdBy.toString() === user.id;
     const hasDeletePermission = folder.sharedWith.some(
       (share: any) => 
-        (share.userId?.toString() === user.id || share.role === user.role) &&
+        (share.userId?.toString() === user.id || share.role === userRoleName) &&
         share.permissions.includes('delete')
     );
 
-    if (!isOwner && !hasDeletePermission) {
+    if (!isOwner && !hasDeletePermission && !user.role.isSystemAdmin) {
       return NextResponse.json({ 
         error: 'Not authorized to delete this folder' 
       }, { status: 403 });

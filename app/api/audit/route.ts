@@ -12,8 +12,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Only admins and chairman can view audit logs
-    if (user.role !== UserRole.CHAIRMAN && user.role !== UserRole.CHIEF_DIRECTOR) {
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+    
+    // Only admins, chairman and chief director can view audit logs
+    if (!user.role.isSystemAdmin && userRoleName !== 'chairman' && userRoleName !== 'chief_director') {
       return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 

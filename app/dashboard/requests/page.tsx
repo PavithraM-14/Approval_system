@@ -60,8 +60,8 @@ function RequestsPageContent() {
       const user = data.user || data; // Handle both wrapped and unwrapped responses
       setCurrentUser(user);
       
-      // Redirect non-requesters to approvals page
-      if (user.role !== 'requester') {
+      // Redirect non-requesters to approvals page (Admins can access both)
+      if (!user.role.permissions.canCreate && !user.role.isSystemAdmin) {
         router.push('/dashboard/approvals');
         return;
       }
@@ -84,6 +84,8 @@ function RequestsPageContent() {
       setActiveFilter('all');
     }
   }, [statusFilter]);
+
+  const userRoleName = currentUser?.role?.name.toLowerCase().replace(/ /g, '_') || '';
 
   const handleSearch = async (filters: any) => {
     setSearchLoading(true);
@@ -217,8 +219,8 @@ function RequestsPageContent() {
     return null;
   }
 
-  // Show access denied for non-requesters
-  if (currentUser.role !== 'requester') {
+  // Show access denied for non-requesters (Admins can bypass)
+  if (!currentUser.role.permissions.canCreate && !currentUser.role.isSystemAdmin) {
     return (
       <div className="max-w-4xl mx-auto p-4 sm:p-6">
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
@@ -275,7 +277,7 @@ function RequestsPageContent() {
             <span className="sm:hidden">↻</span>
           </button>
 
-          {currentUser?.role === 'requester' && (
+          {currentUser?.role?.permissions.canCreate && !currentUser?.role?.isSystemAdmin && (
             <button
               onClick={() => router.push('/dashboard/requests/create')}
               className="px-3 sm:px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-md transition text-sm sm:text-base active:scale-95"
@@ -375,7 +377,7 @@ function RequestsPageContent() {
           </p>
 
           <div className="mt-6 flex gap-3 justify-center">
-            {currentUser?.role === 'requester' && (
+            {currentUser?.role?.permissions.canCreate && !currentUser?.role?.isSystemAdmin && (
               <button
                 onClick={() => router.push('/dashboard/requests/create')}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition"
@@ -429,7 +431,7 @@ function RequestsPageContent() {
 
                     <div className="flex flex-wrap gap-2 items-center justify-between sm:justify-end">
                       {/* User's involvement badge */}
-                      {request._visibility && currentUser?.role !== 'requester' && (
+                      {request._visibility && !currentUser?.role?.permissions.canCreate && !currentUser?.role?.isSystemAdmin && (
                         <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
                           request._visibility.category === 'pending' 
                             ? 'bg-yellow-100 text-yellow-700' 
@@ -454,7 +456,7 @@ function RequestsPageContent() {
                             ? 'VERIFICATION' 
                             : request.status.replace('_', ' ').toUpperCase()}
                         </span>
-                        {request.pendingQuery && request.queryLevel === currentUser?.role && (
+                        {request.pendingQuery && request.queryLevel === userRoleName && (
                           <QueryIndicator size="sm" showText={false} />
                         )}
                       </div>

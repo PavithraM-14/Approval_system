@@ -31,20 +31,27 @@ export async function GET() {
       .populate('history.actor', 'name email empId')
       .lean();
 
+    const userRoleName = currentUser.role.name.toLowerCase().replace(/ /g, '_');
+    const permissions = {
+      ...currentUser.role.permissions,
+      isSystemAdmin: currentUser.role.isSystemAdmin
+    };
+
     // Analyze visibility for each request
     const visibilityAnalysis = managerReviewRequests.map(request => ({
       requestId: request._id,
       title: request.title,
       status: request.status,
-      visibility: analyzeRequestVisibility(request, currentUser.role as UserRole, dbUser._id.toString(), dbUser.college)
+      visibility: analyzeRequestVisibility(request, userRoleName, dbUser._id.toString(), dbUser.college, permissions)
     }));
 
     // Apply full filtering
     const visibleRequests = filterRequestsByVisibility(
       managerReviewRequests,
-      currentUser.role as UserRole,
+      userRoleName,
       dbUser._id.toString(),
       dbUser.college,
+      permissions,
       'pending'
     );
 
@@ -52,12 +59,13 @@ export async function GET() {
       currentUser: {
         id: currentUser.id,
         email: currentUser.email,
-        role: currentUser.role,
-        dbId: dbUser._id.toString()
+        role: currentUser.role.name,
+        dbId: dbUser._id.toString(),
+        isSystemAdmin: currentUser.role.isSystemAdmin
       },
       approvalEngine: {
         requiredApproversForManagerReview: requiredApprovers,
-        isManagerRequiredForManagerReview: requiredApprovers.includes(UserRole.INSTITUTION_MANAGER)
+        isManagerRequiredForManagerReview: requiredApprovers.includes('institution_manager' as UserRole)
       },
       managerReviewRequests: {
         total: managerReviewRequests.length,

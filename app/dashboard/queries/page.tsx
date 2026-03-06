@@ -46,8 +46,10 @@ export default function QueriesPage() {
       const user = data.user || data; // Handle both wrapped and unwrapped responses
       setCurrentUser(user);
       
-      // Only allow requesters and Dean to access this page
-      if (user.role !== 'requester' && user.role !== 'dean') {
+      const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+      
+      // Only allow requesters and Dean to access this page (Admins can bypass)
+      if (!user.role.permissions.canCreate && userRoleName !== 'dean' && !user.role.isSystemAdmin) {
         router.push('/dashboard');
         return;
       }
@@ -66,6 +68,8 @@ export default function QueriesPage() {
       setLoading(true);
       setError(null);
 
+      const userRoleName = currentUser.role.name.toLowerCase().replace(/ /g, '_');
+
       // Fetch all requests and filter for queries
       const response = await fetch('/api/requests', { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to fetch requests');
@@ -74,7 +78,7 @@ export default function QueriesPage() {
       
       // Filter for requests that need response from current user
       const queriesRequests = data.requests.filter((request: Request) => 
-        request.pendingQuery && request.queryLevel === currentUser.role
+        request.pendingQuery && request.queryLevel === userRoleName
       );
 
       setRequests(queriesRequests);
@@ -99,8 +103,10 @@ export default function QueriesPage() {
   const handleRequestClick = (request: Request) => {
     setSelectedRequest(request);
     
+    const userRoleName = currentUser.role.name.toLowerCase().replace(/ /g, '_');
+
     // Open appropriate modal based on user role and query type
-    if (currentUser.role === 'dean' && queryEngine.isDeanMediatedClarification(request)) {
+    if (userRoleName === 'dean' && queryEngine.isDeanMediatedClarification(request)) {
       setIsDeanQueryModalOpen(true);
     } else {
       setIsQueryModalOpen(true);
@@ -296,7 +302,7 @@ export default function QueriesPage() {
               Queries
             </h1>
             <p className="text-gray-600 mt-2">
-              {currentUser?.role === 'requester' 
+              {currentUser?.role?.permissions.canCreate && !currentUser?.role?.isSystemAdmin 
                 ? 'Requests that need your response'
                 : 'Queries that need your review'
               }
@@ -319,7 +325,7 @@ export default function QueriesPage() {
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">All Caught Up!</h3>
           <p className="text-gray-600">
-            {currentUser?.role === 'requester' 
+            {currentUser?.role?.permissions.canCreate && !currentUser?.role?.isSystemAdmin 
               ? 'You have no pending queries to respond to.'
               : 'You have no rejection queries to review.'
             }
@@ -439,8 +445,8 @@ export default function QueriesPage() {
           onQueryAndApprove={handleQueryAndApprove}
           onReject={handleClarificationReject}
           loading={processingClarification}
-          userRole={currentUser?.role || ''}
-          isRequester={currentUser?.role === 'requester'}
+          userRole={currentUser?.role?.name.toLowerCase().replace(/ /g, '_') || ''}
+          isRequester={currentUser?.role?.permissions.canCreate && !currentUser?.role?.isSystemAdmin}
         />
       )}
 

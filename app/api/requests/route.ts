@@ -3,7 +3,7 @@ import connectDB from '../../../lib/mongodb';
 import Request from '../../../models/Request';
 import User from '../../../models/User';
 import AuditLog from '../../../models/AuditLog';
-import { getCurrentUser, validateUserAction } from '../../../lib/auth';
+import { getCurrentUser } from '../../../lib/auth';
 import { CreateRequestSchema } from '../../../lib/types';
 import { RequestStatus, ActionType, UserRole } from '../../../lib/types';
 import { filterRequestsByVisibility } from '../../../lib/request-visibility';
@@ -81,6 +81,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+    const permissions = {
+      ...user.role.permissions,
+      isSystemAdmin: user.role.isSystemAdmin
+    };
+
     // Get all requests and apply sophisticated visibility filtering
     let baseQuery: any = {};
 
@@ -100,9 +106,10 @@ export async function GET(request: NextRequest) {
     // Apply role-based visibility filtering
     let visibleRequests = filterRequestsByVisibility(
       allRequests,
-      user.role as UserRole,
+      userRoleName,
       dbUser._id.toString(),
-      dbUser.college
+      dbUser.college,
+      permissions
     );
 
     console.log('[DEBUG] Requests after visibility filtering:', visibleRequests.length);
@@ -115,7 +122,7 @@ export async function GET(request: NextRequest) {
         // For both requesters and approvers: use visibility category
         visibleRequests = visibleRequests.filter(req => req._visibility?.category === 'pending');
       } else if (statusFilter === 'approved') {
-        if (user.role === UserRole.REQUESTER) {
+        if (permissions.canCreate) {
           // For requesters: show only requests that have been fully approved by Chairman
           visibleRequests = visibleRequests.filter(req => req.status === RequestStatus.APPROVED);
         } else {
@@ -181,23 +188,21 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const user = await getCurrentUser();
 
-    // Enhanced security validation
-    const validation = validateUserAction(user, 'create_request');
-    if (!validation.allowed) {
+    if (!user || !user.role.permissions.canCreate) {
       // Log security violation attempt
-      console.warn(`Unauthorized request creation attempt by user ${user?.email || 'unknown'} with role ${user?.role || 'unknown'}: ${validation.reason}`);
+      console.warn(`Unauthorized request creation attempt by user ${user?.email || 'unknown'} with role ${user?.role?.name || 'unknown'}`);
 
       // Log to audit trail if user exists
       if (user) {
         await AuditLog.create({
-          action: 'user_failed_login',
+          action: 'unauthorized_request_creation_attempt',
           userId: user.id,
           targetType: 'user',
           targetId: user.id,
           details: {
-            userRole: user.role,
+            userRole: user.role.name,
             userEmail: user.email,
-            reason: validation.reason,
+            reason: 'User does not have canCreate permission',
             timestamp: new Date(),
             ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
           },
@@ -205,7 +210,7 @@ export async function POST(request: NextRequest) {
       }
 
       const statusCode = user ? 403 : 401;
-      const errorMessage = user ? `Forbidden: ${validation.reason}` : 'Unauthorized: Authentication required';
+      const errorMessage = user ? 'Forbidden: You do not have permission to create requests' : 'Unauthorized: Authentication required';
 
       return NextResponse.json({ error: errorMessage }, { status: statusCode });
     }

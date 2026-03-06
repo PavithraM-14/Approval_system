@@ -2,32 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserRole } from '../../lib/types';
+import { Role } from '../../lib/types';
 import PasswordInput from '../../components/PasswordInput';
 import OTPVerification from '../../components/OTPVerification';
 import InstitutionSelect from '../../components/InstitutionSelect';
 import NestedSelect from '../../components/NestedSelect';
 import { DENTAL_DEPARTMENTS, ENGINEERING_DEPARTMENTS, FSH_DEPARTMENTS, EEC_DEPARTMENTS, MANAGEMENT_DEPARTMENTS } from '../../lib/constants';
-
-const roleOptions = [
-  { value: UserRole.REQUESTER, label: 'Requester/HOD' },
-  { value: UserRole.INSTITUTION_MANAGER, label: 'Institution Manager' },
-  { value: UserRole.SOP_VERIFIER, label: 'SOP Verifier' },
-  { value: UserRole.ACCOUNTANT, label: 'Accountant' },
-  { value: UserRole.VP, label: 'Vice President' },
-  { value: UserRole.HEAD_OF_INSTITUTION, label: 'Head of Institution' },
-  { value: UserRole.DEAN, label: 'Dean' },
-  { value: UserRole.MMA, label: 'MMA' },
-  { value: UserRole.HR, label: 'HR' },
-  { value: UserRole.AUDIT, label: 'Audit' },
-  { value: UserRole.IT, label: 'IT' },
-  { value: UserRole.CHIEF_DIRECTOR, label: 'Chief Director' },
-  { value: UserRole.CHAIRMAN, label: 'Chairman' },
-];
-
-const rolesWithDepartment = [UserRole.REQUESTER];
-// Roles that do not need to select an Institution
-const rolesWithoutCollege = [UserRole.CHAIRMAN, UserRole.DEAN, UserRole.CHIEF_DIRECTOR];
+import { useEffect } from 'react';
 
 export default function SignupPage() {
   const [step, setStep] = useState<'form' | 'otp'>('form');
@@ -35,7 +16,8 @@ export default function SignupPage() {
   const [empId, setEmpId] = useState('');
   const [email, setEmail] = useState('');
   const [contactNo, setContactNo] = useState('');
-  const [selectedRole, setSelectedRole] = useState<UserRole>(UserRole.REQUESTER);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [selectedRoleId, setSelectedRoleId] = useState<string>('');
   const [college, setCollege] = useState('');
   const [department, setDepartment] = useState('');
   const [password, setPassword] = useState('');
@@ -47,6 +29,34 @@ export default function SignupPage() {
     otpTimestamp: string;
   } | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const res = await fetch('/api/roles');
+        if (res.ok) {
+          const data: Role[] = await res.json();
+          const filteredRoles = data.filter(r => !r.isSystemAdmin);
+          setRoles(filteredRoles);
+          if (filteredRoles.length > 0) {
+            setSelectedRoleId(filteredRoles[0]._id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch roles', err);
+      }
+    };
+    fetchRoles();
+  }, []);
+
+  const selectedRole = roles.find(r => r._id === setSelectedRoleId);
+  // Simple heuristic for dynamic roles: 
+  // If role name contains 'Requester' or 'HOD', it likely needs a department.
+  // If role name contains 'Chairman' or 'Director', it might not need a college.
+  const isDepartmentRequired = roles.find(r => r._id === selectedRoleId)?.name.toLowerCase().includes('requester') || false;
+  const isCollegeRequired = !['Chairman', 'Dean', 'Chief Director'].some(n => 
+    roles.find(r => r._id === selectedRoleId)?.name.includes(n)
+  );
 
   const inputClass =
     'mt-1 block w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 ' +
@@ -60,6 +70,14 @@ export default function SignupPage() {
     'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ' +
     'hover:border-gray-400 transition-colors duration-200 ' +
     'appearance-none cursor-pointer';
+
+  const handleRoleChange = (id: string) => {
+    setSelectedRoleId(id);
+    const role = roles.find(r => r._id === id);
+    if (role && !role.name.toLowerCase().includes('requester')) {
+      setDepartment('');
+    }
+  };
 
   const validateContactNo = () => {
     if (contactNo) {
@@ -89,9 +107,6 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
-
-    const isDepartmentRequired = rolesWithDepartment.includes(selectedRole);
-    const isCollegeRequired = !rolesWithoutCollege.includes(selectedRole);
 
     if (
       !name ||
@@ -143,9 +158,6 @@ export default function SignupPage() {
       const contactDigits = contactNo.replace(/\D/g, '');
       const formattedContactNo = `+91 ${contactDigits}`;
 
-      const isDepartmentRequired = rolesWithDepartment.includes(selectedRole);
-      const isCollegeRequired = !rolesWithoutCollege.includes(selectedRole);
-
       // Verify OTP and create account
       const response = await fetch('/api/auth/verify-otp', {
         method: 'POST',
@@ -160,7 +172,7 @@ export default function SignupPage() {
             email,
             contactNo: formattedContactNo,
             password,
-            role: selectedRole,
+            role: selectedRoleId,
             college: isCollegeRequired ? college : null,
             department: isDepartmentRequired ? department : null,
             otp: otpData?.otp,
@@ -331,24 +343,19 @@ export default function SignupPage() {
             <div>
               <label className={labelClass}>Role *</label>
               <select
-                value={selectedRole}
-                onChange={(e) => {
-                  const role = e.target.value as UserRole;
-                  setSelectedRole(role);
-                  if (!rolesWithDepartment.includes(role)) setDepartment('');
-                  if (rolesWithoutCollege.includes(role)) setCollege('');
-                }}
+                value={selectedRoleId}
+                onChange={(e) => handleRoleChange(e.target.value)}
                 className={inputClass}
               >
-                {roleOptions.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
+                {roles.map((r) => (
+                  <option key={r._id} value={r._id}>
+                    {r.name}
                   </option>
                 ))}
               </select>
             </div>
 
-            {!rolesWithoutCollege.includes(selectedRole) && (
+            {isCollegeRequired && (
               <div>
                 <label className={`${labelClass} mb-2`}>Institution *</label>
                 <div className="relative">
@@ -357,13 +364,12 @@ export default function SignupPage() {
                       value={college}
                       onChange={setCollege}
                     />
-                    {/* Icon is inside the component now */}
                   </div>
                 </div>
               </div>
             )}
 
-            {rolesWithDepartment.includes(selectedRole) && (
+            {isDepartmentRequired && (
               <div>
                 <label className={`${labelClass} mb-2`}>Department *</label>
                 <div className="relative">

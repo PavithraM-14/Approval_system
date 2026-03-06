@@ -63,11 +63,28 @@ export const CreateRequestSchema = z.object({
   attachments: z.array(z.string()).min(1, 'At least one document is required'),
 });
 
+export interface Role {
+  _id: string;
+  name: string;
+  description?: string;
+  isSystemAdmin: boolean;
+  permissions: {
+    canView: boolean;
+    canCreate: boolean;
+    canEdit: boolean;
+    canShare: boolean;
+    canApprove: boolean;
+    canManageBudget: boolean;
+    canRaiseQueries: boolean;
+  };
+}
+
 export interface User {
   _id: string;
   email: string;
   name: string;
-  role: UserRole;
+  role: Role;
+  signature?: string;
   college?: string;
   department?: string;
   createdAt: Date;

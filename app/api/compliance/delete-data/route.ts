@@ -12,9 +12,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Only chairman can delete user data
-    if (user.role !== UserRole.CHAIRMAN) {
-      return NextResponse.json({ error: 'Forbidden: Only Chairman can delete user data' }, { status: 403 });
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+    
+    // Only admins and chairman can delete user data
+    if (!user.role.isSystemAdmin && userRoleName !== 'chairman') {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
     await connectDB();

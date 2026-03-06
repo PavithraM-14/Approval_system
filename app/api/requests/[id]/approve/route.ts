@@ -25,13 +25,14 @@ export async function POST(
 
     console.log('[DEBUG] Approval request started:', {
       requestId: params.id,
-      userRole: user.role,
+      userRole: userRoleName,
       userEmail: user.email
     });
 
     const {
       action: requestAction,
       notes,
+      signature,
       budgetAvailable,
       budgetData,
       forwardedMessage,
@@ -42,14 +43,27 @@ export async function POST(
 
     action = requestAction;
 
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_') as UserRole;
+    const permissions = user.role.permissions;
+
     console.log('[DEBUG] Request body parsed:', {
       action,
       notes: notes ? 'provided' : 'empty',
+      signature: signature ? 'provided' : 'empty',
       target,
-      userRole: user.role
+      userRole: userRoleName
     });
 
-    // Validate action - add new actions for budget routing and query workflow
+    // Permission check for approval
+    if (action === 'approve' && !permissions.canApprove) {
+      return NextResponse.json({ error: 'Permission Denied: You do not have approval rights.' }, { status: 403 });
+    }
+
+    if (action === 'approve' && permissions.canApprove && !signature) {
+       return NextResponse.json({ error: 'Signature required for approval' }, { status: 400 });
+    }
+
+    // Validate action
     if (!['approve', 'reject', 'clarify', 'forward', 'send_to_dean', 'send_to_vp', 'send_to_chairman', 'reject_with_clarification', 'clarify_and_reapprove', 'query_and_reapprove', 'dean_send_to_requester'].includes(action)) {
       console.log('[DEBUG] Invalid action:', action);
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
@@ -80,7 +94,7 @@ export async function POST(
       UserRole.HEAD_OF_INSTITUTION
     ];
 
-    if (institutionalRoles.includes(user.role as UserRole)) {
+    if (institutionalRoles.includes(userRoleName as UserRole)) {
       if (user.college && requestRecord.college && user.college !== requestRecord.college) {
         console.log('[DEBUG] Institutional isolation violation:', {
           userCollege: user.college,
@@ -100,29 +114,29 @@ export async function POST(
     // Clarification responder bypass: allow the role currently responsible for responding
     const isPendingQueryForUser = (
       requestRecord.pendingQuery === true &&
-      requestRecord.queryLevel === (user.role as UserRole)
+      requestRecord.queryLevel === (userRoleName as UserRole)
     );
 
     const isQueryResponder = action === 'query_and_reapprove' && isPendingQueryForUser;
     const isQueryRejector = action === 'reject' && isPendingQueryForUser;
 
     const isDeanSendToRequester = (
-      action === 'dean_send_to_requester' && user.role === UserRole.DEAN
+      action === 'dean_send_to_requester' && userRoleName === UserRole.DEAN
     );
 
     console.log('[DEBUG] Role authorization check:', {
       currentStatus: requestRecord.status,
       requiredApprovers,
-      userRole: user.role,
+      userRole: userRoleName,
       pendingQuery: requestRecord.pendingQuery,
       queryLevel: requestRecord.queryLevel,
-      isAuthorizedApprover: requiredApprovers.includes(user.role as UserRole),
+      isAuthorizedApprover: requiredApprovers.includes(userRoleName as UserRole),
       isQueryResponder,
       isDeanSendToRequester
     });
 
     if (
-      !requiredApprovers.includes(user.role as UserRole) &&
+      !requiredApprovers.includes(userRoleName as UserRole) &&
       !isQueryResponder &&
       !isDeanSendToRequester &&
       !isQueryRejector
@@ -142,7 +156,7 @@ export async function POST(
         .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
 
       console.log('[DEBUG] Department query check:', {
-        userRole: user.role,
+        userRole: userRoleName,
         latestClarification: latestClarification ? {
           queryTarget: latestClarification.queryTarget,
           actor: latestClarification.actor,
@@ -155,13 +169,13 @@ export async function POST(
         }))
       });
 
-      if (latestClarification && latestClarification.queryTarget !== user.role.toLowerCase()) {
+      if (latestClarification && latestClarification.queryTarget !== userRoleName.toLowerCase()) {
         console.log('[DEBUG] Authorization failed:', {
           expected: latestClarification.queryTarget,
-          actual: user.role.toLowerCase()
+          actual: userRoleName.toLowerCase()
         });
         return NextResponse.json(
-          { error: `These queries were sent to ${latestClarification.queryTarget.toUpperCase()} department, not ${user.role.toUpperCase()}. Only ${latestClarification.queryTarget.toUpperCase()} users can respond to these queries.` },
+          { error: `These queries were sent to ${latestClarification.queryTarget.toUpperCase()} department, not ${userRoleName.toUpperCase()}. Only ${latestClarification.queryTarget.toUpperCase()} users can respond to these queries.` },
           { status: 403 }
         );
       }
@@ -177,7 +191,7 @@ export async function POST(
     console.log('[DEBUG] Processing approval request:', {
       requestId: params.id,
       action,
-      userRole: user.role,
+      userRole: userRoleName,
       currentStatus: requestRecord.status,
       previousStatus
     });
@@ -188,26 +202,26 @@ export async function POST(
       case 'approve':
         // Check if this is parallel verification completion
         if (requestRecord.status === RequestStatus.PARALLEL_VERIFICATION) {
-          if (user.role === UserRole.SOP_VERIFIER) {
+          if (userRoleName === UserRole.SOP_VERIFIER) {
             nextStatus = RequestStatus.SOP_COMPLETED;
-          } else if (user.role === UserRole.ACCOUNTANT) {
+          } else if (userRoleName === UserRole.ACCOUNTANT) {
             // Simplified: accountant just confirms budget availability
             nextStatus = RequestStatus.BUDGET_COMPLETED;
           }
-        } else if (requestRecord.status === RequestStatus.SOP_COMPLETED && user.role === UserRole.ACCOUNTANT) {
+        } else if (requestRecord.status === RequestStatus.SOP_COMPLETED && userRoleName === UserRole.ACCOUNTANT) {
           // After both verifications complete, go to Institution Manager for final verification
           nextStatus = RequestStatus.INSTITUTION_VERIFIED;
-        } else if (requestRecord.status === RequestStatus.BUDGET_COMPLETED && user.role === UserRole.SOP_VERIFIER) {
+        } else if (requestRecord.status === RequestStatus.BUDGET_COMPLETED && userRoleName === UserRole.SOP_VERIFIER) {
           // After both verifications complete, go to Institution Manager for final verification
           nextStatus = RequestStatus.INSTITUTION_VERIFIED;
-        } else if (requestRecord.status === RequestStatus.BUDGET_CHECK && user.role === UserRole.ACCOUNTANT) {
+        } else if (requestRecord.status === RequestStatus.BUDGET_CHECK && userRoleName === UserRole.ACCOUNTANT) {
           // Simplified: accountant just confirms budget availability
           // After accountant approval, always go back to manager for routing decision
           nextStatus = RequestStatus.MANAGER_REVIEW;
         } else {
           // ✅ COST-BASED FINAL APPROVAL LOGIC
           if (
-            user.role === UserRole.CHIEF_DIRECTOR &&
+            userRoleName === UserRole.CHIEF_DIRECTOR &&
             requestRecord.status === RequestStatus.CHIEF_DIRECTOR_APPROVAL
           ) {
             const cost = requestRecord.costEstimate || 0;
@@ -224,7 +238,7 @@ export async function POST(
               approvalEngine.getNextStatus(
                 requestRecord.status,
                 ActionType.APPROVE,
-                user.role as UserRole,
+                userRoleName as UserRole,
                 {
                   budgetAvailable,
                   costEstimate: requestRecord.costEstimate,
@@ -244,7 +258,7 @@ export async function POST(
         break;
 
       case 'clarify':
-        if (user.role === UserRole.DEAN && target) {
+        if (userRoleName === UserRole.DEAN && target) {
           nextStatus = RequestStatus.DEPARTMENT_CHECKS;
         } else {
           nextStatus = RequestStatus.CLARIFICATION_REQUIRED;
@@ -253,21 +267,21 @@ export async function POST(
         break;
 
       case 'send_to_dean':
-        if (user.role === UserRole.INSTITUTION_MANAGER && requestRecord.status === RequestStatus.INSTITUTION_VERIFIED) {
+        if (userRoleName === UserRole.INSTITUTION_MANAGER && requestRecord.status === RequestStatus.INSTITUTION_VERIFIED) {
           nextStatus = RequestStatus.DEAN_REVIEW;
           actionType = ActionType.APPROVE;
           // Mark this request as coming from direct send to dean path
           if (!updateData.$set) updateData.$set = {};
           updateData.$set.sentDirectlyToDean = true;
           console.log('[DEBUG] Send to Dean action:', {
-            userRole: user.role,
+            userRole: userRoleName,
             currentStatus: requestRecord.status,
             nextStatus,
             sentDirectlyToDean: true
           });
         } else {
           console.log('[DEBUG] Send to Dean failed - conditions not met:', {
-            userRole: user.role,
+            userRole: userRoleName,
             expectedRole: UserRole.INSTITUTION_MANAGER,
             currentStatus: requestRecord.status,
             expectedStatus: RequestStatus.INSTITUTION_VERIFIED
@@ -276,7 +290,7 @@ export async function POST(
         break;
 
       case 'send_to_vp':
-        if (user.role === UserRole.INSTITUTION_MANAGER && requestRecord.status === RequestStatus.INSTITUTION_VERIFIED) {
+        if (userRoleName === UserRole.INSTITUTION_MANAGER && requestRecord.status === RequestStatus.INSTITUTION_VERIFIED) {
           nextStatus = RequestStatus.VP_APPROVAL;
           actionType = ActionType.APPROVE;
           // This follows normal flow through VP → HOI → Dean → Chief Director
@@ -284,17 +298,17 @@ export async function POST(
         break;
 
       case 'send_to_chairman':
-        if (user.role === UserRole.DEAN && (requestRecord.status === RequestStatus.DEAN_REVIEW || requestRecord.status === RequestStatus.DEAN_VERIFICATION)) {
+        if (userRoleName === UserRole.DEAN && (requestRecord.status === RequestStatus.DEAN_REVIEW || requestRecord.status === RequestStatus.DEAN_VERIFICATION)) {
           nextStatus = RequestStatus.CHAIRMAN_APPROVAL;
           actionType = ActionType.APPROVE;
           console.log('[DEBUG] Send to Chairman action:', {
-            userRole: user.role,
+            userRole: userRoleName,
             currentStatus: requestRecord.status,
             nextStatus
           });
         } else {
           console.log('[DEBUG] Send to Chairman failed - conditions not met:', {
-            userRole: user.role,
+            userRole: userRoleName,
             expectedRole: UserRole.DEAN,
             currentStatus: requestRecord.status,
             expectedStatuses: [RequestStatus.DEAN_REVIEW, RequestStatus.DEAN_VERIFICATION]
@@ -304,7 +318,7 @@ export async function POST(
 
       case 'forward':
         // Handle department responses to Dean queries
-        if ([UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT].includes(user.role as UserRole) &&
+        if ([UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT].includes(userRoleName as UserRole) &&
           requestRecord.status === RequestStatus.DEPARTMENT_CHECKS) {
           // Find the latest query to get the target
           const latestClarification = requestRecord.history
@@ -314,7 +328,7 @@ export async function POST(
           // Use approval engine with proper context
           const context = { queryTarget: latestClarification?.queryTarget };
           console.log('[DEBUG] Department forward context:', {
-            userRole: user.role,
+            userRole: userRoleName,
             currentStatus: requestRecord.status,
             context,
             latestClarification: latestClarification ? {
@@ -326,7 +340,7 @@ export async function POST(
           nextStatus = approvalEngine.getNextStatus(
             requestRecord.status,
             ActionType.FORWARD,
-            user.role as UserRole,
+            userRoleName as UserRole,
             context
           ) || RequestStatus.DEAN_VERIFICATION; // Changed from DEAN_REVIEW to DEAN_VERIFICATION
         } else {
@@ -334,7 +348,7 @@ export async function POST(
             approvalEngine.getNextStatus(
               requestRecord.status,
               ActionType.FORWARD,
-              user.role as UserRole,
+              userRoleName as UserRole,
               {}
             ) || requestRecord.status;
         }
@@ -348,14 +362,14 @@ export async function POST(
         }
 
         // Get the query target based on new workflow
-        const queryTarget = queryEngine.getQueryTarget(requestRecord.status, user.role as UserRole);
+        const queryTarget = queryEngine.getQueryTarget(requestRecord.status, userRoleName as UserRole);
         if (!queryTarget) {
           return NextResponse.json({ error: 'Cannot send queries - no target found' }, { status: 400 });
         }
 
         console.log('[DEBUG] Reject with clarification (NEW WORKFLOW):', {
           currentStatus: requestRecord.status,
-          currentRole: user.role,
+          currentRole: userRoleName,
           queryTarget: queryTarget,
           queryRequest: notes,
           isDeanMediated: queryTarget.isDeanMediated
@@ -373,16 +387,16 @@ export async function POST(
         }
 
         // Check if this request is actually pending query for this user
-        if (!queryEngine.canProvideClarification(requestRecord, user.role as UserRole, user.id)) {
+        if (!queryEngine.canProvideClarification(requestRecord, userRoleName as UserRole, user.id)) {
           return NextResponse.json({ error: 'This request is not pending response from you' }, { status: 400 });
         }
 
         // Handle requester providing query response
-        if (user.role === UserRole.REQUESTER) {
+        if (userRoleName === UserRole.REQUESTER) {
           // Always send back to the original rejector (no Dean mediation)
           const returnStatus = queryEngine.getReturnStatus(requestRecord);
           nextStatus = returnStatus || RequestStatus.MANAGER_REVIEW;
-        } else if (user.role === UserRole.DEAN) {
+        } else if (userRoleName === UserRole.DEAN) {
           // Dean reviewing requester's query and re-approving (legacy support)
           const returnStatus = queryEngine.getReturnStatus(requestRecord);
           nextStatus = returnStatus || RequestStatus.MANAGER_REVIEW;
@@ -395,14 +409,14 @@ export async function POST(
         console.log('[DEBUG] Clarify and reapprove:', {
           currentStatus: requestRecord.status,
           targetStatus: nextStatus,
-          userRole: user.role,
+          userRole: userRoleName,
           queryResponse: notes
         });
         break;
 
       case 'dean_send_to_requester':
         // Dean forwards rejection to requester for query
-        if (user.role !== UserRole.DEAN) {
+        if (userRoleName !== UserRole.DEAN) {
           return NextResponse.json({ error: 'Only Dean can send requests to requester for query' }, { status: 400 });
         }
 
@@ -423,14 +437,14 @@ export async function POST(
 
     // 🔹 **SPECIAL FIX — VP → HOI**
     if (
-      user.role === UserRole.VP &&
+      userRoleName === UserRole.VP &&
       requestRecord.status === RequestStatus.VP_APPROVAL
     ) {
       nextStatus = RequestStatus.HOI_APPROVAL;
     }
 
     // 🔹 SOP stores reference number
-    if (user.role === UserRole.SOP_VERIFIER && sopReference) {
+    if (userRoleName === UserRole.SOP_VERIFIER && sopReference) {
       requestRecord.sopReference = sopReference;
       await requestRecord.save();
     }
@@ -452,6 +466,11 @@ export async function POST(
       timestamp: new Date(),
     };
 
+    if (action === 'approve' && permissions.canApprove) {
+      historyEntry.signature = signature;
+      historyEntry.signatureTimestamp = new Date();
+    }
+
     if (action === 'forward') {
       historyEntry.forwardedMessage = forwardedMessage || notes || '';
       if (attachments?.length) historyEntry.attachments = attachments;
@@ -462,12 +481,12 @@ export async function POST(
     }
 
     // Store SOP reference in history
-    if (user.role === UserRole.SOP_VERIFIER && sopReference) {
+    if (userRoleName === UserRole.SOP_VERIFIER && sopReference) {
       historyEntry.sopReference = sopReference;
     }
 
     // Store budget availability for accountant
-    if (user.role === UserRole.ACCOUNTANT && budgetAvailable !== undefined) {
+    if (userRoleName === UserRole.ACCOUNTANT && budgetAvailable !== undefined) {
       historyEntry.budgetAvailable = budgetAvailable;
       // Store detailed budget information if provided
       if (budgetData) {
@@ -478,19 +497,19 @@ export async function POST(
     }
 
     // Store query target for Dean to department flow
-    if (action === 'clarify' && user.role === UserRole.DEAN && target) {
+    if (action === 'clarify' && userRoleName === UserRole.DEAN && target) {
       historyEntry.queryTarget = target;
     }
 
     // Store query type for Institution Manager flow
-    if (action === 'clarify' && user.role === UserRole.INSTITUTION_MANAGER && target) {
+    if (action === 'clarify' && userRoleName === UserRole.INSTITUTION_MANAGER && target) {
       historyEntry.queryType = target;
     }
 
     // Store department response for Dean queries
-    if (action === 'forward' && [UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT].includes(user.role as UserRole) &&
+    if (action === 'forward' && [UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT].includes(userRoleName as UserRole) &&
       requestRecord.status === RequestStatus.DEPARTMENT_CHECKS) {
-      historyEntry.departmentResponse = user.role;
+      historyEntry.departmentResponse = userRoleName;
     }
 
     // Handle query workflow fields
@@ -515,7 +534,7 @@ export async function POST(
     }
 
     // 🔹 ACCOUNTANT BUDGET AVAILABILITY - already handled above
-    // if (user.role === UserRole.ACCOUNTANT && typeof budgetAvailable === 'boolean') {
+    // if (userRoleName === UserRole.ACCOUNTANT && typeof budgetAvailable === 'boolean') {
     //   historyEntry.budgetAvailable = budgetAvailable;
     // }
 
@@ -534,7 +553,7 @@ export async function POST(
       updateData.$set.pendingQuery = true;
 
       if (action === 'reject_with_clarification') {
-        const queryTarget = queryEngine.getQueryTarget(requestRecord.status, user.role as UserRole);
+        const queryTarget = queryEngine.getQueryTarget(requestRecord.status, userRoleName as UserRole);
         updateData.$set.queryLevel = queryTarget?.role;
       } else {
         // dean_send_to_requester
@@ -545,7 +564,7 @@ export async function POST(
     if (action === 'query_and_reapprove') {
       if (!updateData.$set) updateData.$set = {};
 
-      if (user.role === UserRole.REQUESTER) {
+      if (userRoleName === UserRole.REQUESTER) {
         // Requester provided query - send back to original rejector
         const originalRejector = queryEngine.getOriginalRejector(requestRecord);
         if (originalRejector) {
@@ -569,7 +588,7 @@ export async function POST(
     }
 
     // Save accountant budget availability to Request document
-    if (user.role === UserRole.ACCOUNTANT && action === 'approve' && typeof budgetAvailable === 'boolean') {
+    if (userRoleName === UserRole.ACCOUNTANT && action === 'approve' && typeof budgetAvailable === 'boolean') {
       if (!updateData.$set) updateData.$set = {};
       updateData.$set.budgetAvailable = budgetAvailable;
       // Store detailed budget information if provided

@@ -199,6 +199,9 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
   const [showApprovalHistory, setShowApprovalHistory] = useState(false);
   const [processingApproval, setProcessingApproval] = useState(false);
 
+  const activeUserRoleName = currentUser?.role?.name.toLowerCase().replace(/ /g, '_') || '';
+  const permissions = currentUser?.role?.permissions;
+
   // Helper function to generate external URLs
   const getExternalUrl = (type: string, id: string): string => {
     switch (type) {
@@ -285,17 +288,15 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
       });
 
       // Auto-open appropriate queries modal if request needs response from current user
-      // IMPORTANT: Only REQUESTERS and DEAN (in Dean-mediated cases) can provide responses to queries
       const activeUser = userOverride;
-      if (activeUser && data.pendingQuery && data.queryLevel === activeUser.role) {
-        if (activeUser.role === 'dean' && queryEngine.isDeanMediatedClarification(data)) {
+      const activeUserRoleName = activeUser?.role?.name.toLowerCase().replace(/ /g, '_') || '';
+      
+      if (activeUser && data.pendingQuery && data.queryLevel === activeUserRoleName) {
+        if (activeUserRoleName === 'dean' && queryEngine.isDeanMediatedClarification(data)) {
           setIsDeanQueryModalOpen(true);
-        } else if (activeUser.role === 'requester') {
-          // Only auto-open for requesters, not for the original rejectors
+        } else if (activeUser.role.permissions.canCreate) { // Requesters are those who can create
           setIsQueryModalOpen(true);
         }
-        // For other roles (VP, Manager, etc.), don't auto-open any modal
-        // They should see the request in their rejected list until requester responds
       }
 
     } catch (err) {
@@ -324,7 +325,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
 
     if (action === 'approve' || action === 'reject') {
       // requester should never see the approval UI even if query param exists
-      if (currentUser.role === 'requester') return;
+      if (permissions?.canCreate && !permissions?.isSystemAdmin) return;
 
       const requiredApprovers = approvalEngine.getRequiredApprover(request.status);
       if (!requiredApprovers.includes(currentUser.role as UserRole)) return;
@@ -719,7 +720,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
   };
 
   const hideWorkflowAndHistory =
-    currentUser?.role === 'sop_verifier' || currentUser?.role === 'accountant';
+    activeUserRoleName === 'sop_verifier' || activeUserRoleName === 'accountant';
 
   const handleBackToRequests = () => {
     // Try to go back in history first, fallback to appropriate page based on user role
@@ -1058,13 +1059,13 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
           {/* Process Request Button */}
           {(() => {
             // Check if request needs response from this user
-            // IMPORTANT: Only REQUESTERS and DEAN (in Dean-mediated cases) can provide responses to queries
-            const needsClarification = request.pendingQuery && request.queryLevel === currentUser?.role;
+            // IMPORTANT: Only those with canCreate (requesters) and DEAN (in Dean-mediated cases) can provide responses to queries
+            const needsClarification = request.pendingQuery && request.queryLevel === activeUserRoleName;
             
             // SPECIAL CASE: Dean handling mediated rejection (regardless of pendingQuery status)
             // The Dean should always see the "Handle Rejection" button when it's a Dean-mediated case
-            if (currentUser?.role === 'dean' && queryEngine.isDeanMediatedClarification(request)) {
-              const waitingOnRequester = request.pendingQuery && request.queryLevel === UserRole.REQUESTER;
+            if (activeUserRoleName === 'dean' && queryEngine.isDeanMediatedClarification(request)) {
+              const waitingOnRequester = request.pendingQuery && request.queryLevel === 'requester';
 
               if (waitingOnRequester) {
                 return (
@@ -1081,7 +1082,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
 
               // Check if requester has responded
               const requesterHasResponded = request.history?.some(
-                (h: any) => h.action === 'CLARIFY_AND_REAPPROVE' && h.actor?.role === 'requester'
+                (h: any) => h.action === 'CLARIFY_AND_REAPPROVE' && h.actor?.role?.name === 'Requester'
               );
               
               return (
@@ -1110,8 +1111,8 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
               );
             }
             
-            // If requester needs to provide query, show the button
-            if (currentUser?.role === 'requester' && needsClarification) {
+            // If requester (someone who canCreate) needs to provide query, show the button
+            if (permissions?.canCreate && needsClarification) {
               return (
                 <div className="mt-4 sm:mt-6 flex justify-center sm:justify-start">
                   <button
@@ -1126,11 +1127,11 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             }
             
             // For non-requesters, check if they're authorized to process this request status
-            if (currentUser?.role === 'requester') return null;
+            if (permissions?.canCreate) return null;
             
             if (needsClarification) {
               // Requester: allow responding directly (already handled above)
-              if (currentUser?.role === 'requester') {
+              if (permissions?.canCreate) {
                 return (
                   <div className="mt-4 sm:mt-6 flex flex-col gap-3">
                     <div className="p-3 bg-yellow-50 border border-yellow-200 rounded flex items-center gap-2">
@@ -1162,7 +1163,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
               );
 
               const requiredApprovers = approvalEngine.getRequiredApprover(request.status as RequestStatus);
-              const isAuthorized = requiredApprovers.includes(currentUser?.role as UserRole);
+              const isAuthorized = requiredApprovers.includes(activeUserRoleName as UserRole);
 
               return isAuthorized ? (
                 <div className="mt-4 sm:mt-6 flex flex-col gap-3">
@@ -1174,20 +1175,22 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                     >
                       Process Request
                     </button>
-                    <button
-                      onClick={() => setIsDirectQueryModalOpen(true)}
-                      className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm flex items-center justify-center gap-2"
-                    >
-                      <ExclamationTriangleIcon className="w-5 h-5" />
-                      Raise Query
-                    </button>
+                    {permissions?.canRaiseQueries && (
+                      <button
+                        onClick={() => setIsDirectQueryModalOpen(true)}
+                        className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm flex items-center justify-center gap-2"
+                      >
+                        <ExclamationTriangleIcon className="w-5 h-5" />
+                        Raise Query
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : banner;
             }
             
             const requiredApprovers = approvalEngine.getRequiredApprover(request.status as RequestStatus);
-            const isAuthorized = requiredApprovers.includes(currentUser?.role as UserRole);
+            const isAuthorized = requiredApprovers.includes(activeUserRoleName as UserRole);
             
             return isAuthorized ? (
               <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
@@ -1200,13 +1203,15 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                 </button>
                 
                 {/* Dedicated Raise Query Button */}
-                <button
-                  onClick={() => setIsDirectQueryModalOpen(true)}
-                  className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm flex items-center justify-center gap-2"
-                >
-                  <ExclamationTriangleIcon className="w-5 h-5" />
-                  Raise Query
-                </button>
+                {permissions?.canRaiseQueries && (
+                  <button
+                    onClick={() => setIsDirectQueryModalOpen(true)}
+                    className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <ExclamationTriangleIcon className="w-5 h-5" />
+                    Raise Query
+                  </button>
+                )}
               </div>
             ) : null;
           })()}
@@ -1279,7 +1284,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
           budgetBalance: request.budgetBalance,
           budgetAvailable: request.budgetAvailable
         }}
-        userRole={currentUser?.role || ''}
+        user={currentUser}
         initialAction={initialApprovalAction || undefined}
         onApprove={handleApprove}
         onReject={handleReject}

@@ -18,8 +18,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { userId } = body;
 
-    // Users can export their own data, or admins can export any user's data
-    if (userId !== user.id && user.role !== UserRole.CHAIRMAN) {
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+
+    // Users can export their own data, or admins/chairman can export any user's data
+    if (userId !== user.id && !user.role.isSystemAdmin && userRoleName !== 'chairman') {
       return NextResponse.json({ error: 'Forbidden: Cannot export other user data' }, { status: 403 });
     }
 

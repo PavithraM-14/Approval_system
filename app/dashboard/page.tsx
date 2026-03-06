@@ -87,13 +87,19 @@ export default function DashboardPage() {
     setSearchResults([]);
   };
 
+  const userRoleName = currentUser?.role?.name.toLowerCase().replace(/ /g, '_') || '';
+  const permissions = currentUser?.role?.permissions ? {
+    ...currentUser.role.permissions,
+    isSystemAdmin: currentUser.role.isSystemAdmin
+  } : null;
+
   const handleStatsCardClick = (cardName: string) => {
     // Route based on user role
-    const isRequester = currentUser?.role === 'requester';
+    const isRequester = permissions?.canCreate && !permissions?.isSystemAdmin && !permissions?.isSystemAdmin;
 
     console.log('[DEBUG] Stats card clicked:', {
       cardName,
-      userRole: currentUser?.role,
+      userRole: userRoleName,
       isRequester
     });
 
@@ -152,7 +158,7 @@ export default function DashboardPage() {
       icon: ClipboardDocumentListIcon,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
-      description: currentUser?.role === 'requester' ? 'View all my requests' : 'View all requests forwarded to you',
+      description: permissions?.canCreate && !permissions?.isSystemAdmin ? 'View all my requests' : 'View all requests forwarded to you',
     },
     {
       name: 'Pending',
@@ -160,7 +166,7 @@ export default function DashboardPage() {
       icon: ClockIcon,
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-100',
-      description: currentUser?.role === 'requester' ? 'View my pending requests' : 'View pending approvals',
+      description: permissions?.canCreate && !permissions?.isSystemAdmin ? 'View my pending requests' : 'View pending approvals',
     },
     {
       name: 'Approved',
@@ -168,7 +174,7 @@ export default function DashboardPage() {
       icon: CheckCircleIcon,
       color: 'text-green-600',
       bgColor: 'bg-green-100',
-      description: currentUser?.role === 'requester' ? 'View my fully approved requests' : 'View requests you have approved',
+      description: permissions?.canCreate && !permissions?.isSystemAdmin ? 'View my fully approved requests' : 'View requests you have approved',
     },
     {
       name: 'Rejected',
@@ -176,12 +182,12 @@ export default function DashboardPage() {
       icon: ExclamationTriangleIcon,
       color: 'text-red-600',
       bgColor: 'bg-red-100',
-      description: currentUser?.role === 'requester' ? 'View my rejected requests' : 'View requests you approved but were later rejected',
+      description: permissions?.canCreate && !permissions?.isSystemAdmin ? 'View my rejected requests' : 'View requests you approved but were later rejected',
     },
   ];
 
   // Add "In Progress" card for non-requesters
-  const statsCards = currentUser?.role === 'requester'
+  const statsCards = permissions?.canCreate && !permissions?.isSystemAdmin
     ? baseStatsCards
     : [
       ...baseStatsCards.slice(0, 2), // Total and Pending
@@ -332,7 +338,7 @@ export default function DashboardPage() {
                             : request.status.replace('_', ' ').toUpperCase())
                           : 'UNKNOWN'}
                       </button>
-                      {request.pendingQuery && request.queryLevel === currentUser?.role && (
+                      {request.pendingQuery && request.queryLevel === userRoleName && (
                         <QueryIndicator size="sm" showText={false} />
                       )}
                     </div>
@@ -370,7 +376,7 @@ export default function DashboardPage() {
           <div className="mt-6 text-center">
             <button
               onClick={() => {
-                const targetPath = currentUser?.role === 'requester' ? '/dashboard/requests' : '/dashboard/approvals?status=all';
+                const targetPath = permissions?.canCreate && !permissions?.isSystemAdmin ? '/dashboard/requests' : '/dashboard/approvals?status=all';
                 router.push(targetPath);
               }}
               className="text-blue-600 hover:text-blue-800 font-medium transition-colors"

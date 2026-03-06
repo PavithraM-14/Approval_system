@@ -36,13 +36,16 @@ export async function GET() {
       .populate('history.actor', 'name email empId')
       .lean(); // Convert to plain objects
 
-    // For total requests: 
-    // - Requesters see only their own requests
-    // - Non-requesters see ALL requests that have ever been at their level (including approved ones)
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_') as UserRole;
+    const permissions = {
+      ...user.role.permissions,
+      isSystemAdmin: user.role.isSystemAdmin
+    };
+
     let totalRequests: number;
     let visibleRequests: any[];
 
-    if (user.role === UserRole.REQUESTER) {
+    if (permissions.canCreate && !permissions.isSystemAdmin) {
       // Requesters see only their own requests
       visibleRequests = allRequests.filter(req =>
         req.requester._id?.toString() === dbUser._id.toString() ||
@@ -50,25 +53,24 @@ export async function GET() {
       );
       totalRequests = visibleRequests.length;
     } else {
-      // Non-requesters: apply visibility filtering to get ALL requests at their level
+      // Non-requesters: apply visibility filtering
       visibleRequests = filterRequestsByVisibility(
         allRequests,
-        user.role as UserRole,
+        userRoleName,
         dbUser._id.toString(),
-        dbUser.college
+        dbUser.college,
+        permissions
       );
-
-      // Total requests = all requests they can see (including approved/completed ones)
       totalRequests = visibleRequests.length;
     }
 
-    // Calculate other stats based on role
+    // Calculate other stats
     let pendingRequests: number;
     let approvedRequests: number;
     let rejectedRequests: number;
     let inProgressRequests: number;
 
-    if (user.role === UserRole.REQUESTER) {
+    if (permissions.canCreate && !permissions.isSystemAdmin) {
       // For requesters, use their own requests
       pendingRequests = visibleRequests.filter(req =>
         !['approved', 'rejected'].includes(req.status)
@@ -82,7 +84,7 @@ export async function GET() {
         req.status === RequestStatus.REJECTED
       ).length;
 
-      inProgressRequests = 0; // Requesters don't have "in progress" concept
+      inProgressRequests = 0;
     } else {
       // For non-requesters, use visibility-filtered requests for all counts
       // This ensures they only see requests that have been at their level

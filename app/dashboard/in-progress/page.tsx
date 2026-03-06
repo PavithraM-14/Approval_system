@@ -42,8 +42,8 @@ export default function InProgressPage() {
         const userData = data.user || data; // Handle both wrapped and unwrapped responses
         setCurrentUser(userData);
         
-        // Redirect requesters to their requests page
-        if (userData.role === 'requester') {
+        // Redirect requesters to their requests page (Admins can access both)
+        if (userData.role.permissions.canCreate && !userData.role.isSystemAdmin) {
           router.push('/dashboard/requests');
           return;
         }
@@ -228,8 +228,8 @@ export default function InProgressPage() {
     );
   }
 
-  // Show access denied for requesters
-  if (currentUser.role === 'requester') {
+  // Show access denied for requesters (Admins can bypass)
+  if (currentUser.role.permissions.canCreate && !currentUser.role.isSystemAdmin) {
     return (
       <div className="max-w-4xl mx-auto p-4 sm:p-6">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
@@ -262,7 +262,7 @@ export default function InProgressPage() {
           </p>
           {currentUser && (
             <p className="text-xs sm:text-sm text-gray-500 mt-1">
-              Role: <span className="font-medium">{currentUser.role?.replace('_', ' ').toUpperCase()}</span>
+              Role: <span className="font-medium">{currentUser.role.name.toUpperCase()}</span>
             </p>
           )}
         </div>
