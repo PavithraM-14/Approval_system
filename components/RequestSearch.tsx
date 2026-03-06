@@ -228,7 +228,7 @@ export default function RequestSearch({
               placeholder="0"
               value={filters.minAmount}
               onChange={(e) => handleInputChange('minAmount', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
           </div>
 
@@ -240,7 +240,7 @@ export default function RequestSearch({
               placeholder="No limit"
               value={filters.maxAmount}
               onChange={(e) => handleInputChange('maxAmount', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
           </div>
         </div>
@@ -252,7 +252,7 @@ export default function RequestSearch({
           <span className="text-sm text-gray-600">Active filters:</span>
           {filters.query && (
             <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">
-              Search: "{filters.query}"
+              Search: &quot;{filters.query}&quot;
             </span>
           )}
           {filters.status && (

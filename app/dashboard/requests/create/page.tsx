@@ -12,6 +12,7 @@ import InstitutionSelect from '../../../../components/InstitutionSelect';
 import NestedSelect from '../../../../components/NestedSelect';
 import { Controller } from 'react-hook-form';
 import { DENTAL_DEPARTMENTS, ENGINEERING_DEPARTMENTS, FSH_DEPARTMENTS, EEC_DEPARTMENTS, MANAGEMENT_DEPARTMENTS } from '../../../../lib/constants';
+import GmailImportModal from '../../../../components/GmailImportModal';
 
 type CreateRequestFormData = z.infer<typeof CreateRequestSchema>;
 
@@ -42,6 +43,7 @@ export default function CreateRequestPage() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [showGmailImport, setShowGmailImport] = useState(false);
 
   const {
     register,
@@ -61,6 +63,8 @@ export default function CreateRequestPage() {
       attachments: [],
       costEstimate: undefined,
       expenseCategory: undefined,
+      requestType: 'one-time',
+      renewalPeriodUnit: 'months',
       college: '',
       department: '',
     }
@@ -68,6 +72,7 @@ export default function CreateRequestPage() {
 
   const costEstimate = watch('costEstimate');
   const college = watch('college');
+  const requestType = watch('requestType');
 
   // Use any because the constants have different structures (strings vs objects)
   // NestedSelect handles normalization internally
@@ -221,9 +226,32 @@ export default function CreateRequestPage() {
     const files = e.target.files;
     if (!files?.length) return;
 
-    const validFiles = Array.from(files).filter(f => f.type === 'application/pdf');
+    // Define allowed file types
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword', // .doc
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+      'application/vnd.ms-excel', // .xls
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+      'application/vnd.ms-powerpoint', // .ppt
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'text/plain',
+      'text/csv',
+    ];
+
+    const validFiles = Array.from(files).filter(f => allowedTypes.includes(f.type));
+    
     if (validFiles.length !== files.length) {
-      setError('Only PDF documents are allowed.');
+      setError('Some files were not uploaded. Only PDF, Word, Excel, PowerPoint, images, and text files are allowed.');
+      // Continue with valid files
+    }
+
+    if (validFiles.length === 0) {
+      setError('No valid files selected. Please upload PDF, Word, Excel, PowerPoint, images, or text files.');
       return;
     }
 
@@ -323,7 +351,7 @@ export default function CreateRequestPage() {
             <label className={`text-sm font-medium ${errors.title ? 'text-red-600' : 'text-gray-700'}`}>Title<span className="text-red-600">*</span></label>
             <input
               {...register('title')}
-              placeholder="Enter request title (min 5 characters)"
+              placeholder="e.g., Lab Equipment Purchase, Software License Renewal"
               onBlur={(e) => {
                 if (e.target.value.trim().length > 0 && e.target.value.trim().length < 5) {
                   setFieldError('title', { type: 'manual', message: 'Title must be at least 5 characters' });
@@ -342,7 +370,7 @@ export default function CreateRequestPage() {
             <textarea
               rows={3}
               {...register('purpose')}
-              placeholder="Explain the purpose of this request (min 10 characters)"
+              placeholder="Explain why this is needed and how it will be used..."
               onBlur={(e) => {
                 if (e.target.value.trim().length > 0 && e.target.value.trim().length < 10) {
                   setFieldError('purpose', { type: 'manual', message: 'Purpose must be at least 10 characters' });
@@ -406,37 +434,106 @@ export default function CreateRequestPage() {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-gray-700">Type of Approval</label>
-            <input {...register('expenseCategory')} placeholder="e.g. Travel, Equipment, Consumables" className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500" />
+            <label className="text-sm font-medium text-gray-700">Request Type</label>
+            <select
+              {...register('requestType')}
+              className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="one-time">One-Time</option>
+              <option value="renewal">Renewal (Auto-renews)</option>
+            </select>
+          </div>
+
+          {/* Conditional Renewal Fields */}
+          {requestType === 'renewal' && (
+            <div className="sm:col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-2 mb-3">
+                <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-blue-900">Auto-Renewal</h3>
+                  <p className="text-xs text-blue-700 mt-1">
+                    New request created automatically after specified period
+                  </p>
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-gray-700">Renewal Period <span className="text-red-600">*</span></label>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    type="number"
+                    min="1"
+                    {...register('renewalPeriod', { valueAsNumber: true })}
+                    placeholder="e.g., 12"
+                    className="flex-1 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <select
+                    {...register('renewalPeriodUnit')}
+                    className="border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="days">Days</option>
+                    <option value="months">Months</option>
+                    <option value="years">Years</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="text-sm font-medium text-gray-700">Expense Category</label>
+            <input 
+              {...register('expenseCategory')} 
+              placeholder="e.g., Travel, Equipment, Software, Consumables" 
+              className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500" 
+            />
           </div>
 
           <div className="sm:col-span-2">
-            <label className="text-sm font-medium text-gray-700">SOP Reference</label>
-            <input {...register('sopReference')} className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500" />
+            <label className="text-sm font-medium text-gray-700">SOP Reference (Optional)</label>
+            <input 
+              {...register('sopReference')} 
+              placeholder="e.g., SOP-2024-001"
+              className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500" 
+            />
           </div>
         </div>
 
         {/* DOCUMENTS */}
         <div>
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center mb-2">
             <label className={`text-sm font-medium ${errors.attachments ? 'text-red-600' : 'text-gray-700'}`}>
-              Document Attachments <span className="text-red-600">*</span>
+              Documents <span className="text-red-600">*</span>
             </label>
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="application/pdf"
-              multiple
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="text-blue-600 text-sm hover:underline font-medium"
-            >
-              + Add Document
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowGmailImport(true)}
+                className="text-green-600 text-sm hover:underline font-medium flex items-center gap-1"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                </svg>
+                Import from Gmail
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt,.csv"
+                multiple
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-blue-600 text-sm hover:underline font-medium"
+              >
+                + Add Files
+              </button>
+            </div>
           </div>
 
           {errors.attachments && (
@@ -447,22 +544,22 @@ export default function CreateRequestPage() {
 
           <ul className={`border rounded divide-y mt-2 ${errors.attachments ? 'border-red-600' : 'border-gray-200'}`}>
             {uploadedFiles.map((f, i) => (
-              <li key={i} className="flex justify-between p-2 bg-white">
+              <li key={i} className="flex justify-between items-center p-2 bg-white hover:bg-gray-50">
                 <span className="truncate text-sm">{f.filename}</span>
                 <button
                   type="button"
                   onClick={() => handleRemoveFile(i)}
-                  className="text-red-500 text-sm hover:text-red-700"
+                  className="text-red-500 text-sm hover:text-red-700 ml-2"
                 >
                   Remove
                 </button>
               </li>
             ))}
             {uploadedFiles.length === 0 && !errors.attachments && (
-              <li className="p-4 text-center text-sm text-gray-400 italic">No documents uploaded</li>
+              <li className="p-4 text-center text-sm text-gray-400">No documents uploaded</li>
             )}
             {uploadedFiles.length === 0 && errors.attachments && (
-              <li className="p-4 text-center text-sm text-red-500 italic bg-red-50">Please upload at least one PDF</li>
+              <li className="p-4 text-center text-sm text-red-500 bg-red-50">At least one document required</li>
             )}
           </ul>
         </div>
@@ -485,6 +582,27 @@ export default function CreateRequestPage() {
         </div>
 
       </form>
+
+      {/* Gmail Import Modal */}
+      <GmailImportModal
+        isOpen={showGmailImport}
+        onClose={() => setShowGmailImport(false)}
+        onImportComplete={(importedDocs) => {
+          // Add imported documents to uploaded files
+          if (importedDocs && importedDocs.length > 0) {
+            const newFiles = importedDocs.map((doc: any) => ({
+              url: doc.filePath || doc.url,
+              filename: doc.filename || doc.fileName,
+              size: doc.size || 0
+            }));
+            setUploadedFiles(prev => {
+              const updated = [...prev, ...newFiles];
+              setValue('attachments', updated.map(f => f.url), { shouldValidate: true });
+              return updated;
+            });
+          }
+        }}
+      />
     </div>
   );
 }

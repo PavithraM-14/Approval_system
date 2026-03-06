@@ -47,6 +47,12 @@ const requestSchema = new mongoose.Schema(
     department: { type: String, required: true },
     costEstimate: { type: Number, default: 0 },
     expenseCategory: { type: String, default: '' },
+    requestType: { type: String, enum: ['one-time', 'renewal'], default: 'one-time' },
+    renewalPeriod: { type: Number }, // Number of days/months/years for renewal
+    renewalPeriodUnit: { type: String, enum: ['days', 'months', 'years'] },
+    renewalDate: { type: Date }, // Date when renewal should be triggered
+    parentRequestId: { type: String }, // ID of the original request (for tracking renewal chain)
+    isRenewalGenerated: { type: Boolean, default: false }, // Flag to track if renewal was auto-generated
     sopReference: { type: String },
     attachments: [{ type: String, required: true, validate: [(v: string[]) => v.length > 0, 'At least one document is required'],}],
 
@@ -68,6 +74,24 @@ const requestSchema = new mongoose.Schema(
     },
     pendingQuery: { type: Boolean, default: false }, // Flag to indicate request is pending query
     queryLevel: { type: String }, // The level that needs to provide query
+    lastReminderSent: { type: Date }, // Track when the last reminder email was sent
+    
+    // Retention and compliance fields
+    archived: { type: Boolean, default: false },
+    archivedAt: { type: Date },
+    deleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
+    retentionDate: { type: Date }, // Date when retention policy will be applied
+    
+    // Integration links
+    integrationLinks: [{
+      type: { type: String, enum: ['odoo_po', 'odoo_invoice', 'crm_contact', 'hrm_employee'] },
+      externalId: { type: String },
+      externalUrl: { type: String },
+      linkedAt: { type: Date, default: Date.now },
+      linkedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    }],
+    
     history: [approvalHistorySchema],
   },
   {

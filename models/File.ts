@@ -30,6 +30,20 @@ const fileSchema = new mongoose.Schema(
     isQuery: {
       type: Boolean,
       default: false
+    },
+    // Google Workspace integration fields
+    googleFileId: {
+      type: String,
+      default: null
+    },
+    googleFileType: {
+      type: String,
+      enum: ['document', 'spreadsheet', 'presentation', null],
+      default: null
+    },
+    googleWebViewLink: {
+      type: String,
+      default: null
     }
   },
   {

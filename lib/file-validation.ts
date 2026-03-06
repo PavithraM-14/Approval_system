@@ -1,23 +1,27 @@
 // File validation utilities for upload security
 
-export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-export const MAX_FILES_PER_UPLOAD = 5;
+export const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+export const MAX_FILES_PER_UPLOAD = 10;
 
 // General file uploads (for regular attachments)
 export const ALLOWED_MIME_TYPES = [
   'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/msword', // .doc
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/vnd.ms-excel', // .xls
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-powerpoint', // .ppt
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
   'image/jpeg',
+  'image/jpg',
   'image/png',
   'image/gif',
-  'text/plain'
+  'text/plain',
+  'text/csv'
 ];
 
 export const ALLOWED_EXTENSIONS = [
-  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'gif', 'txt'
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'gif', 'txt', 'csv'
 ];
 
 // Clarification uploads - PDF only
@@ -43,35 +47,32 @@ export function validateFile(file: File, isQuery: boolean = false): FileValidati
   if (file.size > MAX_FILE_SIZE) {
     return {
       isValid: false,
-      error: `File "${file.name}" exceeds the 10MB size limit`
+      error: `File "${file.name}" exceeds the 100MB size limit`
     };
   }
 
-  // Check MIME type
-  if (!allowedMimeTypes.includes(file.type)) {
-    const fileTypeMessage = isQuery 
-      ? `Only PDF files are allowed for query uploads. "${file.name}" is ${file.type}`
-      : `File type "${file.type}" is not allowed for "${file.name}"`;
-    return {
-      isValid: false,
-      error: fileTypeMessage
-    };
-  }
-
-  // Check file extension
+  // Check file extension first (more reliable than MIME type)
   const extension = file.name.split('.').pop()?.toLowerCase();
   if (!extension || !allowedExtensions.includes(extension)) {
     const extensionMessage = isQuery
       ? `Only PDF files are allowed for query uploads. "${file.name}" has extension "${extension}"`
-      : `File extension "${extension}" is not allowed for "${file.name}"`;
+      : `File extension "${extension}" is not allowed for "${file.name}". Allowed: ${allowedExtensions.join(', ')}`;
     return {
       isValid: false,
       error: extensionMessage
     };
   }
 
+  // Check MIME type (if provided by browser)
+  // Some browsers don't provide MIME type or provide generic ones, so we're lenient here
+  if (file.type && !allowedMimeTypes.includes(file.type)) {
+    // Only warn if extension is valid (extension takes precedence)
+    console.warn(`File "${file.name}" has unexpected MIME type: ${file.type}, but extension is valid`);
+  }
+
   // Check for potentially dangerous filenames
-  if (file.name.includes('..') || file.name.includes('/') || file.name.includes('\\')) {
+  // Only reject if .. is used for path traversal (with slashes)
+  if (file.name.includes('../') || file.name.includes('..\\') || file.name.includes('/') || file.name.includes('\\')) {
     return {
       isValid: false,
       error: `Invalid filename: "${file.name}"`

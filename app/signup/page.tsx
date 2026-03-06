@@ -184,7 +184,12 @@ export default function SignupPage() {
       const data = await response.json();
 
       if (response.ok) {
-        router.push('/login?message=Account created successfully! Please login.');
+        // If Google auth is required, redirect to Google OAuth
+        if (data.requiresGoogleAuth && data.googleAuthUrl) {
+          window.location.href = data.googleAuthUrl;
+        } else {
+          router.push('/login?message=Account created successfully! Please login.');
+        }
       } else {
         throw new Error(data.error || 'Verification failed');
       }
@@ -240,7 +245,7 @@ export default function SignupPage() {
         <div className="absolute bottom-[10%] left-[10%] w-[30%] h-[30%] bg-purple-600/10 rounded-full blur-[100px]"></div>
       </div>
 
-      <div className="max-w-xl w-full space-y-8 animate-fadeIn relative z-10">
+      <div className="max-w-md w-full space-y-8 animate-fadeIn relative z-10">
         <div className="flex flex-col items-center text-center">
 
           <h2 className="text-4xl font-extrabold text-white tracking-tight">

@@ -3,7 +3,7 @@ import connectDB from '../../../lib/mongodb';
 import Request from '../../../models/Request';
 import User from '../../../models/User';
 import AuditLog from '../../../models/AuditLog';
-import { getCurrentUser, validateUserAction } from '../../../lib/auth';
+import { getCurrentUser } from '../../../lib/auth';
 import { CreateRequestSchema } from '../../../lib/types';
 import { RequestStatus, ActionType, UserRole } from '../../../lib/types';
 import { filterRequestsByVisibility } from '../../../lib/request-visibility';
@@ -189,7 +189,30 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser();
 
     if (!user || !user.role.permissions.canCreate) {
-      return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requests' }, { status: 403 });
+      // Log security violation attempt
+      console.warn(`Unauthorized request creation attempt by user ${user?.email || 'unknown'} with role ${user?.role?.name || 'unknown'}`);
+
+      // Log to audit trail if user exists
+      if (user) {
+        await AuditLog.create({
+          action: 'unauthorized_request_creation_attempt',
+          userId: user.id,
+          targetType: 'user',
+          targetId: user.id,
+          details: {
+            userRole: user.role.name,
+            userEmail: user.email,
+            reason: 'User does not have canCreate permission',
+            timestamp: new Date(),
+            ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+          },
+        });
+      }
+
+      const statusCode = user ? 403 : 401;
+      const errorMessage = user ? 'Forbidden: You do not have permission to create requests' : 'Unauthorized: Authentication required';
+
+      return NextResponse.json({ error: errorMessage }, { status: statusCode });
     }
 
     const body = await request.json();
@@ -229,9 +252,10 @@ export async function POST(request: NextRequest) {
 
     // Log audit
     await AuditLog.create({
-      requestId: newRequest._id,
+      action: 'request_create',
       userId: requesterUser._id,
-      action: 'create_request',
+      targetType: 'request',
+      targetId: newRequest._id,
       details: { requestData: validatedData },
     });
 

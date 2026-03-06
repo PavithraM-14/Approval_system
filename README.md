@@ -270,6 +270,7 @@ This repository includes `render.yaml` for one-click Blueprint deployment.
 
 ### Ready-to-Implement Features
 - **NextAuth Integration** - Replace dev auth with production-ready auth
+- **Approval Reminder Script** - periodic job to email users about stale pending approvals
 - **Email Notifications** - MailerSend API integration for email alerts
 - **File Uploads** - Complete file attachment system  
 - **PDF Generation** - Server-side PDF export

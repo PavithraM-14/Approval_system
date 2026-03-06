@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ApprovalModal from '../../../../components/ApprovalModal';
 import QueryModal from '../../../../components/QueryModal';
 import QueryIndicator from '../../../../components/QueryIndicator';
@@ -9,6 +9,8 @@ import DeanQueryModal from '../../../../components/DeanQueryModal';
 import ApprovalHistory from '../../../../components/ApprovalHistory';
 import ApprovalWorkflow from '../../../../components/ApprovalWorkflow';
 import AttachmentList from '../../../../components/AttachmentList';
+import SendRequestAttachmentsButton from '../../../../components/SendRequestAttachmentsButton';
+import IntegrationLinks from '../../../../components/IntegrationLinks';
 import { RequestStatus, ActionType, UserRole } from '../../../../lib/types';
 import { approvalEngine } from '../../../../lib/approval-engine';
 import { queryEngine } from '../../../../lib/query-engine';
@@ -175,10 +177,12 @@ interface Request {
 
 export default function RequestDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [request, setRequest] = useState<Request | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [initialApprovalAction, setInitialApprovalAction] = useState<'approve' | 'reject' | null>(null);
   const [isQueryModalOpen, setIsQueryModalOpen] = useState(false);
   const [isDeanQueryModalOpen, setIsDeanQueryModalOpen] = useState(false);
   const [isDirectQueryModalOpen, setIsDirectQueryModalOpen] = useState(false);
@@ -188,6 +192,47 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
 
   const activeUserRoleName = currentUser?.role?.name.toLowerCase().replace(/ /g, '_') || '';
   const permissions = currentUser?.role?.permissions;
+
+  // Helper function to generate external URLs
+  const getExternalUrl = (type: string, id: string): string => {
+    switch (type) {
+      case 'odoo_po':
+        return `${process.env.NEXT_PUBLIC_ODOO_URL || 'http://localhost:8069'}/web#id=${id}&model=purchase.order`;
+      case 'odoo_invoice':
+        return `${process.env.NEXT_PUBLIC_ODOO_URL || 'http://localhost:8069'}/web#id=${id}&model=account.move`;
+      case 'crm_contact':
+        return `${process.env.NEXT_PUBLIC_SUITECRM_URL || 'http://localhost:8080'}/index.php?module=Contacts&action=DetailView&record=${id}`;
+      case 'hrm_employee':
+        return `${process.env.NEXT_PUBLIC_ORANGEHRM_URL || 'http://localhost:8081'}/index.php/pim/viewEmployee/empNumber/${id}`;
+      default:
+        return '';
+    }
+  };
+
+  // Handle linking to external systems
+  const handleLinkToExternal = async (type: string, externalId: string) => {
+    try {
+      const response = await fetch(`/api/requests/${params.id}/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          externalId,
+          externalUrl: getExternalUrl(type, externalId)
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to link');
+      }
+
+      alert('Successfully linked to external system!');
+      await fetchRequest();
+    } catch (error) {
+      console.error('Link error:', error);
+      alert('Failed to link to external system');
+    }
+  };
 
   const fetchCurrentUser = useCallback(async () => {
     try {
@@ -260,6 +305,25 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
 
     initializeData();
   }, [params.id, fetchCurrentUser, fetchRequest]);
+
+  // open approval modal automatically when the email link includes ?action=
+  // automatically open the approval modal when coming from an email link
+  // but only if the logged-in user is actually allowed to approve/reject
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (!action || !request || !currentUser) return;
+
+    if (action === 'approve' || action === 'reject') {
+      // requester should never see the approval UI even if query param exists
+      if (currentUser.role === 'requester') return;
+
+      const requiredApprovers = approvalEngine.getRequiredApprover(request.status);
+      if (!requiredApprovers.includes(currentUser.role as UserRole)) return;
+
+      setInitialApprovalAction(action as 'approve' | 'reject');
+      setIsApprovalModalOpen(true);
+    }
+  }, [searchParams, request, currentUser]);
 
   const handleForward = async (notes: string, attachments: string[]) => {
     try {
@@ -903,7 +967,24 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             />
           )}
 
-          
+          {/* Integration Links and Send Email Button */}
+          <div className="mt-4 sm:mt-6">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <IntegrationLinks 
+                requestId={params.id}
+                onLink={handleLinkToExternal}
+              />
+              
+              {/* Send Request Attachments via Gmail */}
+              {request.attachments?.length > 0 && (
+                <SendRequestAttachmentsButton
+                  requestId={request._id}
+                  requestTitle={request.title}
+                  attachments={request.attachments}
+                />
+              )}
+            </div>
+          </div>
 
           {/* Query Response Attachments (latest) */}
           {(() => {
@@ -1153,6 +1234,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
           budgetAvailable: request.budgetAvailable
         }}
         user={currentUser}
+        initialAction={initialApprovalAction || undefined}
         onApprove={handleApprove}
         onReject={handleReject}
         onRejectWithClarification={handleRejectWithClarification}

@@ -61,10 +61,15 @@ export async function POST(request: NextRequest) {
     // Return success response (without password)
     const { password: _, ...userWithoutPassword } = user.toObject();
     
+    // Generate Google OAuth URL for automatic connection
+    const googleAuthUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/auth/google-connect?userId=${user._id}`;
+    
     return NextResponse.json({ 
       success: true, 
       user: userWithoutPassword,
-      message: 'User created successfully'
+      message: 'User created successfully',
+      googleAuthUrl, // Frontend should redirect to this URL
+      requiresGoogleAuth: true
     });
   } catch (error: any) {
     console.error('Signup error:', error);

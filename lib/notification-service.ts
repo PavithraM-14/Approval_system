@@ -1,9 +1,10 @@
 import Notification from '../models/Notification';
 import User from '../models/User';
 import Request from '../models/Request';
+import { RequestStatus } from './types';
 import nodemailer from 'nodemailer';
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'SRM Approval System';
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Approval System';
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
 // Email transporter setup
@@ -13,7 +14,8 @@ const createEmailTransporter = () => {
     return null;
   }
 
-  return nodemailer.createTransporter({
+  // nodemailer uses `createTransport`, not createTransporter
+  return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port: Number(process.env.EMAIL_PORT || 587),
     secure: process.env.EMAIL_SECURE === 'true',
@@ -210,6 +212,124 @@ function generateEmailTemplate(
 }
 
 /**
+ * Generate an email template containing two action buttons (e.g. approve/reject).
+ */
+function generateEmailWithTwoActions(
+  title: string,
+  message: string,
+  action1Url: string,
+  action1Text: string,
+  action1Color: string,
+  action2Url: string,
+  action2Text: string,
+  action2Color: string
+) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { 
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          line-height: 1.6; 
+          color: #333;
+          margin: 0;
+          padding: 0;
+          background-color: #f5f5f5;
+        }
+        .container { 
+          max-width: 600px; 
+          margin: 40px auto; 
+          background-color: #ffffff;
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header { 
+          background: linear-gradient(135deg, ${action1Color} 0%, ${action1Color}dd 100%);
+          color: white; 
+          padding: 30px 20px; 
+          text-align: center;
+        }
+        .header h1 {
+          margin: 0;
+          font-size: 24px;
+          font-weight: 600;
+        }
+        .content { 
+          padding: 40px 30px;
+        }
+        .content p {
+          margin: 0 0 15px 0;
+          color: #4b5563;
+        }
+        .message-box {
+          background-color: #f9fafb;
+          border-left: 4px solid ${action1Color};
+          padding: 16px;
+          margin: 20px 0;
+          border-radius: 4px;
+        }
+        .actions {
+          text-align: center;
+          margin: 20px 0;
+        }
+        .action-button {
+          display: inline-block;
+          padding: 12px 24px;
+          color: white;
+          text-decoration: none;
+          border-radius: 6px;
+          font-weight: 600;
+          margin: 0 8px;
+        }
+        .button1 { background-color: ${action1Color}; }
+        .button2 { background-color: ${action2Color}; }
+        .footer { 
+          text-align: center; 
+          padding: 20px 30px;
+          background-color: #f9fafb;
+          border-top: 1px solid #e5e7eb;
+        }
+        .footer p {
+          margin: 5px 0;
+          font-size: 12px; 
+          color: #6b7280;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>${title}</h1>
+        </div>
+        <div class="content">
+          <div class="message-box">
+            <p>${message}</p>
+          </div>
+          <div class="actions">
+            <a href="${action1Url}" class="action-button button1">${action1Text}</a>
+            <a href="${action2Url}" class="action-button button2">${action2Text}</a>
+          </div>
+          <p style="font-size: 12px; color: #6b7280;">
+            Or copy links:
+            <br/>
+            <a href="${action1Url}">${action1Text}</a> | <a href="${action2Url}">${action2Text}</a>
+          </p>
+        </div>
+        <div class="footer">
+          <p>This is an automated notification from ${APP_NAME}.</p>
+          <p>&copy; ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
  * Notify user about pending approval
  */
 export async function notifyApprovalPending(
@@ -242,16 +362,23 @@ export async function notifyApprovalPending(
       },
     });
 
-    // Send email notification
-    const actionUrl = `${BASE_URL}/dashboard/requests/${requestId}`;
-    const html = generateEmailTemplate(
+    // Send email notification with direct action buttons
+    const viewUrl = `${BASE_URL}/dashboard/requests/${requestId}`;
+    const approveUrl = `${viewUrl}?action=approve`;
+    const rejectUrl = `${viewUrl}?action=reject`;
+
+    const html = generateEmailWithTwoActions(
       title,
       message,
-      actionUrl,
-      'Review Request',
-      '#2563eb'
+      approveUrl,
+      'Approve',
+      '#10b981', // green
+      rejectUrl,
+      'Reject',
+      '#ef4444'  // red
     );
-    const text = `${title}\n\n${message}\n\nView request: ${actionUrl}`;
+
+    const text = `${title}\n\n${message}\n\nApprove: ${approveUrl}\nReject: ${rejectUrl}\n\nView request: ${viewUrl}`;
 
     await sendEmailNotification(user.email, user.name, title, html, text);
   } catch (error) {
@@ -400,6 +527,48 @@ export async function notifyQueryReceived(
 /**
  * Notify when request is completed
  */
+export async function notifyApprovalReminder(
+  approverId: string,
+  requestId: string,
+  requestTitle: string,
+  daysPending: number
+) {
+  try {
+    const user = await User.findById(approverId);
+    if (!user) return;
+
+    const title = 'Reminder: Approval Pending';
+    const message = `You have had "${requestTitle}" in your queue for ${daysPending} day${daysPending !== 1 ? 's' : ''}. Please review it when you get a moment.`;
+
+    // create an in-app reminder as well
+    await createNotification({
+      userId: approverId,
+      requestId,
+      type: 'approval_pending',
+      title,
+      message,
+      metadata: {
+        requestTitle,
+      },
+    });
+
+    const actionUrl = `${BASE_URL}/dashboard/requests/${requestId}`;
+    const html = generateEmailTemplate(
+      title,
+      message,
+      actionUrl,
+      'Review Request',
+      '#2563eb'
+    );
+    const text = `${title}\n\n${message}\n\nReview: ${actionUrl}`;
+
+    await sendEmailNotification(user.email, user.name, title, html, text);
+  } catch (error) {
+    console.error('Failed to send approval reminder:', error);
+  }
+}
+
+
 export async function notifyRequestCompleted(
   requesterId: string,
   requestId: string,
@@ -451,33 +620,145 @@ export async function getNextApprovers(requestId: string, newStatus: string): Pr
 
   const approverIds: string[] = [];
 
-  // Map status to role
+  // Map status to role.  Any status that represents the *next* approval
+  // step should be included here so the appropriate users receive an email.
+  // Most statuses correspond exactly to roles, but department_checks requires
+  // special handling (see below) and parallel_verification needs both SOP and
+  // accountant.
   const statusToRole: Record<string, string> = {
     'manager_review': 'institution_manager',
     'parallel_verification': 'sop_verifier', // Will also notify accountant
+    'sop_completed': 'accountant',           // if accountant not already notified
+    'budget_completed': 'sop_verifier',     // vice‑versa for SOP verifier
+    'institution_verified': 'institution_manager', // after parallel paths
     'vp_approval': 'vp',
     'hoi_approval': 'head_of_institution',
     'dean_review': 'dean',
-    'department_checks': 'mma', // Or other departments
+    // department_checks is dealt with dynamically below
     'chief_director_approval': 'chief_director',
     'chairman_approval': 'chairman',
   };
 
+  // handle department checks specially by looking at the most recent
+  // clarification entry which stores the target department in queryTarget
+  if (newStatus === RequestStatus.DEPARTMENT_CHECKS) {
+    const latestClarification = request.history
+      ?.filter((h: any) => h.queryTarget)
+      .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+
+    if (latestClarification && latestClarification.queryTarget) {
+      const deptRole = latestClarification.queryTarget.toLowerCase();
+      const deptUsers = await User.find({ role: deptRole, isActive: true });
+      approverIds.push(...deptUsers.map(u => u._id.toString()));
+    } else {
+      // fallback to MMA if we can't determine a target
+      const mmaUsers = await User.find({ role: 'mma', isActive: true });
+      approverIds.push(...mmaUsers.map(u => u._id.toString()));
+    }
+    return approverIds;
+  }
+
   const targetRole = statusToRole[newStatus];
-  if (!targetRole) return [];
+  if (targetRole) {
+    // Find users with the mapped role
+    const approvers = await User.find({ role: targetRole, isActive: true });
+    approverIds.push(...approvers.map(u => u._id.toString()));
+  }
 
-  // Find users with the target role
-  const approvers = await User.find({ role: targetRole, isActive: true });
-  approverIds.push(...approvers.map(u => u._id.toString()));
-
-  // Special case: parallel verification needs both SOP and Accountant
-  if (newStatus === 'parallel_verification') {
+  // Special cases
+  if (newStatus === RequestStatus.PARALLEL_VERIFICATION) {
     const accountants = await User.find({ role: 'accountant', isActive: true });
     approverIds.push(...accountants.map(u => u._id.toString()));
   }
 
   return approverIds;
+
+  return approverIds;
 }
+
+// ------------------------------------------------------------
+// Scheduled reminder logic (runs automatically whenever the module
+// is loaded in a long‑running server process, e.g. during development
+// or on a persistent deployment). It uses the same threshold defined
+// in scripts/sendReminders.ts but can be controlled via env var.
+
+let reminderIntervalStarted = false;
+
+export function startReminderScheduler(intervalMs: number = 24 * 60 * 60 * 1000) {
+  if (reminderIntervalStarted) return;
+  reminderIntervalStarted = true;
+
+  const days = Number(process.env.REMINDER_DAYS || '3');
+  const thresholdMs = days * 24 * 60 * 60 * 1000;
+  const pendingStatuses = [
+    RequestStatus.MANAGER_REVIEW,
+    RequestStatus.PARALLEL_VERIFICATION,
+    RequestStatus.SOP_COMPLETED,
+    RequestStatus.BUDGET_COMPLETED,
+    RequestStatus.INSTITUTION_VERIFIED,
+    RequestStatus.VP_APPROVAL,
+    RequestStatus.HOI_APPROVAL,
+    RequestStatus.DEAN_REVIEW,
+    RequestStatus.DEPARTMENT_CHECKS,
+    RequestStatus.CHIEF_DIRECTOR_APPROVAL,
+    RequestStatus.CHAIRMAN_APPROVAL,
+  ];
+
+  const runCheck = async () => {
+    try {
+      const now = new Date();
+      const stale = await Request.find({ status: { $in: pendingStatuses } });
+      for (const req of stale) {
+        if (!req.history || req.history.length === 0) continue;
+        const lastEntry = req.history
+          .filter((h: any) => h.newStatus === req.status)
+          .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+        if (!lastEntry) continue;
+        const age = now.getTime() - new Date(lastEntry.timestamp).getTime();
+        if (age < thresholdMs) continue;
+
+        // Check if a reminder was already sent today
+        if (req.lastReminderSent) {
+          const lastReminderDate = new Date(req.lastReminderSent);
+          const hoursSinceLastReminder = (now.getTime() - lastReminderDate.getTime()) / (60 * 60 * 1000);
+          
+          // Only send one reminder per day (24 hours)
+          if (hoursSinceLastReminder < 24) {
+            continue;
+          }
+        }
+
+        const approvers = await getNextApprovers(req._id.toString(), req.status);
+        for (const id of approvers) {
+          await notifyApprovalReminder(
+            id,
+            req._id.toString(),
+            req.title,
+            Math.floor(age / (24 * 60 * 60 * 1000))
+          );
+        }
+
+        // Update the lastReminderSent timestamp
+        await Request.findByIdAndUpdate(req._id, {
+          lastReminderSent: now
+        });
+      }
+      console.log('[REMINDER] checked for stale approvals');
+    } catch (error) {
+      console.error('[REMINDER] error during scheduled check:', error);
+    }
+  };
+
+  // run once immediately, then on interval
+  runCheck().catch(console.error);
+  setInterval(runCheck, intervalMs);
+}
+
+// DISABLED: Auto-start scheduler on module import
+// In Next.js serverless environment, this would run on every API call
+// Use the manual script (npm run reminders) with cron/scheduler instead
+// Uncomment the line below only if running in a persistent Node.js server
+// startReminderScheduler();
 
 /**
  * Send notifications to all stakeholders when request status changes

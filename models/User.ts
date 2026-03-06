@@ -17,6 +17,19 @@ const userSchema = new mongoose.Schema({
   otp: { type: String, required: false },
   otpExpiry: { type: Date, required: false },
   isVerified: { type: Boolean, default: false },
+  
+  // Gmail integration
+  gmailAccessToken: { type: String },
+  gmailRefreshToken: { type: String },
+  gmailTokenExpiry: { type: Date },
+  gmailEnabled: { type: Boolean, default: false },
+  
+  // Google Drive integration
+  driveAccessToken: { type: String },
+  driveRefreshToken: { type: String },
+  driveTokenExpiry: { type: Date },
+  driveEnabled: { type: Boolean, default: false },
+  driveFolderId: { type: String }, // Root folder for user's documents
 }, {
   timestamps: true,
 });
