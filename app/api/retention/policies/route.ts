@@ -17,8 +17,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+    
     // Only admins can view retention policies
-    if (user.role !== UserRole.CHAIRMAN && user.role !== UserRole.CHIEF_DIRECTOR) {
+    if (!user.role.isSystemAdmin && userRoleName !== 'chairman' && userRoleName !== 'chief_director') {
       return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -46,14 +48,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const user = await getCurrentUser();
     
-    if (!session?.user) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+
     // Only chairman can create retention policies
-    if (session.user.role !== UserRole.CHAIRMAN) {
+    if (!user.role.isSystemAdmin && userRoleName !== 'chairman') {
       return NextResponse.json({ error: 'Forbidden: Only Chairman can create retention policies' }, { status: 403 });
     }
 

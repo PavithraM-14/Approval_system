@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         mimeType: fileDoc.mimeType
       });
 
-      return new Response(fileDoc.data, {
+      return new Response(fileDoc.data as any, {
         headers: {
           'Content-Type': fileDoc.mimeType,
           'Content-Disposition': `attachment; filename="${fileDoc.originalName}"`,
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
         contentType
       });
 
-      return new Response(fileBuffer, {
+      return new Response(fileBuffer as any, {
         headers: {
           'Content-Type': contentType,
           'Content-Disposition': `attachment; filename="${fileName}"`,

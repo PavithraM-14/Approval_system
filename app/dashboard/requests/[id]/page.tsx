@@ -315,7 +315,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
 
     if (action === 'approve' || action === 'reject') {
       // requester should never see the approval UI even if query param exists
-      if (currentUser.role === 'requester') return;
+      if (permissions?.canCreate && !permissions?.isSystemAdmin) return;
 
       const requiredApprovers = approvalEngine.getRequiredApprover(request.status);
       if (!requiredApprovers.includes(currentUser.role as UserRole)) return;

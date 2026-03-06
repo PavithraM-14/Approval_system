@@ -54,19 +54,24 @@ export async function GET(request: NextRequest) {
     // Build MongoDB query
     let mongoQuery: any = { status };
 
+    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+
     // Access control
-    if (user.role === 'requester') {
+    if (user.role.isSystemAdmin) {
+      // Admins see everything
+      mongoQuery = { status };
+    } else if (user.role.permissions.canCreate) {
       mongoQuery.$or = [
         { uploadedBy: user.id },
         { isPublic: true },
         { 'sharedWith.userId': user.id },
-        { 'sharedWith.role': user.role },
+        { 'sharedWith.role': userRoleName },
         { 'sharedWith.department': user.department }
       ];
     } else {
       mongoQuery.$or = [
         { isPublic: true },
-        { 'sharedWith.role': user.role },
+        { 'sharedWith.role': userRoleName },
         { 'sharedWith.department': user.department },
         { uploadedBy: user.id }
       ];

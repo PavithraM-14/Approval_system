@@ -42,6 +42,9 @@ export async function GET() {
       isSystemAdmin: user.role.isSystemAdmin
     };
 
+    let totalRequests: number;
+    let visibleRequests: any[];
+
     if (permissions.canCreate && !permissions.isSystemAdmin) {
       // Requesters see only their own requests
       visibleRequests = allRequests.filter(req =>
@@ -55,7 +58,8 @@ export async function GET() {
         allRequests,
         userRoleName,
         dbUser._id.toString(),
-        dbUser.college
+        dbUser.college,
+        permissions
       );
       totalRequests = visibleRequests.length;
     }

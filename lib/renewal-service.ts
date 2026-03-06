@@ -123,8 +123,10 @@ export async function createRenewalRequest(originalRequestId: string): Promise<a
   // Send notification to requester
   try {
     await sendEmail({
-      to: originalRequest.requester.email,
+      toEmail: originalRequest.requester.email,
+      toName: originalRequest.requester.name,
       subject: `Renewal Request Created: ${newRequest.requestId}`,
+      text: `A renewal request has been automatically created: ${newRequest.requestId}`,
       html: `
         <h2>Automatic Renewal Request Created</h2>
         <p>Dear ${originalRequest.requester.name},</p>

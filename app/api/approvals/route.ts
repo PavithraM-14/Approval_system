@@ -87,6 +87,10 @@ export async function GET(request: NextRequest) {
 
     console.log('[DEBUG] Total requests in system:', allRequests.length);
 
+    // Debug: Check if there are any MANAGER_REVIEW requests
+    const managerReviewRequests = allRequests.filter(r => r.status === RequestStatus.MANAGER_REVIEW);
+    console.log('[DEBUG] Total MANAGER_REVIEW requests in system:', managerReviewRequests.length);
+
     // Determine visibility mode based on status filter
     let visibleRequests: any[] = [];
 
@@ -163,7 +167,7 @@ export async function GET(request: NextRequest) {
     if (managerReviewRequests.length > 0 && !statusFilter) {
       console.log('[DEBUG] MANAGER_REVIEW requests visibility analysis:');
       managerReviewRequests.forEach(req => {
-        const visibility = analyzeRequestVisibility(req, user.role as UserRole, dbUser._id.toString(), dbUser.college);
+        const visibility = analyzeRequestVisibility(req, userRoleName, dbUser._id.toString(), dbUser.college, permissions);
 
         // Check if this is a post-parallel-verification scenario
         const hasParallelVerificationHistory = req.history?.some((h: any) =>

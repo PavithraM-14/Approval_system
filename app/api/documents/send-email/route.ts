@@ -63,15 +63,18 @@ export async function POST(request: NextRequest) {
       }
 
       // Check if user has access to document
+      const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
       const hasAccess = 
+        user.role.isSystemAdmin ||
         document.uploadedBy.toString() === user.id ||
         document.isPublic ||
         document.sharedWith.some((share: any) => 
           share.userId?.toString() === user.id ||
+          share.role === userRoleName ||
           share.department === user.department
         );
 
-      if (!hasAccess && user.role === 'requester') {
+      if (!hasAccess && user.role.permissions.canCreate) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
 

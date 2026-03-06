@@ -70,7 +70,7 @@ function getSmtpErrorDetails(error: unknown): {
   };
 }
 
-async function sendEmail(options: {
+export async function sendEmail(options: {
   toEmail: string;
   toName: string;
   subject: string;
