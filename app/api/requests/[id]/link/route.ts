@@ -25,7 +25,8 @@ export async function POST(
       );
     }
 
-    const req = await Request.findOne({ requestId: params.id });
+    // Try to find by _id first, then by requestId
+    const req = await Request.findById(params.id) || await Request.findOne({ requestId: params.id });
     if (!req) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 });
     }
@@ -70,12 +71,14 @@ export async function GET(
 
     await connectDB();
 
-    const req = await Request.findOne({ requestId: params.id })
-      .populate('integrationLinks.linkedBy', 'name email');
-
+    // Try to find by _id first, then by requestId
+    const req = await Request.findById(params.id) || await Request.findOne({ requestId: params.id });
     if (!req) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 });
     }
+
+    // Populate the linkedBy user
+    await req.populate('integrationLinks.linkedBy', 'name email');
 
     return NextResponse.json({ 
       success: true, 

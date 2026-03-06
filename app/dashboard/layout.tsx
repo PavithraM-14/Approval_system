@@ -10,7 +10,9 @@ import {
   ClockIcon,
   FolderIcon,
   ArrowRightStartOnRectangleIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  ChartBarIcon,
+  LinkIcon
 } from '@heroicons/react/24/outline';
 import { UserRole } from '../../lib/types';
 import { AuthUser } from '../../lib/auth';
@@ -31,16 +33,13 @@ const navigation: NavItem[] = [
   { name: 'Documents', href: '/dashboard/documents', icon: FolderIcon, roles: Object.values(UserRole) },
   {
     name: 'Pending Approvals',
-    href: '/dashboard/requests?status=pending', // Redirect requesters to their pending requests
-    icon: ClipboardDocumentListIcon,
-    roles: [UserRole.REQUESTER] // Only for requesters
-  },
-  {
-    name: 'Pending Approvals',
     href: '/dashboard/approvals',
     icon: ClipboardDocumentListIcon,
-    roles: [UserRole.INSTITUTION_MANAGER, UserRole.SOP_VERIFIER, UserRole.ACCOUNTANT, UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN] // All non-requester roles
+    roles: [UserRole.INSTITUTION_MANAGER, UserRole.SOP_VERIFIER, UserRole.ACCOUNTANT, UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN]
   },
+  { name: 'Integrations', href: '/dashboard/integrations', icon: LinkIcon, roles: [UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN, UserRole.IT] },
+  { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon, roles: [UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN] },
+  { name: 'Compliance', href: '/dashboard/compliance', icon: HomeIcon, roles: [UserRole.AUDIT, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN] },
   { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, roles: Object.values(UserRole) }
 ];
 
@@ -112,7 +111,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch('/api/auth/me', { credentials: 'include' });
       if (res.ok) {
-        setUser(await res.json());
+        const data = await res.json();
+        setUser(data.user || data); // Handle both wrapped and unwrapped responses
       } else {
         router.push('/login');
       }

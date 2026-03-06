@@ -49,7 +49,8 @@ export default function DashboardPage() {
     try {
       const response = await fetch('/api/auth/me', { credentials: 'include' });
       if (response.ok) {
-        const userData = await response.json();
+        const data = await response.json();
+        const userData = data.user || data; // Handle both wrapped and unwrapped responses
         setCurrentUser(userData);
       }
     } catch (err) {

@@ -56,7 +56,8 @@ function RequestsPageContent() {
         return;
       }
 
-      const user = await response.json();
+      const data = await response.json();
+      const user = data.user || data; // Handle both wrapped and unwrapped responses
       setCurrentUser(user);
       
       // Redirect non-requesters to approvals page

@@ -42,7 +42,8 @@ export default function QueriesPage() {
     try {
       const response = await fetch('/api/auth/me', { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to fetch user');
-      const user = await response.json();
+      const data = await response.json();
+      const user = data.user || data; // Handle both wrapped and unwrapped responses
       setCurrentUser(user);
       
       // Only allow requesters and Dean to access this page

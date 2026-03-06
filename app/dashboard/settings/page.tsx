@@ -18,7 +18,7 @@ export default function SettingsPage() {
       const response = await fetch('/api/auth/me');
       if (response.ok) {
         const data = await response.json();
-        setUser(data.user);
+        setUser(data.user || data); // Handle both wrapped and unwrapped responses
       }
     } catch (error) {
       console.error('Error fetching user data:', error);

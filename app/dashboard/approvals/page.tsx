@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import QueryIndicator from '../../../components/QueryIndicator';
@@ -39,6 +39,7 @@ function ApprovalsPageContent() {
   const [searchActive, setSearchActive] = useState(false);
   const [searchResults, setSearchResults] = useState<Request[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
   // Extract unique values for search filters
   const colleges = [...new Set(requests.map(r => r.college))];
@@ -54,27 +55,35 @@ function ApprovalsPageContent() {
     }
   }, [statusFilter]);
 
-  const fetchCurrentUser = useCallback(async () => {
-    console.log('[DEBUG] fetchCurrentUser called in approvals page');
+  const fetchCurrentUser = async () => {
+    if (hasCheckedAuth) return null;
+    
     try {
       const response = await fetch('/api/auth/me', {
         credentials: 'include'
       });
       if (response.ok) {
-        const userData = await response.json();
-        console.log('[DEBUG] Current user in approvals page:', userData);
-        setCurrentUser(userData);
+        const data = await response.json();
+        const userData = data.user || data;
+        
+        setHasCheckedAuth(true);
         
         // Redirect requesters to their pending requests page
         if (userData.role === 'requester') {
-          router.push('/dashboard/requests?status=pending');
-          return;
+          // Use replace to prevent back button issues
+          window.location.replace('/dashboard/requests');
+          return null;
         }
+        
+        setCurrentUser(userData);
+        return userData;
       }
     } catch (err) {
       console.error('Error fetching current user:', err);
     }
-  }, [router]);
+    setHasCheckedAuth(true);
+    return null;
+  };
 
   const fetchApprovals = useCallback(async (status: string = 'pending') => {
     console.log('[DEBUG] fetchApprovals called with status:', status);
@@ -110,14 +119,35 @@ function ApprovalsPageContent() {
   }, []);
 
   useEffect(() => {
-    fetchCurrentUser();
-  }, [fetchCurrentUser]);
+    if (!hasCheckedAuth) {
+      fetchCurrentUser().then(user => {
+        if (user && user.role !== 'requester') {
+          fetchApprovals(activeTab);
+        }
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
 
+  // Separate effect for tab changes
   useEffect(() => {
-    if (currentUser) {
+    if (hasCheckedAuth && currentUser && currentUser.role !== 'requester') {
       fetchApprovals(activeTab);
     }
-  }, [currentUser, activeTab, fetchApprovals]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]); // Only re-run when tab changes
+
+  // Show loading state while checking auth
+  if (!hasCheckedAuth) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -441,15 +471,5 @@ function ApprovalsPageContent() {
 }
 
 export default function ApprovalsPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      }
-    >
-      <ApprovalsPageContent />
-    </Suspense>
-  );
+  return <ApprovalsPageContent />;
 }

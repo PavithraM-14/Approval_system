@@ -644,7 +644,7 @@ export default function DocumentsPage() {
                             </button>
                             <button
                               onClick={() => {
-                                console.log('Opening version history for request attachment:', {
+                                console.log('Opening version history for document:', {
                                   id: doc._id,
                                   title: doc.title,
                                   isRequestAttachment: doc.isRequestAttachment

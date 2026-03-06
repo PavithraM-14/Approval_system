@@ -1,210 +1,217 @@
-import RetentionPolicy, { RetentionAction } from '../models/RetentionPolicy';
-import Request from '../models/Request';
-import { RequestStatus } from './types';
-import { createAuditLog } from './audit-service';
-import { AuditAction } from '../models/AuditLog';
+import connectDB from './mongodb';
+import Document from '../models/Document';
+import RetentionPolicy from '../models/RetentionPolicy';
+import AuditLog from '../models/AuditLog';
 
 /**
- * Check and apply retention policies to requests
+ * Check and apply retention policies to documents
+ * This should be run daily via cron job
  */
 export async function applyRetentionPolicies() {
-  const policies = await RetentionPolicy.find({ isActive: true });
-  const now = new Date();
-  const results = {
-    archived: 0,
-    deleted: 0,
-    notified: 0,
-    errors: 0,
-  };
-
-  for (const policy of policies) {
-    try {
-      const cutoffDate = new Date(now.getTime() - policy.retentionPeriodDays * 24 * 60 * 60 * 1000);
-      
-      // Find requests that match the policy and are older than retention period
-      const query: any = {
-        createdAt: { $lte: cutoffDate },
-        status: { $in: [RequestStatus.APPROVED, RequestStatus.REJECTED] }, // Only apply to completed requests
-      };
-
-      if (policy.category) {
-        query.expenseCategory = policy.category;
-      }
-
-      const affectedRequests = await Request.find(query);
-
-      for (const request of affectedRequests) {
-        switch (policy.action) {
-          case RetentionAction.ARCHIVE:
-            // Mark as archived (you can add an 'archived' field to Request model)
-            await Request.findByIdAndUpdate(request._id, {
-              $set: { archived: true, archivedAt: now },
-            });
-            results.archived++;
-            
-            await createAuditLog({
-              action: AuditAction.REQUEST_VIEW,
-              userId: policy.createdBy.toString(),
-              targetType: 'request',
-              targetId: request._id.toString(),
-              details: { action: 'archived', policyId: policy._id, policyName: policy.name },
-            });
-            break;
-
-          case RetentionAction.DELETE:
-            // Soft delete (mark as deleted but keep in database)
-            await Request.findByIdAndUpdate(request._id, {
-              $set: { deleted: true, deletedAt: now },
-            });
-            results.deleted++;
-            
-            await createAuditLog({
-              action: AuditAction.REQUEST_VIEW,
-              userId: policy.createdBy.toString(),
-              targetType: 'request',
-              targetId: request._id.toString(),
-              details: { action: 'deleted', policyId: policy._id, policyName: policy.name },
-            });
-            break;
-
-          case RetentionAction.NOTIFY:
-            // Send notification to relevant users
-            // This would integrate with your notification system
-            results.notified++;
-            break;
-        }
-      }
-    } catch (error) {
-      console.error(`Error applying retention policy ${policy._id}:`, error);
-      results.errors++;
-    }
-  }
-
-  return results;
-}
-
-/**
- * Check for requests approaching retention deadline
- */
-export async function checkUpcomingRetentions() {
-  const policies = await RetentionPolicy.find({ isActive: true });
-  const now = new Date();
-  const upcomingRetentions = [];
-
-  for (const policy of policies) {
-    const notifyDate = new Date(now.getTime() - (policy.retentionPeriodDays - policy.notifyBeforeDays) * 24 * 60 * 60 * 1000);
-    const cutoffDate = new Date(now.getTime() - policy.retentionPeriodDays * 24 * 60 * 60 * 1000);
-
-    const query: any = {
-      createdAt: { $gte: cutoffDate, $lte: notifyDate },
-      status: { $in: [RequestStatus.APPROVED, RequestStatus.REJECTED] },
+  try {
+    await connectDB();
+    
+    const now = new Date();
+    const results = {
+      archived: 0,
+      deleted: 0,
+      flaggedForReview: 0,
+      errors: [] as string[]
     };
 
-    if (policy.category) {
-      query.expenseCategory = policy.category;
+    // Get all active retention policies
+    const policies = await RetentionPolicy.find({ isActive: true });
+
+    for (const policy of policies) {
+      try {
+        // Calculate cutoff date based on retention period
+        const cutoffDate = new Date();
+        cutoffDate.setFullYear(cutoffDate.getFullYear() - policy.retentionPeriodYears);
+
+        // Find documents that match this policy and are past retention period
+        const expiredDocuments = await Document.find({
+          documentType: policy.documentType,
+          createdAt: { $lt: cutoffDate },
+          status: { $ne: 'deleted' }, // Don't process already deleted docs
+          retentionApplied: { $ne: true } // Don't reprocess
+        });
+
+        console.log(`[Retention] Found ${expiredDocuments.length} expired documents for policy: ${policy.name}`);
+
+        for (const doc of expiredDocuments) {
+          switch (policy.action) {
+            case 'archive':
+              // Mark as archived
+              doc.status = 'archived';
+              doc.retentionApplied = true;
+              await doc.save();
+              results.archived++;
+              
+              // Log the action
+              await AuditLog.create({
+                action: 'document_archived',
+                userId: policy.createdBy,
+                targetType: 'document',
+                targetId: doc._id,
+                details: {
+                  reason: 'Retention policy applied',
+                  policyName: policy.name,
+                  retentionPeriod: policy.retentionPeriodYears
+                }
+              });
+              break;
+
+            case 'delete':
+              // Soft delete
+              doc.status = 'deleted';
+              doc.retentionApplied = true;
+              await doc.save();
+              results.deleted++;
+              
+              await AuditLog.create({
+                action: 'document_deleted',
+                userId: policy.createdBy,
+                targetType: 'document',
+                targetId: doc._id,
+                details: {
+                  reason: 'Retention policy applied',
+                  policyName: policy.name,
+                  retentionPeriod: policy.retentionPeriodYears
+                }
+              });
+              break;
+
+            case 'review':
+              // Flag for manual review
+              doc.requiresReview = true;
+              doc.reviewReason = `Retention period of ${policy.retentionPeriodYears} years expired`;
+              await doc.save();
+              results.flaggedForReview++;
+              break;
+          }
+        }
+      } catch (error) {
+        console.error(`[Retention] Error processing policy ${policy.name}:`, error);
+        results.errors.push(`Policy ${policy.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     }
 
-    const requests = await Request.find(query)
-      .populate('requester', 'name email')
-      .lean();
-
-    if (requests.length > 0) {
-      upcomingRetentions.push({
-        policy: policy.name,
-        action: policy.action,
-        daysUntilAction: policy.notifyBeforeDays,
-        affectedRequests: requests.length,
-        requests: requests.map(r => ({
-          id: r._id,
-          title: r.title,
-          requester: r.requester,
-          createdAt: r.createdAt,
-        })),
-      });
-    }
+    console.log('[Retention] Policy application complete:', results);
+    return { success: true, results };
+  } catch (error) {
+    console.error('[Retention] Failed to apply retention policies:', error);
+    return { success: false, error };
   }
-
-  return upcomingRetentions;
 }
 
 /**
- * Create a new retention policy
+ * Get documents expiring soon (within 30 days)
  */
-export async function createRetentionPolicy(policyData: {
-  name: string;
-  description?: string;
-  documentType?: string;
-  category?: string;
-  retentionPeriodDays: number;
-  action: RetentionAction;
-  notifyBeforeDays?: number;
-  createdBy: string;
-}) {
-  const policy = await RetentionPolicy.create(policyData);
-  
-  await createAuditLog({
-    action: AuditAction.DOCUMENT_UPDATE,
-    userId: policyData.createdBy,
-    targetType: 'system',
-    details: { action: 'retention_policy_created', policyId: policy._id, policyName: policy.name },
-  });
+export async function getExpiringDocuments(daysAhead: number = 30) {
+  try {
+    await connectDB();
+    
+    const now = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + daysAhead);
 
-  return policy;
+    const policies = await RetentionPolicy.find({ isActive: true });
+    const expiringDocs = [];
+
+    for (const policy of policies) {
+      const cutoffDate = new Date();
+      cutoffDate.setFullYear(cutoffDate.getFullYear() - policy.retentionPeriodYears);
+      
+      const futureCutoff = new Date();
+      futureCutoff.setFullYear(futureCutoff.getFullYear() - policy.retentionPeriodYears);
+      futureCutoff.setDate(futureCutoff.getDate() + daysAhead);
+
+      const docs = await Document.find({
+        documentType: policy.documentType,
+        createdAt: { $gte: cutoffDate, $lt: futureCutoff },
+        status: { $nin: ['deleted', 'archived'] }
+      }).populate('uploadedBy', 'name email');
+
+      expiringDocs.push(...docs.map(doc => ({
+        ...doc.toObject(),
+        policyName: policy.name,
+        action: policy.action,
+        daysUntilExpiry: Math.ceil((futureCutoff.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      })));
+    }
+
+    return expiringDocs;
+  } catch (error) {
+    console.error('[Retention] Failed to get expiring documents:', error);
+    return [];
+  }
 }
 
 /**
- * Get all retention policies
+ * Create default retention policies
  */
-export async function getRetentionPolicies(activeOnly: boolean = false) {
-  const query = activeOnly ? { isActive: true } : {};
-  return await RetentionPolicy.find(query)
-    .populate('createdBy', 'name email')
-    .sort({ createdAt: -1 });
-}
+export async function createDefaultPolicies(adminUserId: string) {
+  try {
+    await connectDB();
 
-/**
- * Update retention policy
- */
-export async function updateRetentionPolicy(
-  policyId: string,
-  updates: Partial<{
-    name: string;
-    description: string;
-    retentionPeriodDays: number;
-    action: RetentionAction;
-    isActive: boolean;
-    notifyBeforeDays: number;
-  }>,
-  updatedBy: string
-) {
-  const policy = await RetentionPolicy.findByIdAndUpdate(
-    policyId,
-    { $set: updates },
-    { new: true }
-  );
+    const defaultPolicies = [
+      {
+        name: 'Financial Documents - 7 Years',
+        description: 'Financial records must be retained for 7 years as per tax regulations',
+        documentType: 'financial',
+        retentionPeriodYears: 7,
+        action: 'archive',
+        createdBy: adminUserId
+      },
+      {
+        name: 'HR Documents - 5 Years',
+        description: 'Employee records retained for 5 years after employment ends',
+        documentType: 'hr',
+        retentionPeriodYears: 5,
+        action: 'archive',
+        createdBy: adminUserId
+      },
+      {
+        name: 'Contracts - 10 Years',
+        description: 'Legal contracts retained for 10 years after expiration',
+        documentType: 'contract',
+        retentionPeriodYears: 10,
+        action: 'archive',
+        createdBy: adminUserId
+      },
+      {
+        name: 'Invoices - 7 Years',
+        description: 'Invoice records for tax and audit purposes',
+        documentType: 'invoice',
+        retentionPeriodYears: 7,
+        action: 'archive',
+        createdBy: adminUserId
+      },
+      {
+        name: 'General Documents - 3 Years',
+        description: 'General business documents',
+        documentType: 'general',
+        retentionPeriodYears: 3,
+        action: 'review',
+        createdBy: adminUserId
+      }
+    ];
 
-  await createAuditLog({
-    action: AuditAction.DOCUMENT_UPDATE,
-    userId: updatedBy,
-    targetType: 'system',
-    details: { action: 'retention_policy_updated', policyId, updates },
-  });
+    for (const policy of defaultPolicies) {
+      const existing = await RetentionPolicy.findOne({ 
+        documentType: policy.documentType,
+        isActive: true 
+      });
+      
+      if (!existing) {
+        await RetentionPolicy.create(policy);
+        console.log(`[Retention] Created policy: ${policy.name}`);
+      }
+    }
 
-  return policy;
-}
-
-/**
- * Delete retention policy
- */
-export async function deleteRetentionPolicy(policyId: string, deletedBy: string) {
-  await RetentionPolicy.findByIdAndDelete(policyId);
-
-  await createAuditLog({
-    action: AuditAction.DOCUMENT_DELETE,
-    userId: deletedBy,
-    targetType: 'system',
-    details: { action: 'retention_policy_deleted', policyId },
-  });
-
-  return { success: true };
+    return { success: true, created: defaultPolicies.length };
+  } catch (error) {
+    console.error('[Retention] Failed to create default policies:', error);
+    return { success: false, error };
+  }
 }

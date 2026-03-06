@@ -27,6 +27,9 @@ const createSmtpTransporter = () => {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD,
     },
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 };
 
@@ -84,6 +87,9 @@ async function sendEmail(options: {
 
   throw new Error(getEmailConfigurationError() || 'Email service is not configured');
 }
+
+// Export for use in other services
+export { sendEmail };
 
 /**
  * Generate a 6-digit OTP

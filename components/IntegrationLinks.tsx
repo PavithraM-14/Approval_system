@@ -42,6 +42,9 @@ export default function IntegrationLinks({ requestId, onLink }: IntegrationLinks
       if (ordersRes.ok) {
         const data = await ordersRes.json();
         setPurchaseOrders(data.data || []);
+        if (data.source === 'mock') {
+          console.log('📊 Using demo data for Odoo');
+        }
       }
 
       if (invoicesRes.ok) {

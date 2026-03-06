@@ -38,7 +38,8 @@ export default function InProgressPage() {
         credentials: 'include'
       });
       if (response.ok) {
-        const userData = await response.json();
+        const data = await response.json();
+        const userData = data.user || data; // Handle both wrapped and unwrapped responses
         setCurrentUser(userData);
         
         // Redirect requesters to their requests page

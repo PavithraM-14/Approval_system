@@ -101,7 +101,8 @@ export default function CreateRequestPage() {
         const res = await fetch('/api/auth/me', { credentials: 'include' });
         if (!res.ok) return router.push('/login');
 
-        const userData = await res.json();
+        const data = await res.json();
+        const userData = data.user || data; // Handle both wrapped and unwrapped responses
         if (userData.role !== UserRole.REQUESTER) {
           router.push('/dashboard');
           return;

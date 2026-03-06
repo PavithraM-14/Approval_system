@@ -1,55 +1,61 @@
 import mongoose from 'mongoose';
 
-export enum RetentionAction {
-  ARCHIVE = 'archive',
-  DELETE = 'delete',
-  NOTIFY = 'notify',
+export interface IRetentionPolicy {
+  _id: string;
+  name: string;
+  description: string;
+  documentType: string; // 'financial', 'hr', 'contract', 'general', etc.
+  retentionPeriodYears: number;
+  action: 'archive' | 'delete' | 'review'; // What to do after retention period
+  isActive: boolean;
+  createdBy: mongoose.Types.ObjectId;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-const retentionPolicySchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-    },
-    description: {
-      type: String,
-      required: false,
-    },
-    documentType: {
-      type: String,
-      required: false, // If null, applies to all documents
-    },
-    category: {
-      type: String,
-      required: false, // If null, applies to all categories
-    },
-    retentionPeriodDays: {
-      type: Number,
-      required: true,
-    },
-    action: {
-      type: String,
-      enum: Object.values(RetentionAction),
-      required: true,
-    },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-    notifyBeforeDays: {
-      type: Number,
-      default: 30, // Notify 30 days before action
-    },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
+const retentionPolicySchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true
   },
-  {
-    timestamps: true,
+  description: {
+    type: String,
+    required: true
+  },
+  documentType: {
+    type: String,
+    required: true,
+    enum: ['financial', 'hr', 'contract', 'legal', 'general', 'email', 'invoice', 'purchase_order'],
+    index: true
+  },
+  retentionPeriodYears: {
+    type: Number,
+    required: true,
+    min: 1,
+    max: 100
+  },
+  action: {
+    type: String,
+    required: true,
+    enum: ['archive', 'delete', 'review'],
+    default: 'archive'
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+    index: true
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   }
-);
+}, {
+  timestamps: true
+});
+
+// Index for efficient queries
+retentionPolicySchema.index({ documentType: 1, isActive: 1 });
 
 export default mongoose.models.RetentionPolicy || mongoose.model('RetentionPolicy', retentionPolicySchema);

@@ -151,6 +151,14 @@ interface ApprovalHistoryItem {
   originalRejector?: string;
 }
 
+interface IntegrationLink {
+  type: 'odoo_po' | 'odoo_invoice' | 'crm_contact' | 'hrm_employee';
+  externalId: string;
+  externalUrl?: string;
+  linkedAt: Date;
+  linkedBy: string;
+}
+
 interface Request {
   _id: string;
   requestId?: string;
@@ -173,6 +181,7 @@ interface Request {
   budgetSpent: number;
   budgetBalance: number;
   budgetAvailable?: boolean;
+  integrationLinks?: IntegrationLink[];
 }
 
 export default function RequestDetailPage({ params }: { params: { id: string } }) {
@@ -235,7 +244,8 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
     try {
       const response = await fetch('/api/auth/me');
       if (response.ok) {
-        const userData = await response.json();
+        const data = await response.json();
+        const userData = data.user || data; // Handle both wrapped and unwrapped responses
         setCurrentUser(userData);
         return userData;
       }
@@ -964,6 +974,47 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
               title="Attachments"
               className="mt-4 sm:mt-6"
             />
+          )}
+
+          {/* Linked External Records */}
+          {request.integrationLinks && request.integrationLinks.length > 0 && (
+            <div className="mt-4 sm:mt-6">
+              <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-3">Linked External Records</h4>
+              <div className="space-y-2">
+                {request.integrationLinks.map((link: any, index: number) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        {link.type.includes('odoo') && '🏢'}
+                        {link.type.includes('crm') && '👥'}
+                        {link.type.includes('hrm') && '📋'}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {link.type === 'odoo_po' && 'Odoo Purchase Order'}
+                          {link.type === 'odoo_invoice' && 'Odoo Invoice'}
+                          {link.type === 'crm_contact' && 'CRM Contact'}
+                          {link.type === 'hrm_employee' && 'HRM Employee'}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          ID: {link.externalId} • Linked {new Date(link.linkedAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                    {link.externalUrl && (
+                      <a
+                        href={link.externalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        View
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Integration Links and Send Email Button */}
