@@ -5,9 +5,8 @@ import { UserRole } from './lib/types';
 
 // Define protected routes and their required roles
 const protectedRoutes = {
-  '/dashboard/requests/create': [UserRole.REQUESTER],
   '/api/requests': {
-    POST: [UserRole.REQUESTER], // Only requesters can create requests
+    POST: [UserRole.REQUESTER], // Only requesters can create requests via API
     GET: Object.values(UserRole), // All authenticated users can view (filtered by role in API)
   },
 } as const;
@@ -81,7 +80,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/dashboard/requests/create',
     '/api/requests/:path*',
   ],
 };
