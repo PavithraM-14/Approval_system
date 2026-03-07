@@ -4,10 +4,10 @@ import { jwtVerify } from 'jose';
 import { UserRole } from './lib/types';
 
 // Define protected routes and their required roles
+// Note: GET requests are handled by the API routes themselves with proper permission checks
 const protectedRoutes = {
   '/api/requests': {
-    POST: [UserRole.REQUESTER], // Only requesters can create requests via API
-    GET: Object.values(UserRole), // All authenticated users can view (filtered by role in API)
+    POST: [UserRole.REQUESTER], // Only requesters can create requests via API (legacy check)
   },
 } as const;
 
@@ -36,6 +36,7 @@ export async function middleware(request: NextRequest) {
   } else if (typeof routeConfig === 'object' && method in routeConfig) {
     requiredRoles = routeConfig[method as keyof typeof routeConfig] as UserRole[];
   } else {
+    // No specific protection for this method, allow through
     return NextResponse.next();
   }
 
@@ -80,6 +81,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/api/requests/:path*',
+    '/api/requests',
   ],
 };
