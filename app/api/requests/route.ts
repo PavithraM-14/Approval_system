@@ -16,27 +16,26 @@ import { getNextApprovers, notifyApprovalPending } from '../../../lib/notificati
 function getRoleBasedFilter(userRole: UserRole, userId: any, pendingOnly: boolean = false, isForDashboard: boolean = false) {
   let filter: any = {};
 
-  switch (userRole) {
-    case UserRole.REQUESTER:
-      // Requesters can only see their own requests
-      filter.requester = userId;
-      break;
+  // Check if user has canCreate permission (replaces REQUESTER role check)
+  const hasCanCreate = userRole === UserRole.REQUESTER; // This will be replaced by permission check in the route
 
-    default:
-      // For non-requesters, be more inclusive especially for dashboard
-      if (isForDashboard) {
-        // For dashboard recent requests, show all requests to give approvers system overview
-        filter = {}; // No filter = all requests
-      } else if (pendingOnly) {
-        // For pending approvals, show all non-completed requests
-        filter.status = {
-          $nin: [RequestStatus.APPROVED, RequestStatus.REJECTED]
-        };
-      } else {
-        // For regular requests view, show all requests
-        filter = {}; // No filter = all requests
-      }
-      break;
+  if (hasCanCreate) {
+    // Users with canCreate can only see their own requests
+    filter.requester = userId;
+  } else {
+    // For approvers, show based on context
+    if (isForDashboard) {
+      // For dashboard recent requests, show all requests to give approvers system overview
+      filter = {}; // No filter = all requests
+    } else if (pendingOnly) {
+      // For pending approvals, show all non-completed requests
+      filter.status = {
+        $nin: [RequestStatus.APPROVED, RequestStatus.REJECTED]
+      };
+    } else {
+      // For regular requests view, show all requests
+      filter = {}; // No filter = all requests
+    }
   }
 
   return filter;
@@ -72,9 +71,9 @@ export async function GET(request: NextRequest) {
     // Get user's database record for proper filtering
     let dbUser = null;
     if (mongoose.Types.ObjectId.isValid(user.id)) {
-      dbUser = await User.findById(user.id);
+      dbUser = await User.findById(user.id).populate('role');
     } else {
-      dbUser = await User.findOne({ email: user.email });
+      dbUser = await User.findOne({ email: user.email }).populate('role');
     }
 
     if (!dbUser) {
@@ -87,10 +86,18 @@ export async function GET(request: NextRequest) {
       isSystemAdmin: user.role.isSystemAdmin
     };
 
-    // Get all requests and apply sophisticated visibility filtering
+    // Permission-based filtering: Users with canCreate see only their requests
+    const hasCanCreate = permissions.canCreate && !permissions.isSystemAdmin;
+    
     let baseQuery: any = {};
+    
+    if (hasCanCreate) {
+      // Users with canCreate permission can only see their own requests
+      baseQuery.requester = dbUser._id;
+    }
+    // Approvers and admins see all requests (no additional filter)
 
-    // Apply basic filters first
+    // Apply basic filters
     if (college) {
       baseQuery.college = college;
     }
@@ -103,14 +110,16 @@ export async function GET(request: NextRequest) {
 
     console.log('[DEBUG] Total requests fetched:', allRequests.length);
 
-    // Apply role-based visibility filtering
-    let visibleRequests = filterRequestsByVisibility(
-      allRequests,
-      userRoleName,
-      dbUser._id.toString(),
-      dbUser.college,
-      permissions
-    );
+    // Apply role-based visibility filtering (for approvers to see relevant requests)
+    let visibleRequests = hasCanCreate 
+      ? allRequests // Users with canCreate see their own requests (already filtered)
+      : filterRequestsByVisibility(
+          allRequests,
+          userRoleName,
+          dbUser._id.toString(),
+          dbUser.college,
+          permissions
+        );
 
     console.log('[DEBUG] Requests after visibility filtering:', visibleRequests.length);
 
@@ -122,11 +131,11 @@ export async function GET(request: NextRequest) {
         // For both requesters and approvers: use visibility category
         visibleRequests = visibleRequests.filter(req => req._visibility?.category === 'pending');
       } else if (statusFilter === 'approved') {
-        if (permissions.canCreate) {
-          // For requesters: show only requests that have been fully approved by Chairman
+        if (hasCanCreate) {
+          // For users with canCreate: show only requests that have been fully approved by Chairman
           visibleRequests = visibleRequests.filter(req => req.status === RequestStatus.APPROVED);
         } else {
-          // For non-requesters: show requests that they have approved (regardless of current status)
+          // For approvers: show requests that they have approved (regardless of current status)
           visibleRequests = visibleRequests.filter(req => req._visibility?.category === 'approved');
         }
       } else if (statusFilter === 'rejected') {

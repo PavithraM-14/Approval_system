@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
       // Admins see everything
       query = { status };
     } else if (user.role.permissions.canCreate) {
+      // Users with canCreate permission can only see their own uploads + shared docs
       query.$or = [
         { uploadedBy: user.id },
         { isPublic: true },
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
         { 'sharedWith.department': user.department }
       ];
     } else {
+      // Approvers see public documents and those shared with them
       query.$or = [
         { isPublic: true },
         { 'sharedWith.role': userRoleName },
@@ -94,6 +96,13 @@ export async function GET(request: NextRequest) {
 
       // Apply department filter to requests
       if (department) requestQuery.department = department;
+
+      // Filter request attachments based on user permissions
+      if (user.role.permissions.canCreate && !user.role.isSystemAdmin) {
+        // Users with canCreate can only see attachments from their own requests
+        requestQuery.requester = user.id;
+      }
+      // Approvers and admins see all request attachments (no additional filter)
 
       const requests = await Request.find(requestQuery)
         .populate('requester', 'name email role department')
