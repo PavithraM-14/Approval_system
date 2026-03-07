@@ -1024,10 +1024,11 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
               <IntegrationLinks 
                 requestId={params.id}
                 onLink={handleLinkToExternal}
+                canShare={currentUser?.role?.isSystemAdmin || currentUser?.role?.permissions?.canShare || false}
               />
               
               {/* Send Request Attachments via Gmail */}
-              {request.attachments?.length > 0 && (
+              {request.attachments?.length > 0 && (currentUser?.role?.isSystemAdmin || currentUser?.role?.permissions?.canShare) && (
                 <SendRequestAttachmentsButton
                   requestId={request._id}
                   requestTitle={request.title}

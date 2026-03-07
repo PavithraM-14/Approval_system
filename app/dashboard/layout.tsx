@@ -12,7 +12,8 @@ import {
   ArrowRightStartOnRectangleIcon,
   Cog6ToothIcon,
   ChartBarIcon,
-  LinkIcon
+  LinkIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
 import { UserRole } from '../../lib/types';
 import { AuthUser } from '../../lib/auth';
@@ -23,13 +24,14 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<any>;
   roles: UserRole[];
+  adminOnly?: boolean; // For items only visible to System Admins
 }
 
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: Object.values(UserRole) },
   { name: 'My Requests', href: '/dashboard/requests', icon: ClipboardDocumentListIcon, roles: [UserRole.REQUESTER] },
   { name: 'Create Request', href: '/dashboard/requests/create', icon: DocumentPlusIcon, roles: [UserRole.REQUESTER] },
-  { name: 'Queries', href: '/dashboard/queries', icon: ClockIcon, roles: [UserRole.REQUESTER, UserRole.DEAN] },
+  { name: 'Queries', href: '/dashboard/queries', icon: ClockIcon, roles: Object.values(UserRole) }, // All users can respond to queries on their own requests
   { name: 'Documents', href: '/dashboard/documents', icon: FolderIcon, roles: Object.values(UserRole) },
   {
     name: 'Pending Approvals',
@@ -40,6 +42,7 @@ const navigation: NavItem[] = [
   { name: 'Integrations', href: '/dashboard/integrations', icon: LinkIcon, roles: [UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN, UserRole.IT] },
   { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon, roles: [UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN] },
   { name: 'Compliance', href: '/dashboard/compliance', icon: HomeIcon, roles: [UserRole.AUDIT, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN] },
+  { name: 'Role Management', href: '/dashboard/roles', icon: UserGroupIcon, roles: [], adminOnly: true },
   { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, roles: Object.values(UserRole) }
 ];
 
@@ -59,15 +62,19 @@ const formatLabel = (value?: string | UserRole) => {
 };
 
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [queryCount, setClarificationCount] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const shouldShowDepartment = !!(user?.department && user?.role && rolesWithDepartments.has(user.role));
+  
+  // Extract role name from role object
+  const userRoleName = user?.role?.name?.toLowerCase().replace(/ /g, '_') || '';
+  
+  const shouldShowDepartment = !!(user?.department && userRoleName && rolesWithDepartments.has(userRoleName as UserRole));
   const formattedDepartment = shouldShowDepartment ? formatLabel(user?.department).toUpperCase() : '';
-  const formattedRole = user?.role ? formatLabel(user.role).toUpperCase() : '';
+  const formattedRole = userRoleName ? formatLabel(userRoleName).toUpperCase() : '';
 
   // Function to check if navigation item is active
   const isActiveRoute = (href: string) => {
@@ -124,7 +131,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const fetchClarificationCount = useCallback(async () => {
-    if (!user) {
+    if (!user || !userRoleName) {
       return;
     }
 
@@ -136,36 +143,48 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
       // Filter for requests that need query from current user
       const queryRequests = data.requests.filter((request: any) =>
-        request.pendingQuery && request.queryLevel === user?.role
+        request.pendingQuery && request.queryLevel === userRoleName
       );
 
       setClarificationCount(queryRequests.length);
     } catch (err) {
       console.error('Error fetching query count:', err);
     }
-  }, [user]);
+  }, [user, userRoleName]);
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
   useEffect(() => {
-    if (user && (user.role === 'requester' || user.role === 'dean')) {
+    if (user) {
       fetchClarificationCount();
       // Set up interval to refresh count every 30 seconds
       const interval = setInterval(fetchClarificationCount, 30000);
       return () => clearInterval(interval);
     }
-  }, [user, fetchClarificationCount]);
+  }, [user, userRoleName, fetchClarificationCount]);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     router.push('/');
   };
 
-  const filteredNavigation = navigation.filter(
-    item => user && item.roles.includes(user.role)
-  );
+  // System Admins see all navigation items
+  const filteredNavigation = user?.role?.isSystemAdmin 
+    ? navigation 
+    : navigation.filter(item => {
+        // Skip admin-only items for non-admins
+        if (item.adminOnly) return false;
+        
+        // Items with all roles (Object.values(UserRole)) should be visible to everyone
+        if (item.roles.length === Object.values(UserRole).length) {
+          return true;
+        }
+        
+        // Check if user's role is in the allowed roles
+        return user && userRoleName && item.roles.includes(userRoleName as UserRole);
+      });
 
   if (loading) {
     return (
@@ -244,9 +263,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                 Welcome, <span className="font-medium">{user?.name}</span>
               </div>
               <div className="text-xs text-gray-500">
-                {user?.role === 'requester' && user?.department
-                  ? `${user.department.toUpperCase()} - ${user.role.replace(/_/g, ' ').toUpperCase()}`
-                  : user?.role?.replace(/_/g, ' ').toUpperCase()
+                {userRoleName === 'requester' && user?.department
+                  ? `${user.department.toUpperCase()} - ${formattedRole}`
+                  : formattedRole
                 }
               </div>
             </div>

@@ -72,6 +72,7 @@ interface FileMetadata {
 
 export default function DocumentsPage() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
   const [fileMetadata, setFileMetadata] = useState<Record<string, FileMetadata>>({});
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -98,6 +99,22 @@ export default function DocumentsPage() {
     status: 'active',
     tags: ''
   });
+
+  useEffect(() => {
+    fetchUser();
+  }, []);
+
+  const fetchUser = async () => {
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user || data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch user:', error);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -571,7 +588,7 @@ export default function DocumentsPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {doc.uploadedBy.name}
+                      {doc.uploadedBy?.name || 'Unknown'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {new Date(doc.createdAt).toLocaleDateString()}
@@ -621,27 +638,31 @@ export default function DocumentsPage() {
                             >
                               Download
                             </a>
-                            <button
-                              onClick={() => {
-                                setSelectedDocument(doc);
-                                setShowShareModal(true);
-                              }}
-                              className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium text-xs"
-                            >
-                              <ShareIcon className="h-4 w-4 mr-1" />
-                              Share
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedDocForEmail(doc);
-                                setShowSendEmail(true);
-                              }}
-                              className="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium text-xs"
-                              title="Send via Gmail"
-                            >
-                              <EnvelopeIcon className="h-4 w-4 mr-1" />
-                              Email
-                            </button>
+                            {(user?.role?.isSystemAdmin || user?.role?.permissions?.canShare) && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSelectedDocument(doc);
+                                    setShowShareModal(true);
+                                  }}
+                                  className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium text-xs"
+                                >
+                                  <ShareIcon className="h-4 w-4 mr-1" />
+                                  Share
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedDocForEmail(doc);
+                                    setShowSendEmail(true);
+                                  }}
+                                  className="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium text-xs"
+                                  title="Send via Gmail"
+                                >
+                                  <EnvelopeIcon className="h-4 w-4 mr-1" />
+                                  Email
+                                </button>
+                              </>
+                            )}
                             <button
                               onClick={() => {
                                 console.log('Opening version history for document:', {
@@ -699,27 +720,31 @@ export default function DocumentsPage() {
                             >
                               Download
                             </a>
-                            <button
-                              onClick={() => {
-                                setSelectedDocument(doc);
-                                setShowShareModal(true);
-                              }}
-                              className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium text-xs"
-                            >
-                              <ShareIcon className="h-4 w-4 mr-1" />
-                              Share
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedDocForEmail(doc);
-                                setShowSendEmail(true);
-                              }}
-                              className="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium text-xs"
-                              title="Send via Gmail"
-                            >
-                              <EnvelopeIcon className="h-4 w-4 mr-1" />
-                              Email
-                            </button>
+                            {(user?.role?.isSystemAdmin || user?.role?.permissions?.canShare) && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setSelectedDocument(doc);
+                                    setShowShareModal(true);
+                                  }}
+                                  className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium text-xs"
+                                >
+                                  <ShareIcon className="h-4 w-4 mr-1" />
+                                  Share
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedDocForEmail(doc);
+                                    setShowSendEmail(true);
+                                  }}
+                                  className="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors font-medium text-xs"
+                                  title="Send via Gmail"
+                                >
+                                  <EnvelopeIcon className="h-4 w-4 mr-1" />
+                                  Email
+                                </button>
+                              </>
+                            )}
                             <button
                               onClick={() => {
                                 setSelectedDocForVersions(doc);
@@ -786,6 +811,7 @@ export default function DocumentsPage() {
         currentFileName={selectedDocForVersions?.fileName || ''}
         currentVersion={selectedDocForVersions?.version || 1}
         onVersionUploaded={() => fetchData()}
+        canEdit={user?.role?.isSystemAdmin || user?.role?.permissions?.canEdit || false}
       />
     </div>
   );

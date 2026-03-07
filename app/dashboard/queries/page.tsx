@@ -48,10 +48,11 @@ export default function QueriesPage() {
       
       const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
       
-      // Only allow requesters and Dean to access this page (Admins can bypass)
-      if (!user.role.permissions.canCreate && userRoleName !== 'dean' && !user.role.isSystemAdmin) {
-        router.push('/dashboard');
-        return;
+      // Allow System Admins, Dean, and any user who has created requests (request creators can always respond to queries)
+      // We'll check if they have any requests in the fetchQueriesRequests function
+      if (userRoleName !== 'dean' && !user.role.isSystemAdmin) {
+        // Allow access - we'll filter their requests in fetchQueriesRequests
+        // Request creators should always be able to respond to queries on their own requests
       }
     } catch (err) {
       console.error('Error fetching user:', err);

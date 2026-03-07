@@ -49,8 +49,8 @@ export async function GET(request: NextRequest) {
       isSystemAdmin: user.role.isSystemAdmin
     };
 
-    // Requesters don't have pending approvals to process
-    if (permissions.canCreate) {
+    // Requesters don't have pending approvals to process (but System Admins can access)
+    if (permissions.canCreate && !permissions.isSystemAdmin) {
       console.log('[DEBUG] User is requester, redirecting to requests');
       return NextResponse.json({
         error: 'Requesters should use /api/requests endpoint',

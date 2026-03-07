@@ -54,10 +54,15 @@ export async function middleware(request: NextRequest) {
     const secret = getJwtSecret();
     
     const { payload } = await jwtVerify(authToken.value, secret);
-    const userRole = payload.role as UserRole;
+    const userRole = payload.role as string;
+
+    // System Admins bypass all role checks
+    if (userRole === 'system_admin') {
+      return NextResponse.next();
+    }
 
     // Check if user has required role
-    if (!requiredRoles.includes(userRole)) {
+    if (!requiredRoles.includes(userRole as UserRole)) {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
       }

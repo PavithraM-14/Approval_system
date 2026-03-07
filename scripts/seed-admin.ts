@@ -32,8 +32,11 @@ async function seedAdmin() {
           canView: true,
           canEdit: true,
           canShare: true,
-          canApprove: true,
+          canDownload: true,
+          canForward: true,
           canManageBudget: true,
+          canESign: true,
+          canApprove: true,
           canRaiseQueries: true,
         }
       });

@@ -9,8 +9,11 @@ export interface IRole {
     canCreate: boolean;
     canEdit: boolean;
     canShare: boolean;
-    canApprove: boolean;
+    canDownload: boolean;
+    canForward: boolean;
     canManageBudget: boolean;
+    canESign: boolean;
+    canApprove: boolean;
     canRaiseQueries: boolean;
   };
 }
@@ -24,8 +27,11 @@ const roleSchema = new mongoose.Schema<IRole>({
     canCreate: { type: Boolean, default: false },
     canEdit: { type: Boolean, default: false },
     canShare: { type: Boolean, default: false },
-    canApprove: { type: Boolean, default: false },
+    canDownload: { type: Boolean, default: false },
+    canForward: { type: Boolean, default: false },
     canManageBudget: { type: Boolean, default: false },
+    canESign: { type: Boolean, default: false },
+    canApprove: { type: Boolean, default: false },
     canRaiseQueries: { type: Boolean, default: false },
   },
 }, {

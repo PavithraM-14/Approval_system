@@ -23,6 +23,7 @@ interface DocumentVersionsModalProps {
     currentFileName: string;
     currentVersion: number;
     onVersionUploaded?: () => void;
+    canEdit?: boolean;
 }
 
 export default function DocumentVersionsModal({
@@ -32,7 +33,8 @@ export default function DocumentVersionsModal({
     documentTitle,
     currentFileName,
     currentVersion,
-    onVersionUploaded
+    onVersionUploaded,
+    canEdit = false
 }: DocumentVersionsModalProps) {
     const [versions, setVersions] = useState<Version[]>([]);
     const [loading, setLoading] = useState(false);
@@ -111,25 +113,27 @@ export default function DocumentVersionsModal({
                 </div>
 
                 <div className="p-6 flex-1 overflow-y-auto">
-                    {/* Upload New Version Section */}
-                    <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Upload New Version</h4>
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="file"
-                                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                                className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                            />
-                            <button
-                                onClick={handleUploadNewVersion}
-                                disabled={!file || uploading}
-                                className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
-                            >
-                                {uploading ? 'Uploading...' : 'Upload Version'}
-                            </button>
+                    {/* Upload New Version Section - Only show if user has canEdit permission */}
+                    {canEdit && (
+                        <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                            <h4 className="text-sm font-semibold text-gray-900 mb-3">Upload New Version</h4>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="file"
+                                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                                    className="flex-1 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                />
+                                <button
+                                    onClick={handleUploadNewVersion}
+                                    disabled={!file || uploading}
+                                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                                >
+                                    {uploading ? 'Uploading...' : 'Upload Version'}
+                                </button>
+                            </div>
+                            {currentVersion && currentVersion > 0 && <p className="text-xs text-gray-500 mt-2">Uploading will overwrite the current version ({currentVersion}) and archive the existing file.</p>}
                         </div>
-                        {currentVersion && currentVersion > 0 && <p className="text-xs text-gray-500 mt-2">Uploading will overwrite the current version ({currentVersion}) and archive the existing file.</p>}
-                    </div>
+                    )}
 
                     {/* Versions List */}
                     <h4 className="text-sm font-semibold text-gray-900 mb-3">Previous Versions ({versions.length})</h4>

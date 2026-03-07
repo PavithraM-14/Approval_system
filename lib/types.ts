@@ -73,8 +73,11 @@ export interface Role {
     canCreate: boolean;
     canEdit: boolean;
     canShare: boolean;
-    canApprove: boolean;
+    canDownload: boolean;
+    canForward: boolean;
     canManageBudget: boolean;
+    canESign: boolean;
+    canApprove: boolean;
     canRaiseQueries: boolean;
   };
 }

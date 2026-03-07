@@ -53,8 +53,11 @@ export default function ApprovalModal({
     canView: true,
     canEdit: false,
     canShare: false,
-    canApprove: false,
+    canDownload: false,
+    canForward: false,
     canManageBudget: false,
+    canESign: false,
+    canApprove: false,
     canRaiseQueries: false,
   };
 
@@ -220,7 +223,7 @@ export default function ApprovalModal({
       return;
     }
 
-    if (action === 'approve' && permissions.canApprove) {
+    if (action === 'approve' && permissions.canESign) {
       if (!signature.trim()) {
         alert('Please enter your full name as e-signature');
         return;
@@ -1147,7 +1150,7 @@ export default function ApprovalModal({
           </div>
 
           {/* E-Signature Section */}
-          {action === 'approve' && permissions.canApprove && (
+          {action === 'approve' && permissions.canESign && (
             <div className="mt-6 border-t border-gray-100 pt-6">
               <div className="flex items-center gap-2 mb-3">
                 <PencilIcon className="w-5 h-5 text-blue-600" />

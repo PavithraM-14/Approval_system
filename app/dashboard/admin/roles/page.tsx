@@ -20,6 +20,7 @@ export default function RolesPage() {
       canEdit: false,
       canShare: false,
       canApprove: false,
+      canForward: false,
       canManageBudget: false,
       canRaiseQueries: false,
     }
@@ -60,8 +61,11 @@ export default function RolesPage() {
           canView: true,
           canEdit: false,
           canShare: false,
-          canApprove: false,
+          canDownload: false,
+          canForward: false,
           canManageBudget: false,
+          canESign: false,
+          canApprove: false,
           canRaiseQueries: false,
         }
       });

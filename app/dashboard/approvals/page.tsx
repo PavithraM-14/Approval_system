@@ -263,7 +263,7 @@ function ApprovalsPageContent() {
           </p>
           {currentUser && (
             <p className="text-xs sm:text-sm text-gray-500 mt-1">
-              Role: <span className="font-medium">{currentUser.role?.replace('_', ' ').toUpperCase()}</span>
+              Role: <span className="font-medium">{currentUser.role?.name?.replace(/_/g, ' ').toUpperCase() || 'Unknown'}</span>
             </p>
           )}
         </div>

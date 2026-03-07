@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Role } from '../../lib/types';
 import PasswordInput from '../../components/PasswordInput';
 import OTPVerification from '../../components/OTPVerification';
-import InstitutionSelect from '../../components/InstitutionSelect';
 import NestedSelect from '../../components/NestedSelect';
 import { DENTAL_DEPARTMENTS, ENGINEERING_DEPARTMENTS, FSH_DEPARTMENTS, EEC_DEPARTMENTS, MANAGEMENT_DEPARTMENTS } from '../../lib/constants';
 import { useEffect } from 'react';
@@ -18,7 +17,6 @@ export default function SignupPage() {
   const [contactNo, setContactNo] = useState('');
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
-  const [college, setCollege] = useState('');
   const [department, setDepartment] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -36,10 +34,10 @@ export default function SignupPage() {
         const res = await fetch('/api/roles');
         if (res.ok) {
           const data: Role[] = await res.json();
-          const filteredRoles = data.filter(r => !r.isSystemAdmin);
-          setRoles(filteredRoles);
-          if (filteredRoles.length > 0) {
-            setSelectedRoleId(filteredRoles[0]._id);
+          const systemAdminRoles = data.filter(r => r.isSystemAdmin);
+          setRoles(systemAdminRoles);
+          if (systemAdminRoles.length > 0) {
+            setSelectedRoleId(systemAdminRoles[0]._id);
           }
         }
       } catch (err) {
@@ -52,11 +50,7 @@ export default function SignupPage() {
   const selectedRole = roles.find(r => r._id === setSelectedRoleId);
   // Simple heuristic for dynamic roles: 
   // If role name contains 'Requester' or 'HOD', it likely needs a department.
-  // If role name contains 'Chairman' or 'Director', it might not need a college.
   const isDepartmentRequired = roles.find(r => r._id === selectedRoleId)?.name.toLowerCase().includes('requester') || false;
-  const isCollegeRequired = !['Chairman', 'Dean', 'Chief Director'].some(n => 
-    roles.find(r => r._id === selectedRoleId)?.name.includes(n)
-  );
 
   const inputClass =
     'mt-1 block w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 ' +
@@ -114,7 +108,6 @@ export default function SignupPage() {
       !password ||
       !empId ||
       !contactNo ||
-      (isCollegeRequired && !college) ||
       (isDepartmentRequired && !department)
     ) {
       setError('Please fill in all required fields');
@@ -173,7 +166,7 @@ export default function SignupPage() {
             contactNo: formattedContactNo,
             password,
             role: selectedRoleId,
-            college: isCollegeRequired ? college : null,
+            college: null,
             department: isDepartmentRequired ? department : null,
             otp: otpData?.otp,
             otpTimestamp: otpData?.otpTimestamp,
@@ -298,7 +291,7 @@ export default function SignupPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@srmrmp.edu.in"
+                placeholder="name@enterprise.com"
                 autoComplete="off"
                 className={inputClass}
               />
@@ -355,20 +348,6 @@ export default function SignupPage() {
               </select>
             </div>
 
-            {isCollegeRequired && (
-              <div>
-                <label className={`${labelClass} mb-2`}>Institution *</label>
-                <div className="relative">
-                  <div className="relative">
-                    <InstitutionSelect
-                      value={college}
-                      onChange={setCollege}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
             {isDepartmentRequired && (
               <div>
                 <label className={`${labelClass} mb-2`}>Department *</label>
@@ -376,17 +355,9 @@ export default function SignupPage() {
                   <NestedSelect
                     value={department}
                     onChange={setDepartment}
-                    options={
-                      college === 'DENTAL' ? DENTAL_DEPARTMENTS :
-                        college === 'EEC' ? EEC_DEPARTMENTS :
-                          college?.includes('FSH') ? FSH_DEPARTMENTS :
-                            college?.includes('Management') ? MANAGEMENT_DEPARTMENTS :
-                              college?.includes('E&T') ? ENGINEERING_DEPARTMENTS :
-                                ENGINEERING_DEPARTMENTS
-                    }
+                    options={ENGINEERING_DEPARTMENTS}
                     placeholder="Select Department"
                     dropUp={true}
-                    disabled={!college}
                   />
                 </div>
               </div>

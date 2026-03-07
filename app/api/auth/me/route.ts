@@ -13,7 +13,9 @@ export async function GET() {
     
     // Fetch full user data from database including Google integration status
     await connectDB();
-    const user = await User.findById(currentUser.id).select('-password -gmailAccessToken -gmailRefreshToken -driveAccessToken -driveRefreshToken -otp');
+    const user = await User.findById(currentUser.id)
+      .populate('role')
+      .select('-password -gmailAccessToken -gmailRefreshToken -driveAccessToken -driveRefreshToken -otp');
     
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

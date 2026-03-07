@@ -98,7 +98,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <span className="text-gray-600">Role:</span>
-            <span className="ml-2 font-medium">{user?.role}</span>
+            <span className="ml-2 font-medium">{user?.role?.name || 'Unknown'}</span>
           </div>
         </div>
       </div>

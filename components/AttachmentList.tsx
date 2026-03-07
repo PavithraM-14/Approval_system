@@ -7,6 +7,7 @@ interface AttachmentListProps {
   title?: string;
   className?: string;
   highlightColor?: 'blue' | 'green';
+  canEdit?: boolean;
 }
 
 interface FileMetadata {
@@ -20,7 +21,8 @@ export default function AttachmentList({
   attachments, 
   title = 'Attachments',
   className = '',
-  highlightColor = 'blue'
+  highlightColor = 'blue',
+  canEdit = false
 }: AttachmentListProps) {
   const [fileMetadata, setFileMetadata] = useState<Record<string, FileMetadata>>({});
   const [loading, setLoading] = useState(true);
@@ -196,7 +198,7 @@ export default function AttachmentList({
                 )}
                 
                 {/* Edit Online Button (for Word, Excel, PowerPoint) */}
-                {canEditOnline && !loading && (
+                {canEdit && canEditOnline && !loading && (
                   <button
                     onClick={() => handleEditOnline(fileId)}
                     disabled={isConverting}

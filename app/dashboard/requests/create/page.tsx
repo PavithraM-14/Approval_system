@@ -103,7 +103,12 @@ export default function CreateRequestPage() {
 
         const data = await res.json();
         const userData = data.user || data; // Handle both wrapped and unwrapped responses
-        if (userData.role !== UserRole.REQUESTER) {
+        
+        // Allow System Admins and users with canCreate permission to access this page
+        const isSystemAdmin = userData.role?.isSystemAdmin;
+        const canCreate = userData.role?.permissions?.canCreate;
+        
+        if (!isSystemAdmin && !canCreate) {
           router.push('/dashboard');
           return;
         }

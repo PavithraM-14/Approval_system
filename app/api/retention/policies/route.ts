@@ -17,10 +17,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+    const userRoleName = user.role?.name?.toLowerCase().replace(/ /g, '_') || '';
+    const isSystemAdmin = user.role?.isSystemAdmin || false;
     
     // Only admins can view retention policies
-    if (!user.role.isSystemAdmin && userRoleName !== 'chairman' && userRoleName !== 'chief_director') {
+    if (!isSystemAdmin && userRoleName !== 'chairman' && userRoleName !== 'chief_director') {
       return NextResponse.json({ error: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
@@ -37,10 +38,10 @@ export async function GET(request: NextRequest) {
 
     const policies = await getRetentionPolicies(activeOnly);
     return NextResponse.json({ policies });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching retention policies:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch retention policies' },
+      { error: 'Failed to fetch retention policies', details: error.message },
       { status: 500 }
     );
   }

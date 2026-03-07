@@ -215,3 +215,61 @@ export async function createDefaultPolicies(adminUserId: string) {
     return { success: false, error };
   }
 }
+
+/**
+ * Get all retention policies
+ */
+export async function getRetentionPolicies(activeOnly: boolean = false) {
+  try {
+    await connectDB();
+    
+    const filter = activeOnly ? { isActive: true } : {};
+    const policies = await RetentionPolicy.find(filter).sort({ createdAt: -1 });
+    
+    return policies;
+  } catch (error) {
+    console.error('[Retention] Failed to get retention policies:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create a new retention policy
+ */
+export async function createRetentionPolicy(policyData: any) {
+  try {
+    await connectDB();
+    
+    const policy = await RetentionPolicy.create(policyData);
+    
+    await AuditLog.create({
+      action: 'retention_policy_created',
+      userId: policyData.createdBy,
+      targetType: 'retention_policy',
+      targetId: policy._id,
+      details: {
+        policyName: policy.name,
+        documentType: policy.documentType,
+        retentionPeriod: policy.retentionPeriodYears
+      }
+    });
+    
+    return policy;
+  } catch (error) {
+    console.error('[Retention] Failed to create retention policy:', error);
+    throw error;
+  }
+}
+
+/**
+ * Check for upcoming retentions (documents expiring in next 30 days)
+ */
+export async function checkUpcomingRetentions() {
+  try {
+    const expiringDocs = await getExpiringDocuments(30);
+    return expiringDocs;
+  } catch (error) {
+    console.error('[Retention] Failed to check upcoming retentions:', error);
+    return [];
+  }
+}

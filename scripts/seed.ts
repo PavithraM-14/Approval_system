@@ -42,8 +42,11 @@ async function seed() {
         canCreate: true,
         canEdit: true,
         canShare: true,
-        canApprove: true,
+        canDownload: true,
+        canForward: true,
         canManageBudget: true,
+        canESign: true,
+        canApprove: true,
         canRaiseQueries: true,
       }
     });
@@ -60,8 +63,11 @@ async function seed() {
           canCreate: true,
           canEdit: true,
           canShare: false,
-          canApprove: false,
+          canDownload: true,
+          canForward: false,
           canManageBudget: false,
+          canESign: false,
+          canApprove: false,
           canRaiseQueries: false,
         }
       },
@@ -74,8 +80,11 @@ async function seed() {
           canCreate: false,
           canEdit: false,
           canShare: true,
-          canApprove: true,
+          canDownload: true,
+          canForward: false,
           canManageBudget: false,
+          canESign: true,
+          canApprove: true,
           canRaiseQueries: true,
         }
       }

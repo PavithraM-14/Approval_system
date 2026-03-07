@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import connectDB from '../../../../lib/mongodb';
 import User from '../../../../models/User';
+import Role from '../../../../models/Role';
 import bcrypt from 'bcryptjs';
 import { jwtVerify, SignJWT } from 'jose';
 
@@ -39,8 +39,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only @srmrmp.edu.in emails are allowed' }, { status: 400 });
     }*/
     
-    // Find user
-    const user = await User.findOne({ email });
+    // Find user and populate role
+    const user = await User.findOne({ email }).populate({
+      path: 'role',
+      model: Role
+    });
     if (!user) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
@@ -51,6 +54,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
     
+    // Extract role name for JWT
+    const roleName = (user.role as any).name.toLowerCase().replace(/ /g, '_');
+    
     // Create JWT token
     const secret = getJwtSecret();
     
@@ -59,7 +65,7 @@ export async function POST(request: NextRequest) {
       email: user.email,
       name: user.name,
       empId: user.empId,
-      role: user.role,
+      role: roleName, // Store role name, not ObjectId
       college: user.college,
       department: user.department,
     })
@@ -68,23 +74,26 @@ export async function POST(request: NextRequest) {
       .setExpirationTime('24h')
       .sign(secret);
     
-    // Set cookie
-    const cookieStore = cookies();
-    cookieStore.set('auth-token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24, // 24 hours
-    });
-    
     // Return user data (without password)
     const { password: _, ...userWithoutPassword } = user.toObject();
     
-    return NextResponse.json({ 
+    // Create response with cookie
+    const response = NextResponse.json({ 
       success: true, 
       user: userWithoutPassword,
       message: 'Login successful'
     });
+    
+    // Set cookie using Response API
+    response.cookies.set('auth-token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: '/',
+    });
+    
+    return response;
   } catch (error: any) {
     console.error('Login error:', error);
     return NextResponse.json({ error: error.message || 'Login failed' }, { status: 500 });

@@ -133,15 +133,17 @@ export async function PATCH(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    // Check permissions
+    // Check permissions (System Admin, role canEdit permission, owner, or document edit permission)
+    const isSystemAdmin = user.role?.isSystemAdmin;
+    const hasRoleEditPermission = user.role?.permissions?.canEdit;
     const isOwner = document.uploadedBy.toString() === user.id;
-    const hasEditPermission = document.sharedWith.some(
+    const hasDocEditPermission = document.sharedWith.some(
       (share: any) => 
         (share.userId?.toString() === user.id || share.role === user.role) &&
         share.permissions.includes('edit')
     );
 
-    if (!isOwner && !hasEditPermission) {
+    if (!isSystemAdmin && !hasRoleEditPermission && !isOwner && !hasDocEditPermission) {
       return NextResponse.json({ 
         error: 'Not authorized to edit this document' 
       }, { status: 403 });

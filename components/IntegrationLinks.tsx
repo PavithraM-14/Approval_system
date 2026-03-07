@@ -12,9 +12,10 @@ import {
 interface IntegrationLinksProps {
   requestId: string;
   onLink?: (type: string, id: string) => void;
+  canShare?: boolean;
 }
 
-export default function IntegrationLinks({ requestId, onLink }: IntegrationLinksProps) {
+export default function IntegrationLinks({ requestId, onLink, canShare = false }: IntegrationLinksProps) {
   const [activeTab, setActiveTab] = useState<'odoo' | 'crm' | 'hrm'>('odoo');
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -114,13 +115,15 @@ export default function IntegrationLinks({ requestId, onLink }: IntegrationLinks
 
   return (
     <>
-      <button
-        onClick={() => setShowModal(true)}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-      >
-        <LinkIcon className="w-4 h-4" />
-        Link to ERP/CRM/HR
-      </button>
+      {canShare && (
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          <LinkIcon className="w-4 h-4" />
+          Link to ERP/CRM/HR
+        </button>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

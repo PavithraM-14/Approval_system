@@ -184,15 +184,17 @@ export async function POST(
             return NextResponse.json({ error: 'Document not found' }, { status: 404 });
         }
 
-        // Check permissions (must have edit permission)
+        // Check permissions (must have edit permission from role or document sharing)
+        const isSystemAdmin = user.role?.isSystemAdmin;
+        const hasRoleEditPermission = user.role?.permissions?.canEdit;
         const isOwner = document.uploadedBy.toString() === user.id;
-        const hasEditPermission = document.sharedWith.some(
+        const hasDocEditPermission = document.sharedWith.some(
             (share: any) =>
                 (share.userId?.toString() === user.id || share.role === user.role) &&
                 share.permissions.includes('edit')
         );
 
-        if (!isOwner && !hasEditPermission) {
+        if (!isSystemAdmin && !hasRoleEditPermission && !isOwner && !hasDocEditPermission) {
             return NextResponse.json({
                 error: 'Not authorized to create a new version of this document'
             }, { status: 403 });
