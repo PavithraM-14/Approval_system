@@ -34,6 +34,7 @@ export default function SignupPage() {
   const [companySearchQuery, setCompanySearchQuery] = useState('');
   const [companies, setCompanies] = useState<Company[]>([]);
   const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([]);
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState('');
   
@@ -57,8 +58,10 @@ export default function SignupPage() {
   // Filter companies based on search query
   useEffect(() => {
     if (companySearchQuery.trim() === '') {
+      // Show all companies when no search query
       setFilteredCompanies(companies);
     } else {
+      // Filter companies based on search
       const filtered = companies.filter(company =>
         company.name.toLowerCase().includes(companySearchQuery.toLowerCase())
       );
@@ -517,35 +520,72 @@ export default function SignupPage() {
                   />
                 </div>
 
-                <div>
-                  <label className={labelClass}>Search Company *</label>
+                <div className="relative">
+                  <label className={labelClass}>Select Company *</label>
                   <input
                     type="text"
                     required
                     value={companySearchQuery}
-                    onChange={(e) => setCompanySearchQuery(e.target.value)}
-                    placeholder="Search for your company"
+                    onChange={(e) => {
+                      setCompanySearchQuery(e.target.value);
+                      setShowCompanyDropdown(true);
+                    }}
+                    onFocus={() => setShowCompanyDropdown(true)}
+                    placeholder="Click to select or search for your company"
                     autoComplete="off"
                     className={inputClass}
                   />
-                  {companySearchQuery && filteredCompanies.length > 0 && (
-                    <div className="mt-2 max-h-48 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg">
-                      {filteredCompanies.map((company) => (
-                        <button
-                          key={company._id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCompanyId(company._id);
-                            setCompanySearchQuery(company.name);
-                          }}
-                          className={`w-full text-left px-4 py-3 hover:bg-slate-700 transition-colors ${
-                            selectedCompanyId === company._id ? 'bg-slate-700 text-blue-400' : 'text-white'
-                          }`}
-                        >
-                          {company.name}
-                        </button>
-                      ))}
-                    </div>
+                  {showCompanyDropdown && filteredCompanies.length > 0 && (
+                    <>
+                      {/* Backdrop to close dropdown when clicking outside */}
+                      <div 
+                        className="fixed inset-0 z-10" 
+                        onClick={() => setShowCompanyDropdown(false)}
+                      />
+                      <div className="absolute z-20 mt-2 w-full max-h-60 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-2xl">
+                        {filteredCompanies.map((company) => (
+                          <button
+                            key={company._id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCompanyId(company._id);
+                              setCompanySearchQuery(company.name);
+                              setShowCompanyDropdown(false);
+                            }}
+                            className={`w-full text-left px-4 py-3 hover:bg-slate-700 transition-colors border-b border-slate-700 last:border-b-0 ${
+                              selectedCompanyId === company._id 
+                                ? 'bg-slate-700 text-blue-400 font-semibold' 
+                                : 'text-white'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span>{company.name}</span>
+                              {selectedCompanyId === company._id && (
+                                <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {showCompanyDropdown && filteredCompanies.length === 0 && companySearchQuery && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-10" 
+                        onClick={() => setShowCompanyDropdown(false)}
+                      />
+                      <div className="absolute z-20 mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-4">
+                        <p className="text-slate-400 text-sm text-center">
+                          No companies found matching "{companySearchQuery}"
+                        </p>
+                        <p className="text-slate-500 text-xs text-center mt-2">
+                          Please check the spelling or contact your administrator
+                        </p>
+                      </div>
+                    </>
                   )}
                 </div>
 
