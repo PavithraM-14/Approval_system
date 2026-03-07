@@ -88,9 +88,6 @@ export async function sendEmail(options: {
   throw new Error(getEmailConfigurationError() || 'Email service is not configured');
 }
 
-// Export for use in other services
-export { sendEmail };
-
 /**
  * Generate a 6-digit OTP
  */
