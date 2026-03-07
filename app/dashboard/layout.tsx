@@ -23,25 +23,27 @@ interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<any>;
-  roles: UserRole[];
+  roles?: UserRole[]; // Optional - if not provided, will check permissions
   adminOnly?: boolean; // For items only visible to System Admins
+  requiresPermission?: 'canCreate' | 'canApprove' | 'canEdit' | 'canShare'; // Permission-based access
+  requiresAnyPermission?: Array<'canCreate' | 'canApprove' | 'canForward' | 'canManageBudget'>; // Requires at least one of these permissions
 }
 
 const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon, roles: Object.values(UserRole) },
-  { name: 'My Requests', href: '/dashboard/requests', icon: ClipboardDocumentListIcon, roles: [UserRole.REQUESTER] },
-  { name: 'Create Request', href: '/dashboard/requests/create', icon: DocumentPlusIcon, roles: [UserRole.REQUESTER] },
-  { name: 'Queries', href: '/dashboard/queries', icon: ClockIcon, roles: Object.values(UserRole) }, // All users can respond to queries on their own requests
+  { name: 'My Requests', href: '/dashboard/requests', icon: ClipboardDocumentListIcon, requiresPermission: 'canCreate' },
+  { name: 'Create Request', href: '/dashboard/requests/create', icon: DocumentPlusIcon, requiresPermission: 'canCreate' },
+  { name: 'Queries', href: '/dashboard/queries', icon: ClockIcon, requiresPermission: 'canCreate' },
   { name: 'Documents', href: '/dashboard/documents', icon: FolderIcon, roles: Object.values(UserRole) },
   {
     name: 'Pending Approvals',
     href: '/dashboard/approvals',
     icon: ClipboardDocumentListIcon,
-    roles: [UserRole.INSTITUTION_MANAGER, UserRole.SOP_VERIFIER, UserRole.ACCOUNTANT, UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN]
+    requiresAnyPermission: ['canApprove', 'canForward', 'canManageBudget']
   },
-  { name: 'Integrations', href: '/dashboard/integrations', icon: LinkIcon, roles: [UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN, UserRole.IT] },
-  { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon, roles: [UserRole.VP, UserRole.HEAD_OF_INSTITUTION, UserRole.DEAN, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN] },
-  { name: 'Compliance', href: '/dashboard/compliance', icon: HomeIcon, roles: [UserRole.AUDIT, UserRole.CHIEF_DIRECTOR, UserRole.CHAIRMAN] },
+  { name: 'Integrations', href: '/dashboard/integrations', icon: LinkIcon, roles: [], adminOnly: true },
+  { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon, roles: [], adminOnly: true },
+  { name: 'Compliance', href: '/dashboard/compliance', icon: HomeIcon, roles: [], adminOnly: true },
   { name: 'Role Management', href: '/dashboard/roles', icon: UserGroupIcon, roles: [], adminOnly: true },
   { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, roles: Object.values(UserRole) }
 ];
@@ -177,13 +179,26 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         // Skip admin-only items for non-admins
         if (item.adminOnly) return false;
         
+        // Check if user has ANY of the required permissions
+        if (item.requiresAnyPermission) {
+          return item.requiresAnyPermission.some(permission => 
+            user?.role?.permissions?.[permission] === true
+          );
+        }
+        
+        // Check single permission-based access
+        if (item.requiresPermission) {
+          const permission = item.requiresPermission;
+          return user?.role?.permissions?.[permission] === true;
+        }
+        
         // Items with all roles (Object.values(UserRole)) should be visible to everyone
-        if (item.roles.length === Object.values(UserRole).length) {
+        if (item.roles && item.roles.length === Object.values(UserRole).length) {
           return true;
         }
         
         // Check if user's role is in the allowed roles
-        return user && userRoleName && item.roles.includes(userRoleName as UserRole);
+        return user && userRoleName && item.roles && item.roles.includes(userRoleName as UserRole);
       });
 
   if (loading) {
