@@ -330,8 +330,9 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus, requ
               {/* Workflow steps */}
               <div className="relative flex justify-between items-center px-8">
                 {workflowSteps.map((step, index) => {
-                  const isCompleted = index < currentStepIndex;
-                  const isCurrent = index === currentStepIndex;
+                  // If status is approved, all steps including the last one should be completed
+                  const isCompleted = currentStatus === 'approved' ? true : index < currentStepIndex;
+                  const isCurrent = currentStatus === 'approved' ? false : index === currentStepIndex;
                   
                   return (
                     <div key={step.id} className="flex flex-col items-center relative z-10" style={{ flex: 1, maxWidth: '120px' }}>
@@ -360,7 +361,7 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus, requ
                         </span>
                         
                         {/* Active badge */}
-                        {isCurrent && (
+                        {isCurrent && !isCompleted && (
                           <span className="text-[10px] font-medium mt-0.5 block opacity-90">● Active</span>
                         )}
                       </div>
@@ -374,8 +375,9 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus, requ
           {/* Mobile view - vertical list */}
           <div className="md:hidden space-y-3">
             {workflowSteps.map((step, index) => {
-              const isCompleted = index < currentStepIndex;
-              const isCurrent = index === currentStepIndex;
+              // If status is approved, all steps including the last one should be completed
+              const isCompleted = currentStatus === 'approved' ? true : index < currentStepIndex;
+              const isCurrent = currentStatus === 'approved' ? false : index === currentStepIndex;
               
               return (
                 <div key={step.id} className="flex items-start">
@@ -424,21 +426,43 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus, requ
           </div>
           
           {/* Current status information */}
-          <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className={`mt-8 p-4 rounded-lg border ${
+            currentStatus === 'approved' 
+              ? 'bg-green-50 border-green-200' 
+              : 'bg-blue-50 border-blue-200'
+          }`}>
             <div className="flex items-start">
               <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
+                {currentStatus === 'approved' ? (
+                  <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                )}
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-blue-900">Current Stage</h3>
-                <div className="mt-2 text-sm text-blue-800">
+                <h3 className={`text-sm font-medium ${
+                  currentStatus === 'approved' ? 'text-green-900' : 'text-blue-900'
+                }`}>
+                  {currentStatus === 'approved' ? 'Workflow Status' : 'Current Stage'}
+                </h3>
+                <div className={`mt-2 text-sm ${
+                  currentStatus === 'approved' ? 'text-green-800' : 'text-blue-800'
+                }`}>
                   <p className="font-semibold">
-                    {workflowSteps[currentStepIndex]?.name || 'Processing'}
+                    {currentStatus === 'approved' 
+                      ? 'Completed - Request Approved' 
+                      : workflowSteps[currentStepIndex]?.name || 'Processing'}
                   </p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    Step {currentStepIndex + 1} of {workflowSteps.length}
+                  <p className={`text-xs mt-1 ${
+                    currentStatus === 'approved' ? 'text-green-600' : 'text-blue-600'
+                  }`}>
+                    {currentStatus === 'approved' 
+                      ? 'All approval steps completed successfully' 
+                      : `Step ${currentStepIndex + 1} of ${workflowSteps.length}`}
                   </p>
                 </div>
               </div>
