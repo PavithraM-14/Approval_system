@@ -35,17 +35,108 @@ export async function POST(request: NextRequest) {
     const customRoles = await CustomRole.find({ companyId: dbUser.company });
     console.log('[DEBUG] Custom roles found:', customRoles.map(r => ({ id: r._id, name: r.name })));
 
-    // Find a role that matches the user's current role name
-    const matchingRole = customRoles.find(r => 
+    // Find all workflow configurations for this company
+    const workflows = await WorkflowConfiguration.find({ companyId: dbUser.company });
+    console.log('[DEBUG] Workflows found:', workflows.map(w => ({ id: w._id, name: w.name, isActive: w.isActive })));
+
+    // Check what roles are referenced in workflows
+    const referencedRoleIds = new Set();
+    workflows.forEach(workflow => {
+      workflow.nodes.forEach((node: any) => {
+        if (node.data?.roleId) {
+          referencedRoleIds.add(node.data.roleId.toString());
+        }
+      });
+    });
+
+    console.log('[DEBUG] Referenced role IDs in workflows:', Array.from(referencedRoleIds));
+
+    // Check if the referenced roles exist
+    const existingRoleIds = customRoles.map(r => r._id.toString());
+    const missingRoleIds = Array.from(referencedRoleIds).filter(id => !existingRoleIds.includes(id));
+    
+    console.log('[DEBUG] Missing role IDs:', missingRoleIds);
+
+    // If there are no custom roles, create them based on the workflow requirements
+    let createdRoles = [];
+    if (customRoles.length === 0 && workflows.length > 0) {
+      console.log('[DEBUG] No custom roles found, creating them from workflow nodes...');
+      
+      for (const workflow of workflows) {
+        for (const node of workflow.nodes) {
+          if (node.type === 'approval' && node.data?.roleId) {
+            const roleName = node.label || 'Approval Role';
+            
+            // Skip if we already created this role
+            if (createdRoles.find(r => r.name === roleName)) continue;
+            
+            console.log('[DEBUG] Creating custom role:', roleName);
+            
+            const newRole = new CustomRole({
+              _id: node.data.roleId, // Use the same ID that the workflow expects
+              name: roleName,
+              description: `Auto-created role for ${roleName}`,
+              companyId: dbUser.company,
+              permissions: {
+                canView: true,
+                canCreate: false,
+                canEdit: false,
+                canShare: true,
+                canDownload: true,
+                canForward: false,
+                canManageBudget: false,
+                canESign: true,
+                canApprove: true,
+                canRaiseQueries: true
+              },
+              createdBy: dbUser._id,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            });
+
+            try {
+              await newRole.save();
+              createdRoles.push(newRole);
+              console.log('[DEBUG] Created role:', roleName);
+            } catch (error) {
+              console.log('[DEBUG] Role might already exist:', error.message);
+              // Try to find the existing role
+              const existingRole = await CustomRole.findById(node.data.roleId);
+              if (existingRole) {
+                createdRoles.push(existingRole);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Refresh custom roles list
+    const allCustomRoles = await CustomRole.find({ companyId: dbUser.company });
+    console.log('[DEBUG] All custom roles after creation:', allCustomRoles.map(r => ({ id: r._id, name: r.name })));
+
+    // Find a role that matches the user's current role name or is an approver role
+    let matchingRole = allCustomRoles.find(r => 
       r.name.toLowerCase().includes('approver') || 
       r.name.toLowerCase().includes('boss') ||
       r.name.toLowerCase() === dbUser.role?.name?.toLowerCase()
     );
 
+    // If still no matching role, use the first available role
+    if (!matchingRole && allCustomRoles.length > 0) {
+      matchingRole = allCustomRoles[0];
+      console.log('[DEBUG] Using first available role:', matchingRole.name);
+    }
+
     if (!matchingRole) {
       return NextResponse.json({ 
-        error: 'No matching custom role found',
-        availableRoles: customRoles.map(r => ({ id: r._id, name: r.name }))
+        error: 'No custom roles available',
+        debug: {
+          customRolesCount: allCustomRoles.length,
+          workflowsCount: workflows.length,
+          referencedRoleIds: Array.from(referencedRoleIds),
+          createdRoles: createdRoles.map(r => ({ id: r._id, name: r.name }))
+        }
       }, { status: 400 });
     }
 
@@ -129,7 +220,9 @@ export async function POST(request: NextRequest) {
       details: {
         userRoleAssigned: matchingRole.name,
         executionsFixed: fixedExecutions,
-        totalExecutions: executions.length
+        totalExecutions: executions.length,
+        rolesCreated: createdRoles.length,
+        totalCustomRoles: allCustomRoles.length
       }
     });
 
