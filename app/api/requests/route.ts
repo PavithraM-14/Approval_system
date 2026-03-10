@@ -71,9 +71,21 @@ async function filterRequestsWithCustomWorkflow(
 
   const userRoleIds = userRoleAssignments.map(assignment => assignment.roleId._id.toString());
 
+  // Also get the user's primary role ID from their User record
+  const dbUser = await User.findById(userId).populate('role');
+  const primaryRoleId = dbUser?.role?._id?.toString();
+  
+  // Combine custom role assignments with primary role
+  const allUserRoleIds = [...userRoleIds];
+  if (primaryRoleId) {
+    allUserRoleIds.push(primaryRoleId);
+  }
+
   console.log('[DEBUG] User role assignments:', {
     userId,
     userRoleIds,
+    primaryRoleId,
+    allUserRoleIds,
     userRoleName
   });
 
@@ -107,11 +119,11 @@ async function filterRequestsWithCustomWorkflow(
     
     // Check if user has the role required by the current node
     const nodeRoleId = currentNode.data?.roleId?.toString();
-    const hasRequiredRole = nodeRoleId && userRoleIds.includes(nodeRoleId);
+    const hasRequiredRole = nodeRoleId && allUserRoleIds.includes(nodeRoleId);
     
     console.log('[DEBUG] Role matching for request', request._id, ':', {
       nodeRoleId,
-      userRoleIds,
+      allUserRoleIds,
       hasRequiredRole,
       currentNodeId: execution.currentNodeId,
       nodeLabel: currentNode.label
