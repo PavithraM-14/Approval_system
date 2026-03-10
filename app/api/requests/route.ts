@@ -13,7 +13,6 @@ import WorkflowConfiguration from '../../../models/WorkflowConfiguration';
 import { workflowExecutionEngine } from '../../../lib/workflow-execution-engine';
 import ExecutionState from '../../../models/ExecutionState';
 import UserRoleAssignment from '../../../models/UserRoleAssignment';
-import WorkflowConfiguration from '../../../models/WorkflowConfiguration';
 
 // Helper function to extract company ID from populated or non-populated company field
 function getCompanyId(company: any): string {
