@@ -1164,8 +1164,17 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                 </div>
               );
 
-              const requiredApprovers = approvalEngine.getRequiredApprover(request.status as RequestStatus);
-              const isAuthorized = requiredApprovers.includes(activeUserRoleName as UserRole);
+              // For custom workflows, check if user has permission to approve at current node
+              let isAuthorized = false;
+              
+              if (request.useCustomWorkflow && request.workflowExecutionId) {
+                // For custom workflows, user is authorized if they have canApprove permission
+                isAuthorized = permissions?.canApprove || false;
+              } else {
+                // For legacy workflows, use the old approval engine logic
+                const requiredApprovers = approvalEngine.getRequiredApprover(request.status as RequestStatus);
+                isAuthorized = requiredApprovers.includes(activeUserRoleName as UserRole);
+              }
 
               return isAuthorized ? (
                 <div className="mt-4 sm:mt-6 flex flex-col gap-3">
@@ -1191,8 +1200,18 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
               ) : banner;
             }
             
-            const requiredApprovers = approvalEngine.getRequiredApprover(request.status as RequestStatus);
-            const isAuthorized = requiredApprovers.includes(activeUserRoleName as UserRole);
+            // For custom workflows, check if user has permission to approve at current node
+            let isAuthorized = false;
+            
+            if (request.useCustomWorkflow && request.workflowExecutionId) {
+              // For custom workflows, user is authorized if they have canApprove permission
+              // The backend will verify they have the correct role for the current node
+              isAuthorized = permissions?.canApprove || false;
+            } else {
+              // For legacy workflows, use the old approval engine logic
+              const requiredApprovers = approvalEngine.getRequiredApprover(request.status as RequestStatus);
+              isAuthorized = requiredApprovers.includes(activeUserRoleName as UserRole);
+            }
             
             return isAuthorized ? (
               <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
