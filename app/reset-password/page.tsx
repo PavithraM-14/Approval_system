@@ -70,11 +70,11 @@ function ResetPasswordContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 px-4 relative overflow-hidden">
       {/* Background Glows */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[10%] right-[10%] w-[30%] h-[30%] bg-blue-600/10 rounded-full blur-[100px]"></div>
-        <div className="absolute bottom-[10%] left-[10%] w-[30%] h-[30%] bg-purple-600/10 rounded-full blur-[100px]"></div>
+        <div className="absolute top-[10%] right-[10%] w-[30%] h-[30%] bg-blue-200/30 rounded-full blur-[100px]"></div>
+        <div className="absolute bottom-[10%] left-[10%] w-[30%] h-[30%] bg-purple-200/30 rounded-full blur-[100px]"></div>
       </div>
 
       <div className="max-w-md w-full space-y-8 animate-fadeIn relative z-10">

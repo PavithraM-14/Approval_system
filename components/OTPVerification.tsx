@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import SeadLogo from './SeadLogo';
 
 interface OTPVerificationProps {
   email: string;
@@ -137,30 +138,30 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 relative overflow-hidden">
-      {/* Background Glows */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[10%] right-[10%] w-[30%] h-[30%] bg-blue-600/10 rounded-full blur-[100px]"></div>
-        <div className="absolute bottom-[10%] left-[10%] w-[30%] h-[30%] bg-purple-600/10 rounded-full blur-[100px]"></div>
-      </div>
-
-      <div className="max-w-md w-full space-y-8 animate-fadeIn relative z-10">
-        <div className="flex flex-col items-center text-center">
-          <div className="w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl shadow-xl flex items-center justify-center mb-6 transform rotate-3">
-            <span className="text-white text-2xl font-black tracking-tighter">SE</span>
-          </div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">
-            Security Verification
-          </h1>
-          <p className="mt-2 text-slate-400 font-medium">
-            Enter the 6-digit code sent to <span className="text-white font-bold">{email}</span>
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        {/* Logo */}
+        <div className="flex justify-center mb-8">
+          <SeadLogo className="w-32 h-20" />
         </div>
 
-        <div className="bg-slate-800/50 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/10">
+        {/* Header */}
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            Verify Your Email
+          </h2>
+          <p className="text-sm text-gray-600 mb-8">
+            Enter the 6-digit code sent to <span className="font-semibold text-gray-900">{email}</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-8 px-6 shadow-lg rounded-xl border border-gray-200">
+          {/* Error Message */}
           {error && (
-            <div className="bg-red-500/10 text-red-400 border border-red-500/20 p-4 rounded-xl text-sm mb-6 flex items-center gap-3">
-              <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+              <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
               {error}
@@ -168,8 +169,8 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
           )}
 
           <div className="mb-8">
-            <label className="block text-sm font-semibold text-slate-300 mb-4 text-center">
-              OTP Code
+            <label className="block text-sm font-medium text-gray-700 mb-4 text-center">
+              Verification Code
             </label>
             <div className="flex justify-center gap-2">
               {otp.map((digit, index) => (
@@ -182,12 +183,12 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
                   onChange={(e) => handleChange(index, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(index, e)}
                   onPaste={index === 0 ? handlePaste : undefined}
-                  className={`w-12 h-14 text-center text-2xl font-bold rounded-xl border transition-all duration-200 outline-none
+                  className={`w-12 h-14 text-center text-2xl font-bold rounded-lg border transition-all duration-200 outline-none
                     ${error
-                      ? 'border-red-500/50 bg-red-500/10 text-red-400'
+                      ? 'border-red-300 bg-red-50 text-red-700 focus:ring-2 focus:ring-red-500 focus:border-red-500'
                       : digit
-                        ? 'border-blue-500 bg-blue-500/10 text-white'
-                        : 'border-slate-700 bg-slate-900/50 text-white focus:border-blue-500/50'}
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+                        : 'border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'}
                   `}
                   disabled={loading}
                 />
@@ -197,22 +198,27 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
 
           {loading && (
             <div className="text-center mb-8">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              <p className="text-sm font-semibold text-blue-400 mt-3 uppercase tracking-wider">Verifying...</p>
+              <div className="inline-flex items-center gap-2">
+                <svg className="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span className="text-sm font-medium text-indigo-600">Verifying...</span>
+              </div>
             </div>
           )}
 
           <div className="text-center mb-8">
-            <p className="text-sm text-slate-400 mb-2 font-medium">Didn&apos;t receive the code?</p>
+            <p className="text-sm text-gray-600 mb-3">Didn&apos;t receive the code?</p>
             {countdown > 0 ? (
-              <p className="text-sm font-bold text-slate-300">
-                Resend available in <span className="text-blue-400">{countdown}s</span>
+              <p className="text-sm font-medium text-gray-700">
+                Resend available in <span className="text-indigo-600 font-semibold">{countdown}s</span>
               </p>
             ) : (
               <button
                 onClick={handleResendOTP}
                 disabled={resending}
-                className="text-blue-400 font-bold hover:text-blue-300 transition-colors disabled:opacity-50 text-sm flex items-center justify-center w-full gap-2"
+                className="text-indigo-600 font-medium hover:text-indigo-500 transition-colors disabled:opacity-50 text-sm"
               >
                 {resending ? 'Sending Code...' : 'Resend Verification Code'}
               </button>
@@ -222,16 +228,23 @@ export default function OTPVerification({ email, type, onVerify, onResend, onBac
           <button
             onClick={onBack}
             disabled={loading}
-            className="w-full bg-slate-900/50 border border-slate-700 hover:bg-slate-900 text-slate-300 py-4 rounded-xl font-bold transition-all disabled:opacity-50"
+            className="w-full bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-700 py-3 px-4 rounded-lg font-medium transition-colors disabled:opacity-50"
           >
             Back to {type === 'signup' ? 'Signup' : 'Login'}
           </button>
 
-          <div className="mt-8 p-4 bg-blue-500/5 rounded-xl border border-blue-500/10">
-            <p className="text-xs text-blue-400/80 text-center leading-relaxed font-medium">
-              For security, this code will expire in 60 seconds. Please keep this screen open while checking your inbox.
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-xs text-blue-700 text-center leading-relaxed">
+              For security, this code will expire in 10 minutes. Please keep this screen open while checking your inbox.
             </p>
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-8 text-center">
+          <p className="text-xs text-gray-500">
+            Secure Enterprise Approval & Documentation System
+          </p>
         </div>
       </div>
     </div>
