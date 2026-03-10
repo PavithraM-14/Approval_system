@@ -127,7 +127,9 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus, requ
               
               // Skip roles that are for requesters (they don't approve, they just create)
               const isRequesterRole = stepName.toLowerCase().includes('requester') || 
-                                     stepName.toLowerCase().includes('creator');
+                                     stepName.toLowerCase().includes('creator') ||
+                                     stepName.toLowerCase().includes('employee') ||
+                                     stepName.toLowerCase().includes('emplyee'); // Handle typo in label
               
               if (!isRequesterRole) {
                 console.log('[ApprovalWorkflow] Adding approval step:', stepName);
@@ -173,10 +175,25 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus, requ
               const execution = await execResponse.json();
               const currentNodeId = execution.currentNodeId;
               console.log('[ApprovalWorkflow] Execution current node:', currentNodeId);
+              console.log('[ApprovalWorkflow] Execution status:', execution.status);
               
-              const currentIndex = steps.findIndex((s: WorkflowStep) => s.id === currentNodeId);
+              // Find the step that matches the current node
+              let currentIndex = steps.findIndex((s: WorkflowStep) => s.id === currentNodeId);
+              
+              // If we can't find the exact node, try to determine based on execution status
+              if (currentIndex < 0) {
+                if (execution.status === 'completed') {
+                  // If workflow is completed, show the last step (Approved)
+                  currentIndex = steps.length - 1;
+                } else if (execution.status === 'in_progress') {
+                  // If in progress but can't find the node, show first approval step
+                  currentIndex = steps.findIndex(s => s.type === 'approval');
+                  if (currentIndex < 0) currentIndex = 1; // Default to second step if no approval found
+                }
+              }
+              
               console.log('[ApprovalWorkflow] Current step index from execution:', currentIndex);
-              setCurrentStepIndex(currentIndex >= 0 ? currentIndex : 0);
+              setCurrentStepIndex(Math.max(0, currentIndex));
             } else {
               console.log('[ApprovalWorkflow] Failed to fetch execution, using status-based detection');
               // Fallback to status-based detection
@@ -208,18 +225,17 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus, requ
       
       // Map status to step index
       if (currentStatus === 'submitted') {
-        // When status is submitted, the request has been created and is waiting for first approver
-        // So we should show "Submitted" as completed and first approval step as current
+        // When status is submitted, the request has been created and should be at the first approval step
         console.log('[ApprovalWorkflow] Status is submitted, setting to first approval step');
         const firstApprovalIndex = steps.findIndex(s => s.type === 'approval');
+        console.log('[ApprovalWorkflow] First approval step index:', firstApprovalIndex);
         setCurrentStepIndex(firstApprovalIndex >= 0 ? firstApprovalIndex : 1);
       } else if (currentStatus === 'approved') {
         console.log('[ApprovalWorkflow] Status is approved, setting to last step');
         setCurrentStepIndex(steps.length - 1);
       } else {
-        // For legacy statuses like "manager_review", default to first approval step
-        // since the custom workflow doesn't use these status names
-        console.log('[ApprovalWorkflow] Legacy status detected, defaulting to first approval step');
+        // For other statuses, try to find the first approval step
+        console.log('[ApprovalWorkflow] Other status detected, defaulting to first approval step');
         const firstApprovalIndex = steps.findIndex(s => s.type === 'approval');
         console.log('[ApprovalWorkflow] First approval step index:', firstApprovalIndex);
         setCurrentStepIndex(firstApprovalIndex >= 0 ? firstApprovalIndex : 1);
