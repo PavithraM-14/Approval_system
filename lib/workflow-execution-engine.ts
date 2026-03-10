@@ -70,9 +70,32 @@ export class WorkflowExecutionEngine {
       throw new Error(`No outgoing edge found from start node in workflow ${workflowId}`);
     }
 
-    const firstNode = workflow.nodes.find((node: IWorkflowNode) => node.id === startEdge.target);
+    let firstNode = workflow.nodes.find((node: IWorkflowNode) => node.id === startEdge.target);
     if (!firstNode) {
       throw new Error(`First node after start not found in workflow ${workflowId}`);
+    }
+
+    // Skip requester nodes - if the first node is a requester role, advance to the next node
+    if (firstNode.type === 'approval') {
+      const nodeLabel = firstNode.label || '';
+      const isRequesterNode = nodeLabel.toLowerCase().includes('employee') || 
+                             nodeLabel.toLowerCase().includes('emplyee') ||
+                             nodeLabel.toLowerCase().includes('requester') ||
+                             nodeLabel.toLowerCase().includes('creator');
+      
+      if (isRequesterNode) {
+        console.log('[DEBUG] Skipping requester node:', nodeLabel);
+        
+        // Find the next node after the requester node
+        const nextEdge = workflow.edges.find((edge: IWorkflowEdge) => edge.source === firstNode.id);
+        if (nextEdge) {
+          const nextNode = workflow.nodes.find((node: IWorkflowNode) => node.id === nextEdge.target);
+          if (nextNode) {
+            console.log('[DEBUG] Advancing to next node:', nextNode.label);
+            firstNode = nextNode;
+          }
+        }
+      }
     }
 
     // Create a new ExecutionState document
@@ -81,7 +104,7 @@ export class WorkflowExecutionEngine {
       workflowId: workflow._id,
       workflowVersion: workflow.version,
       companyId: workflow.companyId,
-      currentNodeId: firstNode.id, // Start at the first approval node, not the start node
+      currentNodeId: firstNode.id, // Start at the first non-requester approval node
       status: 'in_progress',
       parallelPaths: [],
       history: [
