@@ -395,7 +395,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
     }
   };
 
-  const handleApprove = async (notes: string, attachments: string[], sopReference?: string, budgetAvailable?: boolean, budgetData?: { allocated: number; spent: number; balance: number }) => {
+  const handleApprove = async (notes: string, attachments: string[], signature?: string, sopReference?: string, budgetAvailable?: boolean, budgetData?: { allocated: number; spent: number; balance: number }) => {
     try {
       setProcessingApproval(true);
       const response = await fetch(`/api/requests/${params.id}/approve`, {
@@ -405,6 +405,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
           action: 'approve',
           notes,
           attachments,
+          signature,
           sopReference,
           budgetAvailable,
           budgetData
