@@ -10,6 +10,14 @@ import ExecutionState from '../../../../../models/ExecutionState';
 import WorkflowConfiguration from '../../../../../models/WorkflowConfiguration';
 import UserRoleAssignment from '../../../../../models/UserRoleAssignment';
 
+// Helper function to extract company ID from populated or non-populated company field
+function getCompanyId(company: any): string {
+  if (typeof company === 'object' && company._id) {
+    return company._id.toString();
+  }
+  return company.toString();
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -171,43 +179,33 @@ export async function POST(
             const activeWorkflow = await WorkflowConfiguration.findById(updatedExecutionState.workflowId);
             if (activeWorkflow) {
               const currentNode = activeWorkflow.nodes.find((n: any) => n.id === updatedExecutionState.currentNodeId);
-              if (currentNode && currentNode.type === 'approval') {
-                const roleName = currentNode.label || currentNode.data?.label;
+              if (currentNode && currentNode.type === 'approval' && currentNode.data?.roleId) {
+                console.log('[DEBUG] Looking for users with roleId:', currentNode.data.roleId);
                 
-                console.log('[DEBUG] Looking for users with role:', roleName);
+                // Find users with this role in the company
+                const roleAssignments = await UserRoleAssignment.find({
+                  companyId: getCompanyId(requestRecord.requester.company || user.company),
+                  roleId: currentNode.data.roleId
+                }).populate('userId');
                 
-                // First, find the role by name
-                const CustomRole = (await import('../../../../../models/CustomRole')).default;
-                const role = await CustomRole.findOne({
-                  name: roleName,
-                  companyId: requestRecord.requester.company || user.company
-                });
+                console.log('[DEBUG] Notifying', roleAssignments.length, 'users for next approval role:', currentNode.label);
                 
-                if (!role) {
-                  console.error('[ERROR] Role not found:', roleName);
-                } else {
-                  console.log('[DEBUG] Found role:', role.name, 'with ID:', role._id);
-                  
-                  // Find users with this role in the company
-                  const roleAssignments = await UserRoleAssignment.find({
-                    companyId: requestRecord.requester.company || user.company,
-                    roleId: role._id
-                  }).populate('userId');
-                  
-                  console.log('[DEBUG] Notifying', roleAssignments.length, 'users for next approval role:', roleName);
-                  
-                  for (const assignment of roleAssignments) {
-                    if (assignment.userId) {
-                      console.log('[DEBUG] Sending notification to user:', assignment.userId);
-                      await notifyApprovalPending(
-                        assignment.userId.toString(),
-                        params.id,
-                        updatedRequest.title,
-                        user.name
-                      );
-                    }
+                for (const assignment of roleAssignments) {
+                  if (assignment.userId) {
+                    console.log('[DEBUG] Sending notification to user:', assignment.userId._id);
+                    await notifyApprovalPending(
+                      assignment.userId._id.toString(),
+                      params.id,
+                      updatedRequest.title,
+                      user.name
+                    );
                   }
                 }
+              } else {
+                console.log('[DEBUG] Current node is not an approval node or missing roleId:', {
+                  nodeType: currentNode?.type,
+                  hasRoleId: !!currentNode?.data?.roleId
+                });
               }
             }
           } catch (notificationError) {

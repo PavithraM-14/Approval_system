@@ -64,13 +64,24 @@ export class WorkflowExecutionEngine {
       throw new Error(`Workflow ${workflowId} does not have a start node`);
     }
 
+    // Find the first node after start (should be the first approval node)
+    const startEdge = workflow.edges.find((edge: IWorkflowEdge) => edge.source === startNode.id);
+    if (!startEdge) {
+      throw new Error(`No outgoing edge found from start node in workflow ${workflowId}`);
+    }
+
+    const firstNode = workflow.nodes.find((node: IWorkflowNode) => node.id === startEdge.target);
+    if (!firstNode) {
+      throw new Error(`First node after start not found in workflow ${workflowId}`);
+    }
+
     // Create a new ExecutionState document
     const executionState = new ExecutionState({
       requestId,
       workflowId: workflow._id,
       workflowVersion: workflow.version,
       companyId: workflow.companyId,
-      currentNodeId: startNode.id,
+      currentNodeId: firstNode.id, // Start at the first approval node, not the start node
       status: 'in_progress',
       parallelPaths: [],
       history: [
@@ -80,12 +91,26 @@ export class WorkflowExecutionEngine {
           action: 'entered',
           timestamp: new Date(),
         },
+        {
+          nodeId: firstNode.id,
+          nodeType: firstNode.type,
+          action: 'entered',
+          timestamp: new Date(),
+        },
       ],
       startedAt: new Date(),
     });
 
     // Save the ExecutionState to the database
     await executionState.save();
+
+    console.log('[DEBUG] Workflow execution initialized:', {
+      executionId: executionState._id,
+      workflowId,
+      currentNodeId: firstNode.id,
+      nodeType: firstNode.type,
+      nodeLabel: firstNode.label
+    });
 
     return executionState;
   }
@@ -209,6 +234,15 @@ export class WorkflowExecutionEngine {
     if (!nextNode) {
       throw new Error(`Next node not found with ID ${outgoingEdge.target}`);
     }
+
+    console.log('[DEBUG] Advancing workflow from node to node:', {
+      fromNodeId: currentNode.id,
+      fromNodeType: currentNode.type,
+      fromNodeLabel: currentNode.label,
+      toNodeId: nextNode.id,
+      toNodeType: nextNode.type,
+      toNodeLabel: nextNode.label
+    });
 
     // Update current node to next node
     executionState.currentNodeId = nextNode.id;

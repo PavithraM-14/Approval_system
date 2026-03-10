@@ -13,6 +13,7 @@ import WorkflowConfiguration from '../../../models/WorkflowConfiguration';
 import { workflowExecutionEngine } from '../../../lib/workflow-execution-engine';
 import ExecutionState from '../../../models/ExecutionState';
 import UserRoleAssignment from '../../../models/UserRoleAssignment';
+import WorkflowConfiguration from '../../../models/WorkflowConfiguration';
 
 // Helper function to extract company ID from populated or non-populated company field
 function getCompanyId(company: any): string {
@@ -64,6 +65,19 @@ async function filterRequestsWithCustomWorkflow(
     return [];
   }
 
+  // Get user's role assignments to check against workflow nodes
+  const userRoleAssignments = await UserRoleAssignment.find({
+    userId: new mongoose.Types.ObjectId(userId)
+  }).populate('roleId');
+
+  const userRoleIds = userRoleAssignments.map(assignment => assignment.roleId._id.toString());
+
+  console.log('[DEBUG] User role assignments:', {
+    userId,
+    userRoleIds,
+    userRoleName
+  });
+
   // Get execution states for custom workflow requests
   const executionIds = customWorkflowRequests.map(r => r.workflowExecutionId).filter(Boolean);
   const executions = await ExecutionState.find({ _id: { $in: executionIds } });
@@ -92,18 +106,19 @@ async function filterRequestsWithCustomWorkflow(
       return false;
     }
     
-    // Check if user's role matches the current node's role
-    const nodeRoleName = currentNode.label || currentNode.data?.label;
-    const matches = nodeRoleName === userRoleName;
+    // Check if user has the role required by the current node
+    const nodeRoleId = currentNode.data?.roleId?.toString();
+    const hasRequiredRole = nodeRoleId && userRoleIds.includes(nodeRoleId);
     
     console.log('[DEBUG] Role matching for request', request._id, ':', {
-      nodeRoleName,
-      userRoleName,
-      matches,
-      currentNodeId: execution.currentNodeId
+      nodeRoleId,
+      userRoleIds,
+      hasRequiredRole,
+      currentNodeId: execution.currentNodeId,
+      nodeLabel: currentNode.label
     });
     
-    return matches;
+    return hasRequiredRole;
   });
 
   // Add visibility metadata
@@ -471,43 +486,33 @@ export async function POST(request: NextRequest) {
           const activeWorkflow = await WorkflowConfiguration.findById(executionState.workflowId);
           if (activeWorkflow) {
             const currentNode = activeWorkflow.nodes.find((n: any) => n.id === executionState.currentNodeId);
-            if (currentNode && currentNode.type === 'approval') {
-              const roleName = currentNode.label || currentNode.data?.label;
+            if (currentNode && currentNode.type === 'approval' && currentNode.data?.roleId) {
+              console.log('[DEBUG] Looking for users with roleId:', currentNode.data.roleId, 'in company:', getCompanyId(requesterUser.company));
               
-              console.log('[DEBUG] Looking for users with role:', roleName, 'in company:', getCompanyId(requesterUser.company));
+              // Find users with this role in the company
+              const roleAssignments = await UserRoleAssignment.find({
+                companyId: getCompanyId(requesterUser.company),
+                roleId: currentNode.data.roleId
+              }).populate('userId');
               
-              // First, find the role by name
-              const CustomRole = (await import('../../../models/CustomRole')).default;
-              const role = await CustomRole.findOne({
-                name: roleName,
-                companyId: getCompanyId(requesterUser.company)
-              });
+              console.log('[DEBUG] Found', roleAssignments.length, 'users for role:', currentNode.label);
               
-              if (!role) {
-                console.error('[ERROR] Role not found:', roleName);
-              } else {
-                console.log('[DEBUG] Found role:', role.name, 'with ID:', role._id);
-                
-                // Find users with this role in the company
-                const roleAssignments = await UserRoleAssignment.find({
-                  companyId: getCompanyId(requesterUser.company),
-                  roleId: role._id
-                }).populate('userId');
-                
-                console.log('[DEBUG] Found', roleAssignments.length, 'users for role:', roleName);
-                
-                for (const assignment of roleAssignments) {
-                  if (assignment.userId) {
-                    console.log('[DEBUG] Sending notification to user:', assignment.userId);
-                    await notifyApprovalPending(
-                      assignment.userId.toString(),
-                      newRequest._id.toString(),
-                      validatedData.title,
-                      requesterUser.name
-                    );
-                  }
+              for (const assignment of roleAssignments) {
+                if (assignment.userId) {
+                  console.log('[DEBUG] Sending notification to user:', assignment.userId._id);
+                  await notifyApprovalPending(
+                    assignment.userId._id.toString(),
+                    newRequest._id.toString(),
+                    validatedData.title,
+                    requesterUser.name
+                  );
                 }
               }
+            } else {
+              console.log('[DEBUG] Current node is not an approval node or missing roleId:', {
+                nodeType: currentNode?.type,
+                hasRoleId: !!currentNode?.data?.roleId
+              });
             }
           }
         }
