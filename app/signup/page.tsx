@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Role } from '../../lib/types';
 import PasswordInput from '../../components/PasswordInput';
 import OTPVerification from '../../components/OTPVerification';
+import SeadLogo from '../../components/SeadLogo';
 
 type SignupType = 'company' | 'employee';
 type Step = 'type-selection' | 'form' | 'otp';
@@ -58,10 +59,8 @@ export default function SignupPage() {
   // Filter companies based on search query
   useEffect(() => {
     if (companySearchQuery.trim() === '') {
-      // Show all companies when no search query
       setFilteredCompanies(companies);
     } else {
-      // Filter companies based on search
       const filtered = companies.filter(company =>
         company.name.toLowerCase().includes(companySearchQuery.toLowerCase())
       );
@@ -87,7 +86,6 @@ export default function SignupPage() {
       const res = await fetch('/api/roles');
       if (res.ok) {
         const data: Role[] = await res.json();
-        // Filter out system admin roles for employee signup
         const nonAdminRoles = data.filter(r => !r.isSystemAdmin);
         setRoles(nonAdminRoles);
         if (nonAdminRoles.length > 0) {
@@ -98,12 +96,6 @@ export default function SignupPage() {
       console.error('Failed to fetch roles', err);
     }
   };
-
-  const inputClass =
-    'mt-1 block w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 ' +
-    'focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all';
-
-  const labelClass = 'block text-sm font-semibold text-slate-300 ml-1';
 
   const validateContactNo = () => {
     if (contactNo) {
@@ -150,7 +142,6 @@ export default function SignupPage() {
     }
 
     try {
-      // Send OTP to email
       const response = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -285,42 +276,43 @@ export default function SignupPage() {
 
   if (step === 'type-selection') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-12 relative overflow-hidden">
-        {/* Background Glows */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-[10%] right-[10%] w-[30%] h-[30%] bg-blue-600/10 rounded-full blur-[100px]"></div>
-          <div className="absolute bottom-[10%] left-[10%] w-[30%] h-[30%] bg-purple-600/10 rounded-full blur-[100px]"></div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-2xl">
+          {/* Logo */}
+          <div className="flex justify-center mb-8">
+            <SeadLogo className="w-32 h-20" />
+          </div>
 
-        <div className="max-w-4xl w-full space-y-8 animate-fadeIn relative z-10">
-          <div className="flex flex-col items-center text-center">
-            <h2 className="text-4xl font-extrabold text-white tracking-tight">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
               Join S.E.A.D.
             </h2>
-            <p className="mt-2 text-slate-400 font-medium">
+            <p className="text-sm text-gray-600">
               Choose your signup type
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          {/* Signup Type Cards */}
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
             {/* Company Signup Card */}
             <button
               onClick={() => {
                 setSignupType('company');
                 setStep('form');
               }}
-              className="bg-slate-800/50 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/10 hover:border-blue-500/50 transition-all hover:scale-105 text-left group"
+              className="bg-white p-8 rounded-xl shadow-lg border border-gray-200 hover:border-indigo-300 hover:shadow-xl transition-all text-left group"
             >
-              <div className="flex items-center justify-center w-16 h-16 bg-blue-600/20 rounded-xl mb-4 group-hover:bg-blue-600/30 transition-colors">
-                <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-center justify-center w-16 h-16 bg-indigo-100 rounded-xl mb-4 group-hover:bg-indigo-200 transition-colors">
+                <svg className="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">New Company</h3>
-              <p className="text-slate-400">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">New Company</h3>
+              <p className="text-gray-600 text-sm mb-4">
                 Register your company and become the system administrator
               </p>
-              <div className="mt-4 text-blue-400 font-medium flex items-center gap-2">
+              <div className="text-indigo-600 font-medium flex items-center gap-2">
                 Get Started
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -334,18 +326,18 @@ export default function SignupPage() {
                 setSignupType('employee');
                 setStep('form');
               }}
-              className="bg-slate-800/50 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/10 hover:border-purple-500/50 transition-all hover:scale-105 text-left group"
+              className="bg-white p-8 rounded-xl shadow-lg border border-gray-200 hover:border-purple-300 hover:shadow-xl transition-all text-left group"
             >
-              <div className="flex items-center justify-center w-16 h-16 bg-purple-600/20 rounded-xl mb-4 group-hover:bg-purple-600/30 transition-colors">
-                <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-center justify-center w-16 h-16 bg-purple-100 rounded-xl mb-4 group-hover:bg-purple-200 transition-colors">
+                <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">Employee</h3>
-              <p className="text-slate-400">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Employee</h3>
+              <p className="text-gray-600 text-sm mb-4">
                 Join your company that's already using S.E.A.D.
               </p>
-              <div className="mt-4 text-purple-400 font-medium flex items-center gap-2">
+              <div className="text-purple-600 font-medium flex items-center gap-2">
                 Get Started
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -354,12 +346,13 @@ export default function SignupPage() {
             </button>
           </div>
 
-          <div className="text-center pt-4">
-            <p className="text-sm text-slate-400 font-medium">
+          {/* Login Link */}
+          <div className="text-center">
+            <p className="text-sm text-gray-600">
               Already have an account?{' '}
               <button
                 onClick={() => router.push('/login')}
-                className="text-blue-400 hover:text-blue-300 font-bold transition-colors ml-1"
+                className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors"
               >
                 Sign in
               </button>
@@ -371,38 +364,44 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-12 relative overflow-hidden">
-      {/* Background Glows */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[10%] right-[10%] w-[30%] h-[30%] bg-blue-600/10 rounded-full blur-[100px]"></div>
-        <div className="absolute bottom-[10%] left-[10%] w-[30%] h-[30%] bg-purple-600/10 rounded-full blur-[100px]"></div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        {/* Logo */}
+        <div className="flex justify-center mb-8">
+          <SeadLogo className="w-32 h-20" />
+        </div>
 
-      <div className="max-w-md w-full space-y-8 animate-fadeIn relative z-10">
-        <div className="flex flex-col items-center text-center">
+        {/* Header */}
+        <div className="text-center">
           <button
             onClick={() => setStep('type-selection')}
-            className="mb-4 text-slate-400 hover:text-white transition-colors flex items-center gap-2"
+            className="mb-4 text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-2 mx-auto"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             Back to selection
           </button>
 
-          <h2 className="text-4xl font-extrabold text-white tracking-tight">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
             {signupType === 'company' ? 'Register Company' : 'Employee Signup'}
           </h2>
-          <p className="mt-2 text-slate-400 font-medium">
+          <p className="text-sm text-gray-600 mb-8">
             {signupType === 'company' 
               ? 'Create your company account' 
               : 'Join your company on S.E.A.D.'}
           </p>
         </div>
+      </div>
 
-        <div className="bg-slate-800/50 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/10">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-8 px-6 shadow-lg rounded-xl border border-gray-200">
+          {/* Error Message */}
           {error && (
-            <div className="bg-red-50 text-red-600 border border-red-200 p-3 rounded-md text-sm mb-4">
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+              <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
               {error}
             </div>
           )}
@@ -412,7 +411,7 @@ export default function SignupPage() {
               <>
                 {/* Company Signup Form */}
                 <div>
-                  <label className={labelClass}>Company Name *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Company Name *</label>
                   <input
                     type="text"
                     required
@@ -420,12 +419,12 @@ export default function SignupPage() {
                     onChange={(e) => setCompanyName(e.target.value)}
                     placeholder="Enter company name"
                     autoComplete="off"
-                    className={inputClass}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
                   />
                 </div>
 
                 <div>
-                  <label className={labelClass}>Admin Full Name *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Admin Full Name *</label>
                   <input
                     type="text"
                     required
@@ -433,12 +432,12 @@ export default function SignupPage() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Enter your full name"
                     autoComplete="off"
-                    className={inputClass}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
                   />
                 </div>
 
                 <div>
-                  <label className={labelClass}>Admin Email Address *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Admin Email Address *</label>
                   <input
                     type="email"
                     required
@@ -446,12 +445,12 @@ export default function SignupPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="admin@company.com"
                     autoComplete="off"
-                    className={inputClass}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
                   />
                 </div>
 
                 <div>
-                  <label className={labelClass}>Admin Contact Number *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Admin Contact Number *</label>
                   <input
                     type="tel"
                     required
@@ -460,7 +459,7 @@ export default function SignupPage() {
                     onBlur={validateContactNo}
                     placeholder="Enter 10-digit contact number"
                     autoComplete="off"
-                    className={inputClass}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
                   />
                 </div>
               </>
@@ -468,7 +467,7 @@ export default function SignupPage() {
               <>
                 {/* Employee Signup Form */}
                 <div>
-                  <label className={labelClass}>Full Name *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
                   <input
                     type="text"
                     required
@@ -476,12 +475,12 @@ export default function SignupPage() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Enter your full name"
                     autoComplete="off"
-                    className={inputClass}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
                   />
                 </div>
 
                 <div>
-                  <label className={labelClass}>Employee ID *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Employee ID *</label>
                   <input
                     type="text"
                     required
@@ -489,12 +488,12 @@ export default function SignupPage() {
                     onChange={(e) => setEmpId(e.target.value)}
                     placeholder="Enter your employee ID"
                     autoComplete="off"
-                    className={inputClass}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
                   />
                 </div>
 
                 <div>
-                  <label className={labelClass}>Email Address *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
                   <input
                     type="email"
                     required
@@ -502,12 +501,12 @@ export default function SignupPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@company.com"
                     autoComplete="off"
-                    className={inputClass}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
                   />
                 </div>
 
                 <div>
-                  <label className={labelClass}>Contact Number *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Contact Number *</label>
                   <input
                     type="tel"
                     required
@@ -516,12 +515,12 @@ export default function SignupPage() {
                     onBlur={validateContactNo}
                     placeholder="Enter 10-digit contact number"
                     autoComplete="off"
-                    className={inputClass}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
                   />
                 </div>
 
                 <div className="relative">
-                  <label className={labelClass}>Select Company *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Company *</label>
                   <input
                     type="text"
                     required
@@ -533,16 +532,15 @@ export default function SignupPage() {
                     onFocus={() => setShowCompanyDropdown(true)}
                     placeholder="Click to select or search for your company"
                     autoComplete="off"
-                    className={inputClass}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
                   />
                   {showCompanyDropdown && filteredCompanies.length > 0 && (
                     <>
-                      {/* Backdrop to close dropdown when clicking outside */}
                       <div 
                         className="fixed inset-0 z-10" 
                         onClick={() => setShowCompanyDropdown(false)}
                       />
-                      <div className="absolute z-20 mt-2 w-full max-h-60 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-2xl">
+                      <div className="absolute z-20 mt-2 w-full max-h-60 overflow-y-auto bg-white border border-gray-300 rounded-lg shadow-lg">
                         {filteredCompanies.map((company) => (
                           <button
                             key={company._id}
@@ -552,16 +550,16 @@ export default function SignupPage() {
                               setCompanySearchQuery(company.name);
                               setShowCompanyDropdown(false);
                             }}
-                            className={`w-full text-left px-4 py-3 hover:bg-slate-700 transition-colors border-b border-slate-700 last:border-b-0 ${
+                            className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 ${
                               selectedCompanyId === company._id 
-                                ? 'bg-slate-700 text-blue-400 font-semibold' 
-                                : 'text-white'
+                                ? 'bg-indigo-50 text-indigo-600 font-semibold' 
+                                : 'text-gray-900'
                             }`}
                           >
                             <div className="flex items-center justify-between">
                               <span>{company.name}</span>
                               {selectedCompanyId === company._id && (
-                                <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                 </svg>
                               )}
@@ -577,11 +575,11 @@ export default function SignupPage() {
                         className="fixed inset-0 z-10" 
                         onClick={() => setShowCompanyDropdown(false)}
                       />
-                      <div className="absolute z-20 mt-2 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-4">
-                        <p className="text-slate-400 text-sm text-center">
+                      <div className="absolute z-20 mt-2 w-full bg-white border border-gray-300 rounded-lg shadow-lg p-4">
+                        <p className="text-gray-500 text-sm text-center">
                           No companies found matching "{companySearchQuery}"
                         </p>
-                        <p className="text-slate-500 text-xs text-center mt-2">
+                        <p className="text-gray-400 text-xs text-center mt-2">
                           Please check the spelling or contact your administrator
                         </p>
                       </div>
@@ -590,12 +588,12 @@ export default function SignupPage() {
                 </div>
 
                 <div>
-                  <label className={labelClass}>Role *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Role *</label>
                   <select
                     required
                     value={selectedRoleId}
                     onChange={(e) => setSelectedRoleId(e.target.value)}
-                    className={inputClass}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900"
                   >
                     <option value="">Select a role</option>
                     {roles.map((role) => (
@@ -610,55 +608,67 @@ export default function SignupPage() {
 
             {/* Common Password Fields */}
             <div>
-              <label className={labelClass}>Password *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Password *</label>
               <PasswordInput
                 value={password}
                 onChange={setPassword}
                 required
                 placeholder="Enter your password"
                 autoComplete="new-password"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
               />
             </div>
 
             <div>
-              <label className={labelClass}>Confirm Password *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password *</label>
               <PasswordInput
                 value={confirmPassword}
                 onChange={setConfirmPassword}
                 required
                 placeholder="Confirm your password"
                 autoComplete="new-password"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   Processing...
-                </span>
-              ) : 'Continue to Verification'}
+                </>
+              ) : (
+                'Continue to Verification'
+              )}
             </button>
           </form>
 
-          <div className="mt-8 text-center pt-8 border-t border-white/5">
-            <p className="text-sm text-slate-400 font-medium">
+          {/* Login Link */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
               Already have an account?{' '}
               <button
                 onClick={() => router.push('/login')}
-                className="text-blue-400 hover:text-blue-300 font-bold transition-colors ml-1"
+                className="font-medium text-indigo-600 hover:text-indigo-500 transition-colors"
               >
                 Sign in
               </button>
             </p>
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-8 text-center">
+          <p className="text-xs text-gray-500">
+            Secure Enterprise Approval & Documentation System
+          </p>
         </div>
       </div>
     </div>
