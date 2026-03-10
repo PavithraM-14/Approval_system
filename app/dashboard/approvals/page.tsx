@@ -194,20 +194,21 @@ function ApprovalsPageContent() {
         return 'bg-green-100 text-green-700';
       case 'rejected':
         return 'bg-red-100 text-red-700';
-      case 'manager_review':
+      case 'submitted':
         return 'bg-blue-100 text-blue-700';
-      case 'parallel_verification':
-        return 'bg-yellow-100 text-yellow-700';
-      case 'vp_approval':
-        return 'bg-purple-100 text-purple-700';
-      case 'dean_review':
-        return 'bg-indigo-100 text-indigo-700';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return 'bg-blue-100 text-blue-700';
     }
   };
 
   const getStatusDisplayName = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'submitted': 'In Progress',
+      'approved': 'Approved',
+      'rejected': 'Rejected'
+    };
+    return statusMap[status] || 'In Progress';
+  };
     return status === 'parallel_verification' ? 'VERIFICATION' : status.replace(/_/g, ' ').toUpperCase();
   };
 

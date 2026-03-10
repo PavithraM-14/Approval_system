@@ -43,8 +43,8 @@ const requestSchema = new mongoose.Schema(
     },
     title: { type: String, required: true },
     purpose: { type: String, required: true },
-    college: { type: String, required: true },
-    department: { type: String, required: true },
+    college: { type: String, required: false },
+    department: { type: String, required: false },
     costEstimate: { type: Number, default: 0 },
     expenseCategory: { type: String, default: '' },
     requestType: { type: String, enum: ['one-time', 'renewal'], default: 'one-time' },
@@ -91,6 +91,16 @@ const requestSchema = new mongoose.Schema(
       linkedAt: { type: Date, default: Date.now },
       linkedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     }],
+    
+    // Custom workflow fields
+    workflowExecutionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ExecutionState',
+    },
+    useCustomWorkflow: {
+      type: Boolean,
+      default: false,
+    },
     
     history: [approvalHistorySchema],
   },

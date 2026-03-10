@@ -1,11 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ApprovalHistory as ApprovalHistoryType, RequestStatus } from '../lib/types';
 
 interface ApprovalHistoryProps {
   history: ApprovalHistoryType[];
   currentStatus: RequestStatus;
+  workflowExecutionId?: string;
+  useCustomWorkflow?: boolean;
 }
 
 const getStatusBadgeClass = (status: string) => {
@@ -14,32 +16,8 @@ const getStatusBadgeClass = (status: string) => {
       return 'bg-green-100 text-green-800';
     case 'rejected':
       return 'bg-red-100 text-red-800';
-    case 'manager_review':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'parallel_verification':
+    case 'submitted':
       return 'bg-blue-100 text-blue-800';
-    case 'sop_verification':
-      return 'bg-teal-100 text-teal-800';
-    case 'budget_check':
-      return 'bg-purple-100 text-purple-800';
-    case 'institution_verified':
-      return 'bg-green-100 text-green-800';
-    case 'vp_approval':
-      return 'bg-indigo-100 text-indigo-800';
-    case 'hoi_approval':
-      return 'bg-pink-100 text-pink-800';
-    case 'dean_review':
-      return 'bg-orange-100 text-orange-800';
-    case 'department_checks':
-      return 'bg-teal-100 text-teal-800';
-    case 'dean_verification':
-      return 'bg-cyan-100 text-cyan-800';
-    case 'chief_director_approval':
-      return 'bg-amber-100 text-amber-800';
-    case 'chairman_approval':
-      return 'bg-emerald-100 text-emerald-800';
-    case 'query_required':
-      return 'bg-rose-100 text-rose-800';
     default:
       return 'bg-blue-100 text-blue-800';
   }
@@ -68,26 +46,17 @@ const getActionBadgeClass = (action: string) => {
   }
 };
 
-const getStatusDisplayName = (status: string) => {
+const getStatusDisplayName = (status: string, customWorkflowNode?: string) => {
+  // Always use custom workflow node name if available
+  if (customWorkflowNode) {
+    return customWorkflowNode;
+  }
+  
+  // For basic statuses, use simple display
   const statusMap: Record<string, string> = {
-    'manager_review': 'Manager Review',
-    'parallel_verification': 'Verification',
-    'sop_verification': 'SOP Verification',
-    'budget_check': 'Budget Check',
-    'institution_verified': 'Manager Approval',
-    'vp_approval': 'VP Approval',
-    'hoi_approval': 'HOI Approval',
-    'dean_review': 'Dean Review',
-    'department_checks': 'Department Checks',
-    'dean_verification': 'Dean Verification',
-    'chief_director_approval': 'Chief Director Approval',
-    'chairman_approval': 'Chairman Approval',
+    'submitted': 'Submitted',
     'approved': 'Approved',
     'rejected': 'Rejected',
-    'query_required': 'Query Required',
-    'sop_query': 'SOP Query',
-    'budget_query': 'Budget Query',
-    'department_query': 'Department Query'
   };
   
   return statusMap[status.toLowerCase()] || status;
@@ -115,7 +84,38 @@ const getFileNameFromUrl = (url: string) => {
   return parts[parts.length - 1] || 'Document';
 };
 
-const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatus }) => {
+const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatus, workflowExecutionId, useCustomWorkflow }) => {
+  const [currentNodeName, setCurrentNodeName] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchCurrentNode = async () => {
+      if (!useCustomWorkflow || !workflowExecutionId) {
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/executions/${workflowExecutionId}`);
+        if (response.ok) {
+          const execution = await response.json();
+          if (execution.workflow?.nodes && execution.currentNodeId) {
+            const currentNode = execution.workflow.nodes.find((n: any) => n.id === execution.currentNodeId);
+            if (currentNode) {
+              setCurrentNodeName(currentNode.label || currentNode.data?.label || 'Processing');
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch workflow execution:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCurrentNode();
+  }, [workflowExecutionId, useCustomWorkflow]);
+
   if (!history || history.length === 0) {
     return (
       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
@@ -170,18 +170,18 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
                       <div className="mt-1 text-sm">
                         <span className="font-medium text-gray-700">Status: </span>
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusBadgeClass(historyItem.previousStatus)}`}>
-                          {getStatusDisplayName(historyItem.previousStatus)}
+                          {useCustomWorkflow ? historyItem.previousStatus : getStatusDisplayName(historyItem.previousStatus)}
                         </span>
                         <span className="text-gray-500"> → </span>
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusBadgeClass(historyItem.newStatus)}`}>
-                          {getStatusDisplayName(historyItem.newStatus)}
+                          {useCustomWorkflow ? historyItem.newStatus : getStatusDisplayName(historyItem.newStatus)}
                         </span>
                       </div>
-                    ) : historyItem.action === 'create' && historyItem.newStatus && historyItem.newStatus.toLowerCase() === 'manager_review' ? (
+                    ) : historyItem.action === 'create' && historyItem.newStatus ? (
                       <div className="mt-1 text-sm">
                         <span className="font-medium text-gray-700">Status: </span>
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusBadgeClass(historyItem.newStatus)}`}>
-                          {getStatusDisplayName(historyItem.newStatus)}
+                          {useCustomWorkflow ? historyItem.newStatus : getStatusDisplayName(historyItem.newStatus)}
                         </span>
                       </div>
                     ) : null}
@@ -301,9 +301,9 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
             <li className="px-4 py-6 sm:px-6">
               <div className="flex items-start">
                 <div className="flex-shrink-0">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100">
-                    <svg className="w-5 h-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-blue-100">
+                    <svg className="w-5 h-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                     </svg>
                   </div>
                 </div>
@@ -320,11 +320,23 @@ const ApprovalHistory: React.FC<ApprovalHistoryProps> = ({ history, currentStatu
                   </div>
                   <div className="mt-2">
                     <p className="text-sm text-gray-600">
-                      This request is currently in the{' '}
-                      <span className={`font-medium ${getStatusBadgeClass(currentStatus)}`}>
-                        {getStatusDisplayName(currentStatus)}
-                      </span>{' '}
-                      status.
+                      {useCustomWorkflow && currentNodeName ? (
+                        <>
+                          This request is currently at the{' '}
+                          <span className="font-semibold text-blue-700">
+                            {currentNodeName}
+                          </span>{' '}
+                          stage.
+                        </>
+                      ) : (
+                        <>
+                          This request is currently in the{' '}
+                          <span className="font-semibold text-blue-700">
+                            {getStatusDisplayName(currentStatus)}
+                          </span>{' '}
+                          status.
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>

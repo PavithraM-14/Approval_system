@@ -51,9 +51,20 @@ export default function SignupPage() {
   useEffect(() => {
     if (signupType === 'employee') {
       fetchCompanies();
-      fetchRoles();
+      // Don't fetch roles until company is selected
     }
   }, [signupType]);
+
+  // Fetch roles when company is selected
+  useEffect(() => {
+    if (selectedCompanyId) {
+      fetchRoles(selectedCompanyId);
+    } else {
+      // Clear roles when no company is selected
+      setRoles([]);
+      setSelectedRoleId('');
+    }
+  }, [selectedCompanyId]);
 
   // Filter companies based on search query
   useEffect(() => {
@@ -82,9 +93,9 @@ export default function SignupPage() {
     }
   };
 
-  const fetchRoles = async () => {
+  const fetchRoles = async (companyId: string) => {
     try {
-      const res = await fetch('/api/roles');
+      const res = await fetch(`/api/roles/company/${companyId}`);
       if (res.ok) {
         const data: Role[] = await res.json();
         // Filter out system admin roles for employee signup
@@ -92,6 +103,8 @@ export default function SignupPage() {
         setRoles(nonAdminRoles);
         if (nonAdminRoles.length > 0) {
           setSelectedRoleId(nonAdminRoles[0]._id);
+        } else {
+          setSelectedRoleId('');
         }
       }
     } catch (err) {
@@ -596,14 +609,26 @@ export default function SignupPage() {
                     value={selectedRoleId}
                     onChange={(e) => setSelectedRoleId(e.target.value)}
                     className={inputClass}
+                    disabled={!selectedCompanyId}
                   >
-                    <option value="">Select a role</option>
+                    <option value="">
+                      {!selectedCompanyId 
+                        ? 'Please select a company first' 
+                        : roles.length === 0 
+                        ? 'No roles available' 
+                        : 'Select a role'}
+                    </option>
                     {roles.map((role) => (
                       <option key={role._id} value={role._id}>
                         {role.name}
                       </option>
                     ))}
                   </select>
+                  {!selectedCompanyId && (
+                    <p className="text-slate-400 text-xs mt-1">
+                      Select your company to see available roles
+                    </p>
+                  )}
                 </div>
               </>
             )}

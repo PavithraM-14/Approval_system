@@ -132,18 +132,8 @@ export default function RequestSearch({
             >
               <option value="">All Statuses</option>
               <option value="submitted">Submitted</option>
-              <option value="manager_review">Manager Review</option>
-              <option value="parallel_verification">Verification</option>
-              <option value="institution_verified">Institution Verified</option>
-              <option value="vp_approval">VP Approval</option>
-              <option value="hoi_approval">HOI Approval</option>
-              <option value="dean_review">Dean Review</option>
-              <option value="department_checks">Department Checks</option>
-              <option value="chief_director_approval">Chief Director</option>
-              <option value="chairman_approval">Chairman</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
-              <option value="query_required">Clarification Required</option>
             </select>
           </div>
 

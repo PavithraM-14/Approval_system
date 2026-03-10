@@ -182,6 +182,7 @@ interface Request {
   budgetBalance: number;
   budgetAvailable?: boolean;
   integrationLinks?: IntegrationLink[];
+  workflowExecutionId?: string;
 }
 
 export default function RequestDetailPage({ params }: { params: { id: string } }) {
@@ -1223,7 +1224,11 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
       {!hideWorkflowAndHistory && (
         <div className="space-y-4 sm:space-y-6">
           <div className="bg-white shadow rounded-lg sm:rounded-xl p-4 sm:p-6">
-            <ApprovalWorkflow currentStatus={request.status} />
+            <ApprovalWorkflow 
+              currentStatus={request.status} 
+              requestId={request._id}
+              workflowExecutionId={request.workflowExecutionId}
+            />
           </div>
 
           <div className="bg-white shadow rounded-lg sm:rounded-xl p-4 sm:p-6">
@@ -1253,7 +1258,12 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             
             {showApprovalHistory && (
               <div className="transition-all duration-300 ease-in-out">
-                <ApprovalHistory history={request.history} currentStatus={request.status} />
+                <ApprovalHistory 
+                  history={request.history} 
+                  currentStatus={request.status}
+                  workflowExecutionId={request.workflowExecutionId}
+                  useCustomWorkflow={request.useCustomWorkflow}
+                />
               </div>
             )}
             
@@ -1331,10 +1341,6 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
       {(() => {
         // Only show for Dean handling above-Dean rejections
         if (currentUser?.role !== 'dean' || !queryEngine.isDeanMediatedClarification(request)) {
-          console.log('[DEBUG] DeanQueryModal not rendering:', {
-            isDean: currentUser?.role === 'dean',
-            isDeanMediated: queryEngine.isDeanMediatedClarification(request)
-          });
           return null;
         }
 
@@ -1353,27 +1359,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
           ?.filter((h: any) => h.action === 'CLARIFY_AND_REAPPROVE' && h.actor?.role === 'requester')
           ?.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
 
-        console.log('[DEBUG] DeanQueryModal data:', {
-          originalRejector,
-          latestRejection: latestRejection ? {
-            action: latestRejection.action,
-            queryRequest: latestRejection.queryRequest,
-            timestamp: latestRejection.timestamp
-          } : null,
-          requesterClarification: requesterClarification ? 'exists' : 'none',
-          isDeanQueryModalOpen
-        });
-
-        if (!originalRejector) {
-          console.log('[DEBUG] No originalRejector found');
-          return null;
-        }
-        
-        if (!latestRejection) {
-          console.log('[DEBUG] No latestRejection found, history:', request.history?.map((h: any) => ({
-            action: h.action,
-            requiresClarification: h.requiresClarification
-          })));
+        if (!originalRejector || !latestRejection) {
           return null;
         }
 
@@ -1381,7 +1367,6 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
           <DeanQueryModal
             isOpen={isDeanQueryModalOpen}
             onClose={() => {
-              console.log('[DEBUG] Closing DeanQueryModal');
               setIsDeanQueryModalOpen(false);
             }}
             rejectionInfo={{

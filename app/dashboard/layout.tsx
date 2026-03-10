@@ -13,7 +13,9 @@ import {
   Cog6ToothIcon,
   ChartBarIcon,
   LinkIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  RectangleGroupIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 import { UserRole } from '../../lib/types';
 import { AuthUser } from '../../lib/auth';
@@ -45,6 +47,7 @@ const navigation: NavItem[] = [
   { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon, roles: [], adminOnly: true },
   { name: 'Compliance', href: '/dashboard/compliance', icon: HomeIcon, roles: [], adminOnly: true },
   { name: 'Role Management', href: '/dashboard/roles', icon: UserGroupIcon, roles: [], adminOnly: true },
+  { name: 'Workflow Builder', href: '/dashboard/workflow-builder', icon: RectangleGroupIcon, roles: [], adminOnly: true },
   { name: 'Settings', href: '/dashboard/settings', icon: Cog6ToothIcon, roles: Object.values(UserRole) }
 ];
 

@@ -87,114 +87,31 @@ export default function InProgressPage() {
         return 'bg-green-100 text-green-700';
       case 'rejected':
         return 'bg-red-100 text-red-700';
-      case 'manager_review':
+      case 'submitted':
         return 'bg-blue-100 text-blue-700';
-      case 'parallel_verification':
-        return 'bg-yellow-100 text-yellow-700';
-      case 'sop_verification':
-        return 'bg-teal-100 text-teal-700';
-      case 'budget_check':
-        return 'bg-purple-100 text-purple-700';
-      case 'sop_completed':
-        return 'bg-emerald-100 text-emerald-700';
-      case 'budget_completed':
-        return 'bg-violet-100 text-violet-700';
-      case 'institution_verified':
-        return 'bg-green-100 text-green-700';
-      case 'vp_approval':
-        return 'bg-purple-100 text-purple-700';
-      case 'hoi_approval':
-        return 'bg-pink-100 text-pink-700';
-      case 'dean_review':
-        return 'bg-indigo-100 text-indigo-700';
-      case 'department_checks':
-        return 'bg-orange-100 text-orange-700';
-      case 'dean_verification':
-        return 'bg-cyan-100 text-cyan-700';
-      case 'chief_director_approval':
-        return 'bg-amber-100 text-amber-700';
-      case 'chairman_approval':
-        return 'bg-emerald-100 text-emerald-700';
-      case 'sop_query':
-      case 'budget_query':
-      case 'department_query':
-        return 'bg-red-100 text-red-700';
       default:
-        return 'bg-gray-100 text-gray-700';
+        return 'bg-blue-100 text-blue-700';
     }
   };
 
   const getStatusDisplayName = (status: string) => {
     const statusMap: Record<string, string> = {
-      'manager_review': 'Manager Review',
-      'parallel_verification': 'Verification',
-      'sop_verification': 'SOP Verification',
-      'budget_check': 'Budget Check',
-      'sop_completed': 'SOP Completed',
-      'budget_completed': 'Budget Completed',
-      'institution_verified': 'Manager Approval',
-      'vp_approval': 'VP Approval',
-      'hoi_approval': 'Head of Institution Approval',
-      'dean_review': 'Dean Review',
-      'department_checks': 'Department Queries',
-      'dean_verification': 'Dean Verification',
-      'chief_director_approval': 'Chief Director Approval',
-      'chairman_approval': 'Chairman Approval',
-      'sop_query': 'SOP Queries Required',
-      'budget_query': 'Budget Queries Required',
-      'department_query': 'Department Queries Required',
+      'submitted': 'In Progress',
       'approved': 'Fully Approved',
       'rejected': 'Rejected'
     };
     
-    return statusMap[status.toLowerCase()] || (status === 'parallel_verification' ? 'VERIFICATION' : status.replace(/_/g, ' ').toUpperCase());
+    return statusMap[status.toLowerCase()] || 'In Progress';
   };
 
   const getCurrentStageDescription = (status: string) => {
     const stageMap: Record<string, string> = {
-      'manager_review': 'Awaiting manager review and routing decision',
-      'parallel_verification': 'Being verified by SOP and Budget teams',
-      'sop_verification': 'Awaiting SOP reference number verification',
-      'budget_check': 'Awaiting budget availability verification',
-      'sop_completed': 'SOP verification complete',
-      'budget_completed': 'Budget verification complete',
-      'institution_verified': 'Institution verification complete, awaiting routing',
-      'vp_approval': 'Awaiting Vice President approval',
-      'hoi_approval': 'Awaiting Head of Institution approval',
-      'dean_review': 'Awaiting Dean review and decision',
-      'department_checks': 'Awaiting department response',
-      'dean_verification': 'Awaiting Dean verification',
-      'chief_director_approval': 'Awaiting Chief Director approval',
-      'chairman_approval': 'Awaiting Chairman final approval',
-      'sop_query': 'SOP queries required from manager',
-      'budget_query': 'Budget queries required from manager',
-      'department_query': 'Department queries required',
-      'approved': 'Request has been fully approved by Chairman'
+      'submitted': 'Request is being processed through the approval workflow',
+      'approved': 'Request has been fully approved',
+      'rejected': 'Request has been rejected'
     };
     
-    return stageMap[status.toLowerCase()] || 'Processing...';
-  };
-
-  const getWorkflowProgress = (status: string) => {
-    const progressMap: Record<string, { step: number; total: number; label: string }> = {
-      'manager_review': { step: 1, total: 8, label: 'Step 1 of 8' },
-      'parallel_verification': { step: 2, total: 8, label: 'Step 2 of 8' },
-      'sop_verification': { step: 2, total: 8, label: 'Step 2 of 8' },
-      'budget_check': { step: 2, total: 8, label: 'Step 2 of 8' },
-      'sop_completed': { step: 2, total: 8, label: 'Step 2 of 8' },
-      'budget_completed': { step: 2, total: 8, label: 'Step 2 of 8' },
-      'institution_verified': { step: 3, total: 8, label: 'Step 3 of 8' },
-      'vp_approval': { step: 4, total: 8, label: 'Step 4 of 8' },
-      'hoi_approval': { step: 5, total: 8, label: 'Step 5 of 8' },
-      'dean_review': { step: 6, total: 8, label: 'Step 6 of 8' },
-      'department_checks': { step: 6, total: 8, label: 'Step 6 of 8' },
-      'dean_verification': { step: 6, total: 8, label: 'Step 6 of 8' },
-      'chief_director_approval': { step: 7, total: 8, label: 'Step 7 of 8' },
-      'chairman_approval': { step: 8, total: 8, label: 'Final Step' },
-      'approved': { step: 8, total: 8, label: 'Completed' }
-    };
-    
-    return progressMap[status.toLowerCase()] || { step: 1, total: 8, label: 'In Progress' };
+    return stageMap[status.toLowerCase()] || 'Processing through workflow...';
   };
 
   const getUserActionBadge = (userAction?: string) => {
@@ -370,21 +287,10 @@ export default function InProgressPage() {
                           </div>
                         </div>
 
-                        {/* Progress Bar */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500 whitespace-nowrap">
-                            {getWorkflowProgress(request.status).label}
-                          </span>
-                          <div className="flex-1 bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                              style={{ 
-                                width: `${(getWorkflowProgress(request.status).step / getWorkflowProgress(request.status).total) * 100}%` 
-                              }}
-                            ></div>
-                          </div>
-                          <span className="text-xs text-gray-500">
-                            {Math.round((getWorkflowProgress(request.status).step / getWorkflowProgress(request.status).total) * 100)}%
+                        {/* Status Badge */}
+                        <div className="mt-2">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(request.status)}`}>
+                            {getStatusDisplayName(request.status)}
                           </span>
                         </div>
                       </div>

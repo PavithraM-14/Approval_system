@@ -52,8 +52,8 @@ export enum ActionType {
 export const CreateRequestSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters'),
   purpose: z.string().min(10, 'Purpose must be at least 10 characters'),
-  college: z.string().min(1, 'College is required'),
-  department: z.string().min(1, 'Department is required'),
+  college: z.string().optional().or(z.literal('')),
+  department: z.string().optional().or(z.literal('')),
   costEstimate: z.number().optional(),
   expenseCategory: z.string().optional().or(z.literal('')),
   requestType: z.enum(['one-time', 'renewal']).default('one-time'),
@@ -111,6 +111,8 @@ export interface Request {
   attachments: string[];
   requester: User;
   status: RequestStatus;
+  workflowExecutionId?: string;
+  useCustomWorkflow?: boolean;
   createdAt: Date;
   updatedAt: Date;
   history: ApprovalHistory[];

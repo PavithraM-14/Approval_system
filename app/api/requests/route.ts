@@ -5,40 +5,116 @@ import User from '../../../models/User';
 import AuditLog from '../../../models/AuditLog';
 import { getCurrentUser } from '../../../lib/auth';
 import { CreateRequestSchema } from '../../../lib/types';
-import { RequestStatus, ActionType, UserRole } from '../../../lib/types';
-import { filterRequestsByVisibility } from '../../../lib/request-visibility';
+import { RequestStatus, ActionType } from '../../../lib/types';
 import { generateRequestId } from '../../../lib/id-generator';
 import mongoose from 'mongoose';
-import { approvalEngine } from '../../../lib/approval-engine';
-import { getNextApprovers, notifyApprovalPending } from '../../../lib/notification-service';
+import { notifyApprovalPending } from '../../../lib/notification-service';
+import WorkflowConfiguration from '../../../models/WorkflowConfiguration';
+import { workflowExecutionEngine } from '../../../lib/workflow-execution-engine';
+import ExecutionState from '../../../models/ExecutionState';
+import UserRoleAssignment from '../../../models/UserRoleAssignment';
 
-// Function to get role-based filter for request visibility
-function getRoleBasedFilter(userRole: UserRole, userId: any, pendingOnly: boolean = false, isForDashboard: boolean = false) {
-  let filter: any = {};
+// Helper function to extract company ID from populated or non-populated company field
+function getCompanyId(company: any): string {
+  if (typeof company === 'object' && company._id) {
+    return company._id.toString();
+  }
+  return company.toString();
+}
 
-  // Check if user has canCreate permission (replaces REQUESTER role check)
-  const hasCanCreate = userRole === UserRole.REQUESTER; // This will be replaced by permission check in the route
-
-  if (hasCanCreate) {
-    // Users with canCreate can only see their own requests
-    filter.requester = userId;
-  } else {
-    // For approvers, show based on context
-    if (isForDashboard) {
-      // For dashboard recent requests, show all requests to give approvers system overview
-      filter = {}; // No filter = all requests
-    } else if (pendingOnly) {
-      // For pending approvals, show all non-completed requests
-      filter.status = {
-        $nin: [RequestStatus.APPROVED, RequestStatus.REJECTED]
-      };
-    } else {
-      // For regular requests view, show all requests
-      filter = {}; // No filter = all requests
-    }
+// Helper function to filter requests with custom workflow support
+async function filterRequestsWithCustomWorkflow(
+  requests: any[],
+  userRoleName: string,
+  userId: string,
+  permissions: any
+): Promise<any[]> {
+  // System Admins can see everything
+  if (permissions?.isSystemAdmin) {
+    return requests.map(req => ({
+      ...req,
+      _visibility: {
+        canSee: true,
+        category: req.status === RequestStatus.APPROVED ? 'approved' : 
+                  req.status === RequestStatus.REJECTED ? 'completed' : 'in_progress',
+        reason: 'System Administrator Access'
+      }
+    }));
   }
 
-  return filter;
+  // Users with canCreate see only their own requests
+  if (permissions?.canCreate) {
+    return requests
+      .filter(req => req.requester._id?.toString() === userId || req.requester.toString() === userId)
+      .map(req => ({
+        ...req,
+        _visibility: {
+          canSee: true,
+          category: req.status === RequestStatus.APPROVED ? 'approved' : 
+                    req.status === RequestStatus.REJECTED ? 'completed' : 'pending',
+          reason: 'Own request'
+        }
+      }));
+  }
+
+  // For approvers: check custom workflow requests
+  const customWorkflowRequests = requests.filter(r => r.useCustomWorkflow && r.workflowExecutionId);
+  
+  if (customWorkflowRequests.length === 0) {
+    return [];
+  }
+
+  // Get execution states for custom workflow requests
+  const executionIds = customWorkflowRequests.map(r => r.workflowExecutionId).filter(Boolean);
+  const executions = await ExecutionState.find({ _id: { $in: executionIds } });
+  
+  // Get workflows to check current nodes
+  const workflowIds = [...new Set(executions.map(e => e.workflowId))];
+  const workflows = await WorkflowConfiguration.find({ _id: { $in: workflowIds } });
+  
+  // Check which custom workflow requests the user should see
+  const visibleCustomRequests = customWorkflowRequests.filter(request => {
+    const execution = executions.find(e => e._id.toString() === request.workflowExecutionId?.toString());
+    if (!execution) {
+      console.log('[DEBUG] No execution found for request:', request._id);
+      return false;
+    }
+    
+    const workflow = workflows.find(w => w._id.toString() === execution.workflowId.toString());
+    if (!workflow) {
+      console.log('[DEBUG] No workflow found for execution:', execution._id);
+      return false;
+    }
+    
+    const currentNode = workflow.nodes.find((n: any) => n.id === execution.currentNodeId);
+    if (!currentNode || currentNode.type !== 'approval') {
+      console.log('[DEBUG] Current node not found or not approval type:', execution.currentNodeId, currentNode?.type);
+      return false;
+    }
+    
+    // Check if user's role matches the current node's role
+    const nodeRoleName = currentNode.label || currentNode.data?.label;
+    const matches = nodeRoleName === userRoleName;
+    
+    console.log('[DEBUG] Role matching for request', request._id, ':', {
+      nodeRoleName,
+      userRoleName,
+      matches,
+      currentNodeId: execution.currentNodeId
+    });
+    
+    return matches;
+  });
+
+  // Add visibility metadata
+  return visibleCustomRequests.map(req => ({
+    ...req,
+    _visibility: {
+      canSee: true,
+      category: 'pending',
+      reason: 'Current approver in custom workflow'
+    }
+  }));
 }
 
 export async function GET(request: NextRequest) {
@@ -80,7 +156,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+    const userRoleName = user.role.name;
     const permissions = {
       ...user.role.permissions,
       isSystemAdmin: user.role.isSystemAdmin
@@ -109,17 +185,21 @@ export async function GET(request: NextRequest) {
       .lean(); // Convert to plain objects for better performance
 
     console.log('[DEBUG] Total requests fetched:', allRequests.length);
+    console.log('[DEBUG] Request details:', allRequests.map(r => ({
+      id: r._id,
+      title: r.title,
+      status: r.status,
+      useCustomWorkflow: r.useCustomWorkflow,
+      workflowExecutionId: r.workflowExecutionId
+    })));
 
-    // Apply role-based visibility filtering (for approvers to see relevant requests)
-    let visibleRequests = hasCanCreate 
-      ? allRequests // Users with canCreate see their own requests (already filtered)
-      : filterRequestsByVisibility(
-          allRequests,
-          userRoleName,
-          dbUser._id.toString(),
-          dbUser.college,
-          permissions
-        );
+    // Apply custom workflow visibility filtering
+    let visibleRequests = await filterRequestsWithCustomWorkflow(
+      allRequests,
+      userRoleName,
+      dbUser._id.toString(),
+      permissions
+    );
 
     console.log('[DEBUG] Requests after visibility filtering:', visibleRequests.length);
 
@@ -228,28 +308,132 @@ export async function POST(request: NextRequest) {
     const validatedData = CreateRequestSchema.parse(body);
 
     // Find the requester user (should already exist from authentication)
-    const requesterUser = await User.findOne({ email: user!.email });
+    const requesterUser = await User.findOne({ email: user!.email }).populate('company');
     if (!requesterUser) {
       return NextResponse.json({ error: 'User not found. Please ensure you are properly authenticated.' }, { status: 404 });
     }
 
-    // Check if this is a leave request (case-insensitive)
-    const isLeaveRequest = validatedData.title.toLowerCase().includes('leave');
-
-    // Determine initial status based on request type
-    const initialStatus = isLeaveRequest ? RequestStatus.VP_APPROVAL : RequestStatus.MANAGER_REVIEW;
-    const initialNotes = isLeaveRequest
-      ? 'Leave request created and forwarded directly to VP for approval'
-      : 'Request created and forwarded to manager for review';
-
     // Generate unique 6-digit request ID
     const requestId = await generateRequestId();
+
+    // Check if company has an active custom workflow
+    let useCustomWorkflow = false;
+    let workflowExecutionId = null;
+    let initialStatus = RequestStatus.SUBMITTED;
+    let initialNotes = 'Request created';
+
+    console.log('[DEBUG] Checking for active workflow for company:', requesterUser.company);
+
+    if (!requesterUser.company) {
+      return NextResponse.json({ 
+        error: 'Company not found. User must be associated with a company to create requests.' 
+      }, { status: 400 });
+    }
+
+    const activeWorkflow = await WorkflowConfiguration.findOne({
+      companyId: getCompanyId(requesterUser.company),
+      isActive: true,
+    });
+
+    console.log('[DEBUG] Active workflow found:', activeWorkflow ? {
+      id: activeWorkflow._id,
+      name: activeWorkflow.name,
+      isActive: activeWorkflow.isActive,
+      nodeCount: activeWorkflow.nodes.length
+    } : 'none');
+
+    if (!activeWorkflow) {
+      return NextResponse.json({ 
+        error: 'No active workflow found. Please activate a workflow before creating requests.' 
+      }, { status: 400 });
+    }
+
+    // Custom workflow exists - initialize workflow execution
+    try {
+      const companyId = getCompanyId(requesterUser.company);
+      
+      const executionState = await workflowExecutionEngine.initializeExecution(
+        requestId,
+        activeWorkflow._id.toString(),
+        companyId
+      );
+
+      useCustomWorkflow = true;
+      workflowExecutionId = executionState._id;
+      initialStatus = RequestStatus.SUBMITTED;
+      initialNotes = 'Request created and custom workflow initialized';
+
+      console.log('[DEBUG] Custom workflow initialized:', {
+        requestId,
+        workflowId: activeWorkflow._id,
+        executionId: executionState._id,
+        currentNode: executionState.currentNodeId
+      });
+
+      // Advance to the first approval node automatically
+      try {
+        // Find the start node
+        const startNode = activeWorkflow.nodes.find((n: any) => n.type === 'start');
+        if (startNode) {
+          // Find the edge from start node
+          const nextEdge = activeWorkflow.edges.find((e: any) => e.source === startNode.id);
+          if (nextEdge) {
+            const nextNode = activeWorkflow.nodes.find((n: any) => n.id === nextEdge.target);
+            
+            // Skip requester nodes and advance to first actual approver
+            let currentEdge = nextEdge;
+            let currentNode = nextNode;
+            
+            while (currentNode && currentNode.type === 'approval') {
+              const nodeName = currentNode.label || currentNode.data?.label || '';
+              const isRequesterNode = nodeName.toLowerCase().includes('requester') || 
+                                     nodeName.toLowerCase().includes('creator');
+              
+              if (!isRequesterNode) {
+                // Found the first actual approver node
+                executionState.currentNodeId = currentNode.id;
+                executionState.history.push({
+                  nodeId: currentNode.id,
+                  nodeType: currentNode.type,
+                  action: 'entered',
+                  timestamp: new Date(),
+                });
+                await executionState.save();
+                
+                console.log('[DEBUG] Advanced to first approver node:', {
+                  nodeId: currentNode.id,
+                  nodeName: nodeName
+                });
+                break;
+              }
+              
+              // Skip this requester node and move to next
+              const skipEdge = activeWorkflow.edges.find((e: any) => e.source === currentNode.id);
+              if (!skipEdge) break;
+              
+              currentNode = activeWorkflow.nodes.find((n: any) => n.id === skipEdge.target);
+            }
+          }
+        }
+      } catch (advanceError) {
+        console.error('[ERROR] Failed to advance to first approver:', advanceError);
+        // Continue anyway - the workflow can still function
+      }
+    } catch (workflowError) {
+      console.error('[ERROR] Failed to initialize custom workflow:', workflowError);
+      return NextResponse.json({ 
+        error: 'Failed to initialize workflow',
+        details: workflowError instanceof Error ? workflowError.message : 'Unknown error'
+      }, { status: 500 });
+    }
 
     const newRequest = await Request.create({
       requestId,
       ...validatedData,
       requester: requesterUser._id,
       status: initialStatus,
+      useCustomWorkflow,
+      workflowExecutionId,
       history: [{
         action: ActionType.CREATE,
         actor: requesterUser._id,
@@ -274,24 +458,63 @@ export async function POST(request: NextRequest) {
     console.log('[DEBUG] Request created successfully:', {
       requestId: newRequest._id,
       title: validatedData.title,
-      requester: user!.email
+      requester: user!.email,
+      useCustomWorkflow,
     });
 
     // Send notifications to next approvers
-    try {
-      const nextApprovers = await getNextApprovers(newRequest._id.toString(), initialStatus);
-      for (const approverId of nextApprovers) {
-        await notifyApprovalPending(
-          approverId,
-          newRequest._id.toString(),
-          validatedData.title,
-          requesterUser.name
-        );
+    if (useCustomWorkflow && workflowExecutionId) {
+      // For custom workflows, find users assigned to the current node
+      try {
+        const executionState = await ExecutionState.findById(workflowExecutionId);
+        if (executionState && executionState.currentNodeId) {
+          const activeWorkflow = await WorkflowConfiguration.findById(executionState.workflowId);
+          if (activeWorkflow) {
+            const currentNode = activeWorkflow.nodes.find((n: any) => n.id === executionState.currentNodeId);
+            if (currentNode && currentNode.type === 'approval') {
+              const roleName = currentNode.label || currentNode.data?.label;
+              
+              console.log('[DEBUG] Looking for users with role:', roleName, 'in company:', getCompanyId(requesterUser.company));
+              
+              // First, find the role by name
+              const CustomRole = (await import('../../../models/CustomRole')).default;
+              const role = await CustomRole.findOne({
+                name: roleName,
+                companyId: getCompanyId(requesterUser.company)
+              });
+              
+              if (!role) {
+                console.error('[ERROR] Role not found:', roleName);
+              } else {
+                console.log('[DEBUG] Found role:', role.name, 'with ID:', role._id);
+                
+                // Find users with this role in the company
+                const roleAssignments = await UserRoleAssignment.find({
+                  companyId: getCompanyId(requesterUser.company),
+                  roleId: role._id
+                }).populate('userId');
+                
+                console.log('[DEBUG] Found', roleAssignments.length, 'users for role:', roleName);
+                
+                for (const assignment of roleAssignments) {
+                  if (assignment.userId) {
+                    console.log('[DEBUG] Sending notification to user:', assignment.userId);
+                    await notifyApprovalPending(
+                      assignment.userId.toString(),
+                      newRequest._id.toString(),
+                      validatedData.title,
+                      requesterUser.name
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (notificationError) {
+        console.error('[ERROR] Failed to send custom workflow notifications:', notificationError);
+        // Don't fail the request if notifications fail
       }
-      console.log('[DEBUG] Notifications sent to', nextApprovers.length, 'approvers');
-    } catch (notificationError) {
-      console.error('[ERROR] Failed to send notifications:', notificationError);
-      // Don't fail the request if notifications fail
     }
 
     return NextResponse.json(populatedRequest, { status: 201 });

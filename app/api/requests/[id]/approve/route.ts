@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '../../../../../lib/mongodb';
 import Request from '../../../../../models/Request';
 import { getCurrentUser } from '../../../../../lib/auth';
-import { RequestStatus, ActionType, UserRole } from '../../../../../lib/types';
-import { approvalEngine } from '../../../../../lib/approval-engine';
-import { queryEngine } from '../../../../../lib/query-engine';
-import { notifyStatusChange } from '../../../../../lib/notification-service';
+import { RequestStatus, ActionType } from '../../../../../lib/types';
+import { notifyStatusChange, notifyApprovalPending } from '../../../../../lib/notification-service';
 import { setRenewalDate } from '../../../../../lib/renewal-service';
+import { workflowExecutionEngine } from '../../../../../lib/workflow-execution-engine';
+import ExecutionState from '../../../../../models/ExecutionState';
+import WorkflowConfiguration from '../../../../../models/WorkflowConfiguration';
+import UserRoleAssignment from '../../../../../models/UserRoleAssignment';
 
 export async function POST(
   request: NextRequest,
@@ -23,35 +25,22 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('[DEBUG] Approval request started:', {
-      requestId: params.id,
-      userRole: userRoleName,
-      userEmail: user.email
-    });
-
     const {
       action: requestAction,
       notes,
       signature,
-      budgetAvailable,
-      budgetData,
-      forwardedMessage,
       attachments,
-      target,
-      sopReference,
     } = await request.json();
 
     action = requestAction;
 
-    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_') as UserRole;
     const permissions = user.role.permissions;
 
-    console.log('[DEBUG] Request body parsed:', {
-      action,
-      notes: notes ? 'provided' : 'empty',
-      signature: signature ? 'provided' : 'empty',
-      target,
-      userRole: userRoleName
+    console.log('[DEBUG] Approval request started:', {
+      requestId: params.id,
+      userRole: user.role.name,
+      userEmail: user.email,
+      action
     });
 
     // Permission check for approval
@@ -59,14 +48,14 @@ export async function POST(
       return NextResponse.json({ error: 'Permission Denied: You do not have approval rights.' }, { status: 403 });
     }
 
-    if (action === 'approve' && permissions.canApprove && !signature) {
+    if (action === 'approve' && permissions.canESign && !signature) {
        return NextResponse.json({ error: 'Signature required for approval' }, { status: 400 });
     }
 
-    // Validate action
-    if (!['approve', 'reject', 'clarify', 'forward', 'send_to_dean', 'send_to_vp', 'send_to_chairman', 'reject_with_clarification', 'clarify_and_reapprove', 'query_and_reapprove', 'dean_send_to_requester'].includes(action)) {
+    // Validate action - only approve, reject, and reject_with_clarification are supported
+    if (!['approve', 'reject', 'reject_with_clarification'].includes(action)) {
       console.log('[DEBUG] Invalid action:', action);
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid action. Only approve, reject, and reject_with_clarification are supported.' }, { status: 400 });
     }
 
     const requestRecord = await Request.findById(params.id);
@@ -79,594 +68,257 @@ export async function POST(
     console.log('[DEBUG] Request found:', {
       requestId: params.id,
       currentStatus: requestRecord.status,
-      historyLength: requestRecord.history?.length || 0
+      useCustomWorkflow: requestRecord.useCustomWorkflow,
+      workflowExecutionId: requestRecord.workflowExecutionId
     });
 
-    const isDeanMediatedFlow = queryEngine.isDeanMediatedClarification(requestRecord);
-
-    // Institutional isolation check
-    const institutionalRoles = [
-      UserRole.REQUESTER,
-      UserRole.INSTITUTION_MANAGER,
-      UserRole.SOP_VERIFIER,
-      UserRole.ACCOUNTANT,
-      UserRole.VP,
-      UserRole.HEAD_OF_INSTITUTION
-    ];
-
-    if (institutionalRoles.includes(userRoleName as UserRole)) {
-      if (user.college && requestRecord.college && user.college !== requestRecord.college) {
-        console.log('[DEBUG] Institutional isolation violation:', {
-          userCollege: user.college,
-          requestCollege: requestRecord.college
-        });
-        return NextResponse.json({
-          error: `Access Denied: This request belongs to ${requestRecord.college}, but you are assigned to ${user.college}.`
-        }, { status: 403 });
-      }
-    }
-
-    // Role check
-    const requiredApprovers = approvalEngine.getRequiredApprover(
-      requestRecord.status
-    );
-
-    // Clarification responder bypass: allow the role currently responsible for responding
-    const isPendingQueryForUser = (
-      requestRecord.pendingQuery === true &&
-      requestRecord.queryLevel === (userRoleName as UserRole)
-    );
-
-    const isQueryResponder = action === 'query_and_reapprove' && isPendingQueryForUser;
-    const isQueryRejector = action === 'reject' && isPendingQueryForUser;
-
-    const isDeanSendToRequester = (
-      action === 'dean_send_to_requester' && userRoleName === UserRole.DEAN
-    );
-
-    console.log('[DEBUG] Role authorization check:', {
-      currentStatus: requestRecord.status,
-      requiredApprovers,
-      userRole: userRoleName,
-      pendingQuery: requestRecord.pendingQuery,
-      queryLevel: requestRecord.queryLevel,
-      isAuthorizedApprover: requiredApprovers.includes(userRoleName as UserRole),
-      isQueryResponder,
-      isDeanSendToRequester
-    });
-
-    if (
-      !requiredApprovers.includes(userRoleName as UserRole) &&
-      !isQueryResponder &&
-      !isDeanSendToRequester &&
-      !isQueryRejector
-    ) {
-      console.log('[DEBUG] Authorization failed - role not permitted for this action');
+    // ========================================
+    // CUSTOM WORKFLOW ROUTING (100% Customizable)
+    // ========================================
+    if (!requestRecord.useCustomWorkflow || !requestRecord.workflowExecutionId) {
       return NextResponse.json(
-        { error: 'Not authorized to approve this request' },
-        { status: 403 }
+        {
+          error: 'This request does not use a custom workflow. Please ensure all requests are created with an active workflow.',
+        },
+        { status: 400 }
       );
     }
 
-    // Special check for department queries
-    if (requestRecord.status === RequestStatus.DEPARTMENT_CHECKS) {
-      // Find the latest query request from Dean
-      const latestClarification = requestRecord.history
-        .filter((h: any) => h.action === ActionType.CLARIFY && h.queryTarget)
-        .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+    console.log('[DEBUG] Routing through custom workflow:', {
+      action,
+      workflowExecutionId: requestRecord.workflowExecutionId
+    });
 
-      console.log('[DEBUG] Department query check:', {
-        userRole: userRoleName,
-        latestClarification: latestClarification ? {
-          queryTarget: latestClarification.queryTarget,
-          actor: latestClarification.actor,
-          timestamp: latestClarification.timestamp
-        } : null,
-        requestHistory: requestRecord.history.map((h: any) => ({
-          action: h.action,
-          queryTarget: h.queryTarget,
-          timestamp: h.timestamp
-        }))
-      });
+    // Handle approve and reject actions through workflow engine
+    if (action === 'approve' || action === 'reject') {
+      try {
+        // Map action to workflow engine format
+        const workflowAction = action === 'approve' ? 'approved' : 'rejected';
 
-      if (latestClarification && latestClarification.queryTarget !== userRoleName.toLowerCase()) {
-        console.log('[DEBUG] Authorization failed:', {
-          expected: latestClarification.queryTarget,
-          actual: userRoleName.toLowerCase()
+        // Process the action through the workflow execution engine
+        const updatedExecutionState = await workflowExecutionEngine.processAction(
+          requestRecord.workflowExecutionId.toString(),
+          workflowAction,
+          user.id,
+          notes
+        );
+
+        console.log('[DEBUG] Workflow action processed:', {
+          executionStatus: updatedExecutionState.status,
+          currentNodeId: updatedExecutionState.currentNodeId
         });
+
+        // Update request status based on workflow completion
+        let newRequestStatus = requestRecord.status;
+        if (updatedExecutionState.status === 'completed') {
+          newRequestStatus = RequestStatus.APPROVED;
+          console.log('[DEBUG] Workflow completed - marking request as APPROVED');
+        } else if (updatedExecutionState.status === 'rejected') {
+          newRequestStatus = RequestStatus.REJECTED;
+          console.log('[DEBUG] Workflow rejected - marking request as REJECTED');
+        }
+
+        // Update the request with new status and add history entry
+        const historyEntry: any = {
+          action: action === 'approve' ? ActionType.APPROVE : ActionType.REJECT,
+          actor: user.id,
+          previousStatus: requestRecord.status,
+          newStatus: newRequestStatus,
+          timestamp: new Date(),
+          notes: notes || '',
+        };
+
+        if (action === 'approve' && permissions.canESign && signature) {
+          historyEntry.signature = signature;
+          historyEntry.signatureTimestamp = new Date();
+        }
+
+        const updateData: any = {
+          $push: { history: historyEntry },
+        };
+
+        if (newRequestStatus !== requestRecord.status) {
+          updateData.$set = { status: newRequestStatus, lastReminderSent: null };
+        }
+
+        const updatedRequest = await Request.findByIdAndUpdate(
+          params.id,
+          updateData,
+          { new: true }
+        )
+          .populate('requester', 'name email empId role')
+          .populate('history.actor', 'name email empId role');
+
+        console.log('[DEBUG] Request updated via custom workflow:', {
+          requestId: params.id,
+          newStatus: newRequestStatus,
+          executionStatus: updatedExecutionState.status
+        });
+
+        // Set renewal date if this is a renewal request that was just approved
+        if (newRequestStatus === RequestStatus.APPROVED && updatedRequest.requestType === 'renewal') {
+          try {
+            await setRenewalDate(params.id);
+            console.log('[DEBUG] Renewal date set for approved renewal request');
+          } catch (renewalError) {
+            console.error('[ERROR] Failed to set renewal date:', renewalError);
+          }
+        }
+
+        // Send notifications to next approver if workflow is still in progress
+        if (updatedExecutionState.status === 'in_progress' && updatedExecutionState.currentNodeId) {
+          try {
+            const activeWorkflow = await WorkflowConfiguration.findById(updatedExecutionState.workflowId);
+            if (activeWorkflow) {
+              const currentNode = activeWorkflow.nodes.find((n: any) => n.id === updatedExecutionState.currentNodeId);
+              if (currentNode && currentNode.type === 'approval') {
+                const roleName = currentNode.label || currentNode.data?.label;
+                
+                console.log('[DEBUG] Looking for users with role:', roleName);
+                
+                // First, find the role by name
+                const CustomRole = (await import('../../../../../models/CustomRole')).default;
+                const role = await CustomRole.findOne({
+                  name: roleName,
+                  companyId: requestRecord.requester.company || user.company
+                });
+                
+                if (!role) {
+                  console.error('[ERROR] Role not found:', roleName);
+                } else {
+                  console.log('[DEBUG] Found role:', role.name, 'with ID:', role._id);
+                  
+                  // Find users with this role in the company
+                  const roleAssignments = await UserRoleAssignment.find({
+                    companyId: requestRecord.requester.company || user.company,
+                    roleId: role._id
+                  }).populate('userId');
+                  
+                  console.log('[DEBUG] Notifying', roleAssignments.length, 'users for next approval role:', roleName);
+                  
+                  for (const assignment of roleAssignments) {
+                    if (assignment.userId) {
+                      console.log('[DEBUG] Sending notification to user:', assignment.userId);
+                      await notifyApprovalPending(
+                        assignment.userId.toString(),
+                        params.id,
+                        updatedRequest.title,
+                        user.name
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          } catch (notificationError) {
+            console.error('[ERROR] Failed to send next approver notifications:', notificationError);
+            // Don't fail the request if notifications fail
+          }
+        } else {
+          // Workflow completed or rejected - send status change notification
+          try {
+            await notifyStatusChange(
+              params.id,
+              newRequestStatus,
+              user.id,
+              action as 'approve' | 'reject',
+              notes
+            );
+            console.log('[DEBUG] Status change notifications sent successfully');
+          } catch (notificationError) {
+            console.error('[ERROR] Failed to send notifications:', notificationError);
+          }
+        }
+
+        return NextResponse.json(updatedRequest);
+
+      } catch (workflowError) {
+        console.error('[ERROR] Custom workflow processing failed:', workflowError);
+        const errorMessage = workflowError instanceof Error ? workflowError.message : 'Unknown workflow error';
         return NextResponse.json(
-          { error: `These queries were sent to ${latestClarification.queryTarget.toUpperCase()} department, not ${userRoleName.toUpperCase()}. Only ${latestClarification.queryTarget.toUpperCase()} users can respond to these queries.` },
-          { status: 403 }
+          {
+            error: `Failed to process approval through custom workflow: ${errorMessage}`,
+            details: errorMessage,
+          },
+          { status: 500 }
         );
       }
     }
 
-    const previousStatus = requestRecord.status;
-
-    let nextStatus = requestRecord.status;
-    let actionType = ActionType.APPROVE;
-    // Prepare mutable update object early to allow status-specific flags before final assembly
-    let updateData: any = {};
-
-    console.log('[DEBUG] Processing approval request:', {
-      requestId: params.id,
-      action,
-      userRole: userRoleName,
-      currentStatus: requestRecord.status,
-      previousStatus
-    });
-
-    // Handle different actions
-    switch (action) {
-
-      case 'approve':
-        // Check if this is parallel verification completion
-        if (requestRecord.status === RequestStatus.PARALLEL_VERIFICATION) {
-          if (userRoleName === UserRole.SOP_VERIFIER) {
-            nextStatus = RequestStatus.SOP_COMPLETED;
-          } else if (userRoleName === UserRole.ACCOUNTANT) {
-            // Simplified: accountant just confirms budget availability
-            nextStatus = RequestStatus.BUDGET_COMPLETED;
-          }
-        } else if (requestRecord.status === RequestStatus.SOP_COMPLETED && userRoleName === UserRole.ACCOUNTANT) {
-          // After both verifications complete, go to Institution Manager for final verification
-          nextStatus = RequestStatus.INSTITUTION_VERIFIED;
-        } else if (requestRecord.status === RequestStatus.BUDGET_COMPLETED && userRoleName === UserRole.SOP_VERIFIER) {
-          // After both verifications complete, go to Institution Manager for final verification
-          nextStatus = RequestStatus.INSTITUTION_VERIFIED;
-        } else if (requestRecord.status === RequestStatus.BUDGET_CHECK && userRoleName === UserRole.ACCOUNTANT) {
-          // Simplified: accountant just confirms budget availability
-          // After accountant approval, always go back to manager for routing decision
-          nextStatus = RequestStatus.MANAGER_REVIEW;
-        } else {
-          // ✅ COST-BASED FINAL APPROVAL LOGIC
-          if (
-            userRoleName === UserRole.CHIEF_DIRECTOR &&
-            requestRecord.status === RequestStatus.CHIEF_DIRECTOR_APPROVAL
-          ) {
-            const cost = requestRecord.costEstimate || 0;
-
-            if (cost > 50000) {
-              // 🔴 High cost → Chairman required
-              nextStatus = RequestStatus.CHAIRMAN_APPROVAL;
-            } else {
-              // 🟢 Low / No cost → FINAL APPROVAL
-              nextStatus = RequestStatus.APPROVED;
-            }
-          } else {
-            nextStatus =
-              approvalEngine.getNextStatus(
-                requestRecord.status,
-                ActionType.APPROVE,
-                userRoleName as UserRole,
-                {
-                  budgetAvailable,
-                  costEstimate: requestRecord.costEstimate,
-                  budgetNotAvailable: requestRecord.budgetNotAvailable,
-                  sentDirectlyToDean: requestRecord.sentDirectlyToDean
-                }
-              ) || requestRecord.status;
-          }
-        }
-
-        actionType = ActionType.APPROVE;
-        break;
-
-      case 'reject':
-        nextStatus = RequestStatus.REJECTED;
-        actionType = ActionType.REJECT;
-        break;
-
-      case 'clarify':
-        if (userRoleName === UserRole.DEAN && target) {
-          nextStatus = RequestStatus.DEPARTMENT_CHECKS;
-        } else {
-          nextStatus = RequestStatus.CLARIFICATION_REQUIRED;
-        }
-        actionType = ActionType.CLARIFY;
-        break;
-
-      case 'send_to_dean':
-        if (userRoleName === UserRole.INSTITUTION_MANAGER && requestRecord.status === RequestStatus.INSTITUTION_VERIFIED) {
-          nextStatus = RequestStatus.DEAN_REVIEW;
-          actionType = ActionType.APPROVE;
-          // Mark this request as coming from direct send to dean path
-          if (!updateData.$set) updateData.$set = {};
-          updateData.$set.sentDirectlyToDean = true;
-          console.log('[DEBUG] Send to Dean action:', {
-            userRole: userRoleName,
-            currentStatus: requestRecord.status,
-            nextStatus,
-            sentDirectlyToDean: true
-          });
-        } else {
-          console.log('[DEBUG] Send to Dean failed - conditions not met:', {
-            userRole: userRoleName,
-            expectedRole: UserRole.INSTITUTION_MANAGER,
-            currentStatus: requestRecord.status,
-            expectedStatus: RequestStatus.INSTITUTION_VERIFIED
-          });
-        }
-        break;
-
-      case 'send_to_vp':
-        if (userRoleName === UserRole.INSTITUTION_MANAGER && requestRecord.status === RequestStatus.INSTITUTION_VERIFIED) {
-          nextStatus = RequestStatus.VP_APPROVAL;
-          actionType = ActionType.APPROVE;
-          // This follows normal flow through VP → HOI → Dean → Chief Director
-        }
-        break;
-
-      case 'send_to_chairman':
-        if (userRoleName === UserRole.DEAN && (requestRecord.status === RequestStatus.DEAN_REVIEW || requestRecord.status === RequestStatus.DEAN_VERIFICATION)) {
-          nextStatus = RequestStatus.CHAIRMAN_APPROVAL;
-          actionType = ActionType.APPROVE;
-          console.log('[DEBUG] Send to Chairman action:', {
-            userRole: userRoleName,
-            currentStatus: requestRecord.status,
-            nextStatus
-          });
-        } else {
-          console.log('[DEBUG] Send to Chairman failed - conditions not met:', {
-            userRole: userRoleName,
-            expectedRole: UserRole.DEAN,
-            currentStatus: requestRecord.status,
-            expectedStatuses: [RequestStatus.DEAN_REVIEW, RequestStatus.DEAN_VERIFICATION]
-          });
-        }
-        break;
-
-      case 'forward':
-        // Handle department responses to Dean queries
-        if ([UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT].includes(userRoleName as UserRole) &&
-          requestRecord.status === RequestStatus.DEPARTMENT_CHECKS) {
-          // Find the latest query to get the target
-          const latestClarification = requestRecord.history
-            .filter((h: any) => h.action === ActionType.CLARIFY && h.queryTarget)
-            .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
-
-          // Use approval engine with proper context
-          const context = { queryTarget: latestClarification?.queryTarget };
-          console.log('[DEBUG] Department forward context:', {
-            userRole: userRoleName,
-            currentStatus: requestRecord.status,
-            context,
-            latestClarification: latestClarification ? {
-              queryTarget: latestClarification.queryTarget,
-              timestamp: latestClarification.timestamp
-            } : null
-          });
-
-          nextStatus = approvalEngine.getNextStatus(
-            requestRecord.status,
-            ActionType.FORWARD,
-            userRoleName as UserRole,
-            context
-          ) || RequestStatus.DEAN_VERIFICATION; // Changed from DEAN_REVIEW to DEAN_VERIFICATION
-        } else {
-          nextStatus =
-            approvalEngine.getNextStatus(
-              requestRecord.status,
-              ActionType.FORWARD,
-              userRoleName as UserRole,
-              {}
-            ) || requestRecord.status;
-        }
-        actionType = ActionType.FORWARD;
-        break;
-
-      case 'reject_with_clarification':
-        // Validate that query request is provided
-        if (!notes || notes.trim() === '') {
-          return NextResponse.json({ error: 'Queries for the requester are required when raising queries' }, { status: 400 });
-        }
-
-        // Get the query target based on new workflow
-        const queryTarget = queryEngine.getQueryTarget(requestRecord.status, userRoleName as UserRole);
-        if (!queryTarget) {
-          return NextResponse.json({ error: 'Cannot send queries - no target found' }, { status: 400 });
-        }
-
-        console.log('[DEBUG] Reject with clarification (NEW WORKFLOW):', {
-          currentStatus: requestRecord.status,
-          currentRole: userRoleName,
-          queryTarget: queryTarget,
-          queryRequest: notes,
-          isDeanMediated: queryTarget.isDeanMediated
-        });
-
-        // Set the request to pending query at the target level
-        nextStatus = queryTarget.status;
-        actionType = ActionType.REJECT_WITH_CLARIFICATION;
-        break;
-
-      case 'query_and_reapprove':
-        // Validate that query response is provided
-        if (!notes || notes.trim() === '') {
-          return NextResponse.json({ error: 'Response to queries is required' }, { status: 400 });
-        }
-
-        // Check if this request is actually pending query for this user
-        if (!queryEngine.canProvideClarification(requestRecord, userRoleName as UserRole, user.id)) {
-          return NextResponse.json({ error: 'This request is not pending response from you' }, { status: 400 });
-        }
-
-        // Handle requester providing query response
-        if (userRoleName === UserRole.REQUESTER) {
-          // Always send back to the original rejector (no Dean mediation)
-          const returnStatus = queryEngine.getReturnStatus(requestRecord);
-          nextStatus = returnStatus || RequestStatus.MANAGER_REVIEW;
-        } else if (userRoleName === UserRole.DEAN) {
-          // Dean reviewing requester's query and re-approving (legacy support)
-          const returnStatus = queryEngine.getReturnStatus(requestRecord);
-          nextStatus = returnStatus || RequestStatus.MANAGER_REVIEW;
-        } else {
-          return NextResponse.json({ error: 'Invalid role for query response' }, { status: 400 });
-        }
-
-        actionType = ActionType.CLARIFY_AND_REAPPROVE;
-
-        console.log('[DEBUG] Clarify and reapprove:', {
-          currentStatus: requestRecord.status,
-          targetStatus: nextStatus,
-          userRole: userRoleName,
-          queryResponse: notes
-        });
-        break;
-
-      case 'dean_send_to_requester':
-        // Dean forwards rejection to requester for query
-        if (userRoleName !== UserRole.DEAN) {
-          return NextResponse.json({ error: 'Only Dean can send requests to requester for query' }, { status: 400 });
-        }
-
-        if (!notes || notes.trim() === '') {
-          return NextResponse.json({ error: 'Clarification message is required' }, { status: 400 });
-        }
-
-        nextStatus = RequestStatus.SUBMITTED;
-        actionType = ActionType.REJECT_WITH_CLARIFICATION;
-
-        console.log('[DEBUG] Dean sending to requester for query:', {
-          currentStatus: requestRecord.status,
-          targetStatus: nextStatus,
-          queryMessage: notes
-        });
-        break;
-    }
-
-    // 🔹 **SPECIAL FIX — VP → HOI**
-    if (
-      userRoleName === UserRole.VP &&
-      requestRecord.status === RequestStatus.VP_APPROVAL
-    ) {
-      nextStatus = RequestStatus.HOI_APPROVAL;
-    }
-
-    // 🔹 SOP stores reference number
-    if (userRoleName === UserRole.SOP_VERIFIER && sopReference) {
-      requestRecord.sopReference = sopReference;
-      await requestRecord.save();
-    }
-
-    console.log('[DEBUG] After switch statement:', {
-      action,
-      previousStatus,
-      nextStatus,
-      actionType,
-      statusChanged: nextStatus !== previousStatus
-    });
-
-    // BUILD HISTORY ENTRY
-    const historyEntry: any = {
-      action: actionType,
-      actor: user.id,
-      previousStatus,
-      newStatus: nextStatus,
-      timestamp: new Date(),
-    };
-
-    if (action === 'approve' && permissions.canApprove) {
-      historyEntry.signature = signature;
-      historyEntry.signatureTimestamp = new Date();
-    }
-
-    if (action === 'forward') {
-      historyEntry.forwardedMessage = forwardedMessage || notes || '';
-      if (attachments?.length) historyEntry.attachments = attachments;
-    } else {
-      if (notes) historyEntry.notes = notes;
-      if (budgetAvailable !== undefined)
-        historyEntry.budgetAvailable = budgetAvailable;
-    }
-
-    // Store SOP reference in history
-    if (userRoleName === UserRole.SOP_VERIFIER && sopReference) {
-      historyEntry.sopReference = sopReference;
-    }
-
-    // Store budget availability for accountant
-    if (userRoleName === UserRole.ACCOUNTANT && budgetAvailable !== undefined) {
-      historyEntry.budgetAvailable = budgetAvailable;
-      // Store detailed budget information if provided
-      if (budgetData) {
-        historyEntry.budgetAllocated = budgetData.allocated;
-        historyEntry.budgetSpent = budgetData.spent;
-        historyEntry.budgetBalance = budgetData.balance;
-      }
-    }
-
-    // Store query target for Dean to department flow
-    if (action === 'clarify' && userRoleName === UserRole.DEAN && target) {
-      historyEntry.queryTarget = target;
-    }
-
-    // Store query type for Institution Manager flow
-    if (action === 'clarify' && userRoleName === UserRole.INSTITUTION_MANAGER && target) {
-      historyEntry.queryType = target;
-    }
-
-    // Store department response for Dean queries
-    if (action === 'forward' && [UserRole.MMA, UserRole.HR, UserRole.AUDIT, UserRole.IT].includes(userRoleName as UserRole) &&
-      requestRecord.status === RequestStatus.DEPARTMENT_CHECKS) {
-      historyEntry.departmentResponse = userRoleName;
-    }
-
-    // Handle query workflow fields
-    if (action === 'reject_with_clarification' || action === 'dean_send_to_requester') {
-      historyEntry.queryRequest = notes;
-      historyEntry.requiresClarification = true;
-      if (attachments?.length) historyEntry.attachments = attachments;
-
-      // Store original rejector info for tracking
-      if (action === 'reject_with_clarification') {
-        historyEntry.originalRejector = user.id;
+    // Handle reject_with_clarification (query workflow)
+    if (action === 'reject_with_clarification') {
+      // Validate that query request is provided
+      if (!notes || notes.trim() === '') {
+        return NextResponse.json({ error: 'Query message is required when raising queries' }, { status: 400 });
       }
 
-      if (action === 'dean_send_to_requester') {
-        // Legacy support for dean_send_to_requester action
+      console.log('[DEBUG] Reject with clarification:', {
+        currentStatus: requestRecord.status,
+        queryRequest: notes
+      });
+
+      // Add history entry for query
+      const historyEntry: any = {
+        action: ActionType.REJECT_WITH_CLARIFICATION,
+        actor: user.id,
+        previousStatus: requestRecord.status,
+        newStatus: requestRecord.status, // Status doesn't change for queries
+        timestamp: new Date(),
+        queryRequest: notes,
+        requiresClarification: true,
+      };
+
+      if (attachments?.length) {
+        historyEntry.attachments = attachments;
       }
-    }
 
-    if (action === 'query_and_reapprove') {
-      historyEntry.queryResponse = notes;
-      if (attachments?.length) historyEntry.queryAttachments = attachments;
-    }
-
-    // 🔹 ACCOUNTANT BUDGET AVAILABILITY - already handled above
-    // if (userRoleName === UserRole.ACCOUNTANT && typeof budgetAvailable === 'boolean') {
-    //   historyEntry.budgetAvailable = budgetAvailable;
-    // }
-
-    // PREPARE UPDATE
-    updateData = {
-      $push: { history: historyEntry },
-    };
-
-    if (nextStatus !== previousStatus) {
-      updateData.$set = { status: nextStatus, lastReminderSent: null };
-    }
-
-    // Handle query workflow updates
-    if (action === 'reject_with_clarification' || action === 'dean_send_to_requester') {
-      if (!updateData.$set) updateData.$set = {};
-      updateData.$set.pendingQuery = true;
-
-      if (action === 'reject_with_clarification') {
-        const queryTarget = queryEngine.getQueryTarget(requestRecord.status, userRoleName as UserRole);
-        updateData.$set.queryLevel = queryTarget?.role;
-      } else {
-        // dean_send_to_requester
-        updateData.$set.queryLevel = UserRole.REQUESTER;
-      }
-    }
-
-    if (action === 'query_and_reapprove') {
-      if (!updateData.$set) updateData.$set = {};
-
-      if (userRoleName === UserRole.REQUESTER) {
-        // Requester provided query - send back to original rejector
-        const originalRejector = queryEngine.getOriginalRejector(requestRecord);
-        if (originalRejector) {
-          updateData.$set.queryLevel = originalRejector.role;
-          updateData.$set.pendingQuery = true; // Now pending with original rejector
-        } else {
-          updateData.$set.pendingQuery = false;
-          updateData.$set.queryLevel = null;
+      const updateData: any = {
+        $push: { history: historyEntry },
+        $set: {
+          pendingQuery: true,
+          queryLevel: 'requester', // Always send queries to requester
         }
-      } else {
-        // Dean or other reviewer approved after query - workflow complete
-        updateData.$set.pendingQuery = false;
-        updateData.$set.queryLevel = null;
-      }
-    }
+      };
 
-    if (action === 'reject' && isPendingQueryForUser) {
-      if (!updateData.$set) updateData.$set = {};
-      updateData.$set.pendingQuery = false;
-      updateData.$set.queryLevel = null;
-    }
-
-    // Save accountant budget availability to Request document
-    if (userRoleName === UserRole.ACCOUNTANT && action === 'approve' && typeof budgetAvailable === 'boolean') {
-      if (!updateData.$set) updateData.$set = {};
-      updateData.$set.budgetAvailable = budgetAvailable;
-      // Store detailed budget information if provided
-      if (budgetData) {
-        updateData.$set.budgetAllocated = budgetData.allocated;
-        updateData.$set.budgetSpent = budgetData.spent;
-        updateData.$set.budgetBalance = budgetData.balance;
-      }
-    }
-
-    // Add attachments (except forward)
-    if (action !== 'forward' && attachments?.length) {
-      if (!updateData.$set) updateData.$set = {};
-      updateData.$set.attachments = [
-        ...requestRecord.attachments,
-        ...attachments,
-      ];
-    }
-
-    console.log('[DEBUG] About to update request with:', updateData);
-
-    const updatedRequest = await Request.findByIdAndUpdate(
-      params.id,
-      updateData,
-      { new: true }
-    )
-      .populate('requester', 'name email empId role')
-      .populate('history.actor', 'name email empId role');
-
-    console.log('[DEBUG] Request updated successfully');
-
-    // Set renewal date if this is a renewal request that was just approved
-    if (nextStatus === RequestStatus.APPROVED && updatedRequest.requestType === 'renewal') {
-      try {
-        await setRenewalDate(params.id);
-        console.log('[DEBUG] Renewal date set for approved renewal request');
-      } catch (renewalError) {
-        console.error('[ERROR] Failed to set renewal date:', renewalError);
-        // Don't fail the request if renewal date setting fails
-      }
-    }
-
-    // Send notifications to stakeholders
-    try {
-      await notifyStatusChange(
+      const updatedRequest = await Request.findByIdAndUpdate(
         params.id,
-        nextStatus,
-        user.id,
-        action as 'approve' | 'reject' | 'clarify',
-        notes
-      );
-      console.log('[DEBUG] Notifications sent successfully');
-    } catch (notificationError) {
-      console.error('[ERROR] Failed to send notifications:', notificationError);
-      // Don't fail the request if notifications fail
+        updateData,
+        { new: true }
+      )
+        .populate('requester', 'name email empId role')
+        .populate('history.actor', 'name email empId role');
+
+      console.log('[DEBUG] Query sent to requester');
+
+      // Send notification to requester
+      try {
+        // Send generic notification for query
+        const Notification = (await import('../../../../../models/Notification')).default;
+        await Notification.create({
+          userId: requestRecord.requester._id || requestRecord.requester,
+          type: 'query_raised',
+          title: 'Query Raised on Your Request',
+          message: `${user.name} has raised a query on your request "${updatedRequest.title}"`,
+          requestId: params.id,
+          read: false,
+        });
+      } catch (notificationError) {
+        console.error('[ERROR] Failed to send query notification:', notificationError);
+      }
+
+      return NextResponse.json(updatedRequest);
     }
 
-    return NextResponse.json(updatedRequest);
   } catch (error) {
-    console.error('[ERROR] Approve request error:', error);
-    console.error('[ERROR] Error details:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      requestId: params.id,
-      userRole: user?.role,
-      action: action
-    });
-
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('[ERROR] Approval processing failed:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
     return NextResponse.json(
       {
-        error: `Failed to process approval: ${errorMessage}`,
+        error: 'Failed to process approval',
         details: errorMessage,
-        debugInfo: {
-          requestId: params.id,
-          userRole: user?.role,
-          timestamp: new Date().toISOString()
-        }
+        action: action || 'unknown',
+        user: user?.email || 'unknown'
       },
       { status: 500 }
     );

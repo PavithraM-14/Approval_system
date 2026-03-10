@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 
 export default function SettingsPage() {
   const [user, setUser] = useState<any>(null);
@@ -100,6 +101,84 @@ export default function SettingsPage() {
             <span className="text-gray-600">Role:</span>
             <span className="ml-2 font-medium">{user?.role?.name || 'Unknown'}</span>
           </div>
+          
+          {/* Permissions Section */}
+          {user?.role?.permissions && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Your Permissions</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {Object.entries(user.role.permissions).map(([key, value]) => {
+                  // Skip internal fields
+                  if (key === '_id' || key === '__v') return null;
+                  
+                  // Format permission name
+                  const permissionName = key
+                    .replace(/^can/, '')
+                    .replace(/^is/, '')
+                    .replace(/([A-Z])/g, ' $1')
+                    .trim();
+                  
+                  // Get permission description
+                  const getPermissionDescription = (permKey: string) => {
+                    switch (permKey) {
+                      case 'canCreate':
+                        return 'Create new requests';
+                      case 'canEdit':
+                        return 'Edit documents and attachments';
+                      case 'canDelete':
+                        return 'Delete requests and documents';
+                      case 'canApprove':
+                        return 'Approve or reject requests';
+                      case 'canForward':
+                        return 'Forward requests to others';
+                      case 'canViewAll':
+                        return 'View all requests in system';
+                      case 'canViewOwn':
+                        return 'View own requests only';
+                      case 'canManageUsers':
+                        return 'Manage user accounts';
+                      case 'canManageRoles':
+                        return 'Manage roles and permissions';
+                      case 'canManageWorkflows':
+                        return 'Create and edit workflows';
+                      case 'canAccessAnalytics':
+                        return 'Access analytics and reports';
+                      case 'canExportData':
+                        return 'Export data and reports';
+                      case 'canManageIntegrations':
+                        return 'Manage system integrations';
+                      case 'isSystemAdmin':
+                        return 'Full system administrator access';
+                      default:
+                        return permissionName;
+                    }
+                  };
+                  
+                  const isEnabled = value === true;
+                  
+                  return (
+                    <div
+                      key={key}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
+                        isEnabled 
+                          ? 'bg-green-50 text-green-800' 
+                          : 'bg-gray-50 text-gray-500'
+                      }`}
+                    >
+                      {isEnabled ? (
+                        <CheckCircleIcon className="h-5 w-5 text-green-600 flex-shrink-0" />
+                      ) : (
+                        <XCircleIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                      )}
+                      <div className="flex-1">
+                        <div className="font-medium">{getPermissionDescription(key)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

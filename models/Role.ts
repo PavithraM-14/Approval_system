@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 export interface IRole {
   name: string;
   description?: string;
+  company?: mongoose.Types.ObjectId;
   isSystemAdmin: boolean;
   permissions: {
     canView: boolean;
@@ -19,8 +20,9 @@ export interface IRole {
 }
 
 const roleSchema = new mongoose.Schema<IRole>({
-  name: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
   description: { type: String },
+  company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
   isSystemAdmin: { type: Boolean, default: false },
   permissions: {
     canView: { type: Boolean, default: true },
@@ -37,5 +39,8 @@ const roleSchema = new mongoose.Schema<IRole>({
 }, {
   timestamps: true,
 });
+
+// Ensure role names are unique within a company (or globally for system roles)
+roleSchema.index({ name: 1, company: 1 }, { unique: true });
 
 export default mongoose.models.Role || mongoose.model<IRole>('Role', roleSchema);

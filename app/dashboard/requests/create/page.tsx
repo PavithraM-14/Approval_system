@@ -1,613 +1,231 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { CreateRequestSchema, UserRole } from '../../../../lib/types';
-import { AuthUser } from '../../../../lib/auth';
-import { z } from 'zod';
-import CostEstimateInput from '../../../../components/CostEstimateInput';
-import InstitutionSelect from '../../../../components/InstitutionSelect';
-import NestedSelect from '../../../../components/NestedSelect';
-import { Controller } from 'react-hook-form';
-import { DENTAL_DEPARTMENTS, ENGINEERING_DEPARTMENTS, FSH_DEPARTMENTS, EEC_DEPARTMENTS, MANAGEMENT_DEPARTMENTS } from '../../../../lib/constants';
-import GmailImportModal from '../../../../components/GmailImportModal';
-
-type CreateRequestFormData = z.infer<typeof CreateRequestSchema>;
-
-interface UploadedFile {
-  url: string;
-  filename: string;
-  size: number;
-}
-
-const removeNumberArrows = `
-  input::-webkit-outer-spin-button,
-  input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-  input[type="number"] {
-    -moz-appearance: textfield;
-  }
-`;
+import InstitutionSelect from '@/components/InstitutionSelect';
+import FileUpload from '@/components/FileUpload';
+import GmailImportModal from '@/components/GmailImportModal';
+import { EnvelopeIcon } from '@heroicons/react/24/outline';
 
 export default function CreateRequestPage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [attachments, setAttachments] = useState<string[]>([]);
   const [showGmailImport, setShowGmailImport] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    control,
-    formState: { errors },
-    trigger,
-    getValues,
-    setError: setFieldError
-  } = useForm<CreateRequestFormData>({
-    mode: 'onBlur',
-    reValidateMode: 'onBlur',
-    shouldFocusError: false,
-    defaultValues: {
-      attachments: [],
-      costEstimate: undefined,
-      expenseCategory: undefined,
-      requestType: 'one-time',
-      renewalPeriodUnit: 'months',
-      college: '',
-      department: '',
-    }
+  const [formData, setFormData] = useState({
+    title: '',
+    purpose: '',
+    college: '',
+    department: '',
+    costEstimate: '',
+    expenseCategory: '',
+    requestType: 'one-time' as 'one-time' | 'renewal',
   });
 
-  const costEstimate = watch('costEstimate');
-  const college = watch('college');
-  const requestType = watch('requestType');
-
-  // Use any because the constants have different structures (strings vs objects)
-  // NestedSelect handles normalization internally
-  let departmentOptions: any[] = ENGINEERING_DEPARTMENTS;
-  if (college === 'DENTAL') {
-    departmentOptions = DENTAL_DEPARTMENTS;
-  } else if (college?.includes('FSH')) {
-    departmentOptions = FSH_DEPARTMENTS;
-  } else if (college?.includes('Management')) {
-    departmentOptions = MANAGEMENT_DEPARTMENTS;
-  } else if (college === 'EEC') {
-    departmentOptions = EEC_DEPARTMENTS;
-  } else if (college?.includes('E&T')) {
-    departmentOptions = ENGINEERING_DEPARTMENTS;
-  }
-  // Default fallback to ENGINEERING if just "SRMIST" or others for now unless specified
-  // Or maybe empty? User didn't specify behavior for other cases. 
-  // Sticking to engineering as default seems safe for "SRMIST - E&T" or generic "SRM" if that happens.
-
-  const errorText = 'text-xs text-red-600 mt-1';
-
-  /* AUTH CHECK */
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const res = await fetch('/api/auth/me', { credentials: 'include' });
-        if (!res.ok) return router.push('/login');
-
-        const data = await res.json();
-        const userData = data.user || data; // Handle both wrapped and unwrapped responses
-        
-        // Allow System Admins and users with canCreate permission to access this page
-        const isSystemAdmin = userData.role?.isSystemAdmin;
-        const canCreate = userData.role?.permissions?.canCreate;
-        
-        if (!isSystemAdmin && !canCreate) {
-          router.push('/dashboard');
-          return;
-        }
-        setUser(userData);
-      } catch {
-        router.push('/login');
-      } finally {
-        setIsCheckingAuth(false);
-      }
-    };
-    checkAuth();
-  }, [router]);
-
-  /* DEBUG: Log errors when they change */
-  useEffect(() => {
-    if (Object.keys(errors).length > 0) {
-      console.log('Form errors updated:', errors);
-    }
-  }, [errors]);
-
-  /* SUBMIT */
-  const onSubmit = async (data: CreateRequestFormData) => {
-    if (isSubmitting || isUploading) {
-      console.log('[DEBUG] Submission blocked: already processing');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (attachments.length === 0) {
+      setError('Please attach at least one file to your request');
       return;
     }
-
-    console.log('[DEBUG] Form submission attempt:', { data, uploadedFiles: uploadedFiles.length });
-
-    setError(null);
-    let hasErrors = false;
-
-    // Manual validation - check each field
-    if (!data.title || data.title.trim().length < 5) {
-      console.log('[DEBUG] Title validation failed');
-      setFieldError('title', { type: 'manual', message: 'Title must be at least 5 characters' });
-      hasErrors = true;
-    }
-
-    if (!data.purpose || data.purpose.trim().length < 10) {
-      console.log('[DEBUG] Purpose validation failed');
-      setFieldError('purpose', { type: 'manual', message: 'Purpose must be at least 10 characters' });
-      hasErrors = true;
-    }
-
-    if (!data.college || !data.college.trim()) {
-      console.log('[DEBUG] College validation failed');
-      setFieldError('college', { type: 'manual', message: 'College is required' });
-      hasErrors = true;
-    }
-
-    if (!data.department || !data.department.trim()) {
-      console.log('[DEBUG] Department validation failed');
-      setFieldError('department', { type: 'manual', message: 'Department is required' });
-      hasErrors = true;
-    }
-
-    if (uploadedFiles.length === 0) {
-      console.log('[DEBUG] Attachments validation failed');
-      setFieldError('attachments', { type: 'manual', message: 'At least one document is required' });
-      hasErrors = true;
-    }
-
-    if (hasErrors) {
-      console.log('[DEBUG] Validation failed, showing errors');
-      setError('Please fix all highlighted errors before submitting.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
-    console.log('[DEBUG] All validations passed, proceeding with API call');
-    setIsSubmitting(true);
+    
+    setLoading(true);
+    setError('');
 
     try {
       const response = await fetch('/api/requests', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         credentials: 'include',
         body: JSON.stringify({
-          ...data,
-          attachments: uploadedFiles.map(f => f.url),
+          ...formData,
+          costEstimate: formData.costEstimate ? parseFloat(formData.costEstimate) : 0,
+          attachments,
         }),
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        console.error('[DEBUG] API error response:', err);
-
-        // Handle Zod validation errors from the server
-        if (err.errors && Array.isArray(err.errors)) {
-          const errorMessages = err.errors.map((e: any) => e.message).join(', ');
-          setError(`Validation error: ${errorMessages}`);
-        } else {
-          setError(err.error || 'Failed to create request');
-        }
-
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create request');
       }
 
-      const result = await response.json();
-      console.log('[DEBUG] Request created successfully:', result._id);
-      router.push(`/dashboard/requests/${result._id}`);
-    } catch (err) {
-      console.error('[DEBUG] Submission error:', err);
-      setError(err instanceof Error ? err.message : 'Something went wrong');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const data = await response.json();
+      router.push(`/dashboard/requests/${data._id}`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to create request');
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const onInvalid = (fieldErrors: any) => {
-    console.log('[DEBUG] React-hook-form validation errors:', fieldErrors);
-    setError('Please fix all highlighted errors before submitting.');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  /* FILE UPLOAD */
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files?.length) return;
-
-    // Define allowed file types
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword', // .doc
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
-      'application/vnd.ms-excel', // .xls
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-      'application/vnd.ms-powerpoint', // .ppt
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
-      'image/jpeg',
-      'image/jpg',
-      'image/png',
-      'image/gif',
-      'text/plain',
-      'text/csv',
-    ];
-
-    const validFiles = Array.from(files).filter(f => allowedTypes.includes(f.type));
-    
-    if (validFiles.length !== files.length) {
-      setError('Some files were not uploaded. Only PDF, Word, Excel, PowerPoint, images, and text files are allowed.');
-      // Continue with valid files
-    }
-
-    if (validFiles.length === 0) {
-      setError('No valid files selected. Please upload PDF, Word, Excel, PowerPoint, images, or text files.');
-      return;
-    }
-
-    setIsUploading(true);
-    setError(null);
-
-    try {
-      const formData = new FormData();
-
-      // Add all files to the form data (fixed to use 'files' parameter)
-      validFiles.forEach(file => {
-        formData.append('files', file);
-      });
-
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Upload failed');
-      }
-
-      const uploaded = await res.json();
-
-      // Convert the uploaded files to the expected format
-      const newFiles = uploaded.files.map((filePath: string) => ({
-        url: filePath,
-        filename: filePath.split('/').pop() || 'unknown',
-        size: 0 // We don't have size info from the API response
-      }));
-
-      setUploadedFiles(prev => {
-        const updated = [...prev, ...newFiles];
-
-        // ✅ CRITICAL: sync with react-hook-form
-        setValue(
-          'attachments',
-          updated.map(f => f.url),
-          { shouldValidate: true }
-        );
-
-        return updated;
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'File upload failed.');
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+  const handleGmailImportComplete = (importedDocs?: any[]) => {
+    if (importedDocs && importedDocs.length > 0) {
+      const filePaths = importedDocs.map(doc => doc.filePath).filter(Boolean);
+      setAttachments(prev => [...prev, ...filePaths]);
     }
   };
-
-  const handleRemoveFile = (i: number) => {
-    setUploadedFiles(prev => {
-      const updated = prev.filter((_, idx) => idx !== i);
-
-      setValue(
-        'attachments',
-        updated.map(f => f.url),
-        { shouldValidate: true }
-      );
-
-      return updated;
-    });
-  };
-
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600" />
-      </div>
-    );
-  }
-
-  if (!user) return null;
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <style>{removeNumberArrows}</style>
-
-      <h1 className="text-2xl font-bold">Create New Request</h1>
-      <p className="text-gray-600 mb-4">Fill in the details for your new request</p>
+    <div className="max-w-4xl mx-auto animate-fadeIn">
+      <div className="mb-6">
+        <h2 className="text-3xl font-bold text-gray-900">Create New Request</h2>
+        <p className="text-gray-600 mt-1">Fill in the details for your new request</p>
+      </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 text-red-700 border border-red-200 rounded">
-          {error}
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800 text-sm">{error}</p>
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="space-y-4">
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-          <div className="sm:col-span-2">
-            <label className={`text-sm font-medium ${errors.title ? 'text-red-600' : 'text-gray-700'}`}>Title<span className="text-red-600">*</span></label>
-            <input
-              {...register('title')}
-              placeholder="e.g., Lab Equipment Purchase, Software License Renewal"
-              onBlur={(e) => {
-                if (e.target.value.trim().length > 0 && e.target.value.trim().length < 5) {
-                  setFieldError('title', { type: 'manual', message: 'Title must be at least 5 characters' });
-                }
-              }}
-              className={`mt-1 w-full border-2 p-3 rounded transition-all focus:outline-none ${errors.title
-                  ? 'border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200'
-                  : 'border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-                }`}
-            />
-            {errors.title && <p className={`${errorText} font-semibold`}>{errors.title.message}</p>}
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className={`text-sm font-medium ${errors.purpose ? 'text-red-600' : 'text-gray-700'}`}>Purpose<span className="text-red-600">*</span></label>
-            <textarea
-              rows={3}
-              {...register('purpose')}
-              placeholder="Explain why this is needed and how it will be used..."
-              onBlur={(e) => {
-                if (e.target.value.trim().length > 0 && e.target.value.trim().length < 10) {
-                  setFieldError('purpose', { type: 'manual', message: 'Purpose must be at least 10 characters' });
-                }
-              }}
-              className={`mt-1 w-full border-2 p-3 rounded transition-all focus:outline-none ${errors.purpose
-                  ? 'border-red-500 bg-red-50 focus:ring-2 focus:ring-red-200'
-                  : 'border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-                }`}
-            />
-            {errors.purpose && <p className={`${errorText} font-semibold`}>{errors.purpose.message}</p>}
-          </div>
-
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${errors.college ? 'text-red-600' : 'text-gray-700'}`}>Institution<span className="text-red-600">*</span></label>
-            <Controller
-              control={control}
-              name="college"
-              render={({ field: { value, onChange } }) => (
-                <InstitutionSelect
-                  value={value}
-                  onChange={(newValue) => {
-                    onChange(newValue);
-                    // Validate college field after selection
-                    trigger('college');
-                  }}
-                  error={errors.college?.message}
-                />
-              )}
-            />
-          </div>
-
-          <div>
-            <label className={`block text-sm font-medium mb-2 ${errors.department ? 'text-red-600' : 'text-gray-700'}`}>Department<span className="text-red-600">*</span></label>
-            <Controller
-              control={control}
-              name="department"
-              render={({ field: { value, onChange } }) => (
-                <NestedSelect
-                  value={value}
-                  onChange={(newValue) => {
-                    onChange(newValue);
-                    // Validate department field after selection
-                    trigger('department');
-                  }}
-                  options={departmentOptions}
-                  placeholder="Select Department"
-                  error={errors.department?.message}
-                  disabled={!college}
-                />
-              )}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700">Cost Estimate</label>
-            <CostEstimateInput
-              value={costEstimate || 0}
-              onChange={(v) => setValue('costEstimate', v)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-gray-700">Request Type</label>
-            <select
-              {...register('requestType')}
-              className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="one-time">One-Time</option>
-              <option value="renewal">Renewal (Auto-renews)</option>
-            </select>
-          </div>
-
-          {/* Conditional Renewal Fields */}
-          {requestType === 'renewal' && (
-            <div className="sm:col-span-2 bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start gap-2 mb-3">
-                <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-blue-900">Auto-Renewal</h3>
-                  <p className="text-xs text-blue-700 mt-1">
-                    New request created automatically after specified period
-                  </p>
-                </div>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-700">Renewal Period <span className="text-red-600">*</span></label>
-                <div className="flex gap-2 mt-1">
-                  <input
-                    type="number"
-                    min="1"
-                    {...register('renewalPeriod', { valueAsNumber: true })}
-                    placeholder="e.g., 12"
-                    className="flex-1 border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <select
-                    {...register('renewalPeriodUnit')}
-                    className="border border-gray-300 p-2 rounded focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="days">Days</option>
-                    <option value="months">Months</option>
-                    <option value="years">Years</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="text-sm font-medium text-gray-700">Expense Category</label>
-            <input 
-              {...register('expenseCategory')} 
-              placeholder="e.g., Travel, Equipment, Software, Consumables" 
-              className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500" 
-            />
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="text-sm font-medium text-gray-700">SOP Reference (Optional)</label>
-            <input 
-              {...register('sopReference')} 
-              placeholder="e.g., SOP-2024-001"
-              className="mt-1 w-full border border-gray-300 p-2 rounded focus:ring-blue-500" 
-            />
-          </div>
-        </div>
-
-        {/* DOCUMENTS */}
+      <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 space-y-6">
         <div>
-          <div className="flex justify-between items-center mb-2">
-            <label className={`text-sm font-medium ${errors.attachments ? 'text-red-600' : 'text-gray-700'}`}>
-              Documents <span className="text-red-600">*</span>
-            </label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowGmailImport(true)}
-                className="text-green-600 text-sm hover:underline font-medium flex items-center gap-1"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                </svg>
-                Import from Gmail
-              </button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.txt,.csv"
-                multiple
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-blue-600 text-sm hover:underline font-medium"
-              >
-                + Add Files
-              </button>
-            </div>
-          </div>
-
-          {errors.attachments && (
-            <p className="text-xs text-red-600 mt-1">
-              {errors.attachments.message}
-            </p>
-          )}
-
-          <ul className={`border rounded divide-y mt-2 ${errors.attachments ? 'border-red-600' : 'border-gray-200'}`}>
-            {uploadedFiles.map((f, i) => (
-              <li key={i} className="flex justify-between items-center p-2 bg-white hover:bg-gray-50">
-                <span className="truncate text-sm">{f.filename}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveFile(i)}
-                  className="text-red-500 text-sm hover:text-red-700 ml-2"
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
-            {uploadedFiles.length === 0 && !errors.attachments && (
-              <li className="p-4 text-center text-sm text-gray-400">No documents uploaded</li>
-            )}
-            {uploadedFiles.length === 0 && errors.attachments && (
-              <li className="p-4 text-center text-sm text-red-500 bg-red-50">At least one document required</li>
-            )}
-          </ul>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Title <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Enter request title"
+          />
         </div>
 
-        <div className="flex justify-end gap-4 pt-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Purpose <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            required
+            value={formData.purpose}
+            onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            rows={4}
+            placeholder="Describe the purpose of this request"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Institution
+            </label>
+            <InstitutionSelect
+              value={formData.college}
+              onChange={(value) => setFormData({ ...formData, college: value })}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Department
+            </label>
+            <input
+              type="text"
+              value={formData.department}
+              onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter department"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cost Estimate
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.costEstimate}
+              onChange={(e) => setFormData({ ...formData, costEstimate: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="0.00"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Expense Category
+            </label>
+            <input
+              type="text"
+              value={formData.expenseCategory}
+              onChange={(e) => setFormData({ ...formData, expenseCategory: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter expense category"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Request Type <span className="text-red-500">*</span>
+          </label>
+          <select
+            required
+            value={formData.requestType}
+            onChange={(e) => setFormData({ ...formData, requestType: e.target.value as 'one-time' | 'renewal' })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="one-time">One-time</option>
+            <option value="renewal">Renewal</option>
+          </select>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Attachments <span className="text-red-500">*</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowGmailImport(true)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              <EnvelopeIcon className="h-4 w-4" />
+              Import from Gmail
+            </button>
+          </div>
+          <FileUpload
+            onFilesUploaded={setAttachments}
+            maxFiles={10}
+            existingFiles={attachments}
+          />
+        </div>
+
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <button
             type="button"
             onClick={() => router.back()}
-            className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+            className="px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
-            disabled={isSubmitting || isUploading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-sm"
+            disabled={loading}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? 'Creating...' : isUploading ? 'Uploading...' : 'Create Request'}
+            {loading ? 'Creating...' : 'Create Request'}
           </button>
         </div>
-
       </form>
 
-      {/* Gmail Import Modal */}
       <GmailImportModal
         isOpen={showGmailImport}
         onClose={() => setShowGmailImport(false)}
-        onImportComplete={(importedDocs) => {
-          // Add imported documents to uploaded files
-          if (importedDocs && importedDocs.length > 0) {
-            const newFiles = importedDocs.map((doc: any) => ({
-              url: doc.filePath || doc.url,
-              filename: doc.filename || doc.fileName,
-              size: doc.size || 0
-            }));
-            setUploadedFiles(prev => {
-              const updated = [...prev, ...newFiles];
-              setValue('attachments', updated.map(f => f.url), { shouldValidate: true });
-              return updated;
-            });
-          }
-        }}
+        onImportComplete={handleGmailImportComplete}
       />
     </div>
   );

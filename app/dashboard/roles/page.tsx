@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 interface Role {
@@ -23,6 +24,7 @@ interface Role {
 }
 
 export default function RolesPage() {
+  const router = useRouter();
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -80,7 +82,12 @@ export default function RolesPage() {
       <div className="mb-6 flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">Role Management</h2>
-          <p className="text-gray-600 mt-1">Manage user roles and permissions</p>
+          <p className="text-gray-600 mt-1">
+            Manage company roles with permissions and workflow assignments
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            Roles define both what users can do (permissions) and who they are in workflows (for approval routing)
+          </p>
         </div>
         <button
           onClick={() => {
@@ -107,9 +114,6 @@ export default function RolesPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Permissions
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Type
-              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -117,9 +121,13 @@ export default function RolesPage() {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {roles.map((role) => (
-              <tr key={role._id} className="hover:bg-gray-50">
+              <tr 
+                key={role._id} 
+                onClick={() => router.push(`/dashboard/roles/${role._id}`)}
+                className="hover:bg-gray-50 cursor-pointer"
+              >
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{role.name}</div>
+                  <div className="text-sm font-medium text-blue-600">{role.name}</div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="text-sm text-gray-600">{role.description}</div>
@@ -127,7 +135,8 @@ export default function RolesPage() {
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap gap-1">
                     {Object.entries(role.permissions).map(([key, value]) => {
-                      if (!value) return null;
+                      // Skip canView since everyone has it by default
+                      if (!value || key === 'canView') return null;
                       
                       // Custom label mapping
                       const getPermissionLabel = (permKey: string) => {
@@ -152,31 +161,30 @@ export default function RolesPage() {
                     })}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {role.isSystemAdmin ? (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                      System Admin
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      Standard
-                    </span>
-                  )}
-                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setEditingRole(role);
                       setShowModal(true);
                     }}
                     className="text-blue-600 hover:text-blue-900 mr-4"
+                    title="Edit role"
                   >
                     <PencilIcon className="h-5 w-5" />
                   </button>
                   <button
-                    onClick={() => handleDelete(role._id)}
-                    className="text-red-600 hover:text-red-900"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(role._id);
+                    }}
+                    className={`${
+                      role.isSystemAdmin 
+                        ? 'text-gray-400 cursor-not-allowed' 
+                        : 'text-red-600 hover:text-red-900'
+                    }`}
                     disabled={role.isSystemAdmin}
+                    title={role.isSystemAdmin ? 'System admin roles cannot be deleted' : 'Delete role'}
                   >
                     <TrashIcon className="h-5 w-5" />
                   </button>

@@ -3,14 +3,106 @@ import connectDB from '../../../lib/mongodb';
 import Request from '../../../models/Request';
 import User from '../../../models/User';
 import { getCurrentUser } from '../../../lib/auth';
-import { RequestStatus, ActionType, UserRole } from '../../../lib/types';
-import { filterRequestsByVisibility, analyzeRequestVisibility } from '../../../lib/request-visibility';
+import { RequestStatus } from '../../../lib/types';
 import mongoose from 'mongoose';
-import { approvalEngine } from '../../../lib/approval-engine';
+import ExecutionState from '../../../models/ExecutionState';
+import WorkflowConfiguration from '../../../models/WorkflowConfiguration';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const runtime = 'nodejs';
+
+// Helper function to filter custom workflow requests
+async function filterCustomWorkflowRequests(
+  requests: any[],
+  userRoleName: string,
+  userId: string,
+  permissions: any
+): Promise<any[]> {
+  // System Admins can see everything
+  if (permissions?.isSystemAdmin) {
+    return requests.map(req => ({
+      ...req,
+      _visibility: {
+        canSee: true,
+        category: req.status === RequestStatus.APPROVED ? 'approved' : 
+                  req.status === RequestStatus.REJECTED ? 'completed' : 'in_progress',
+        reason: 'System Administrator Access'
+      }
+    }));
+  }
+
+  // Users with canCreate see only their own requests (shouldn't be here but handle it)
+  if (permissions?.canCreate) {
+    return requests
+      .filter(req => req.requester._id?.toString() === userId || req.requester.toString() === userId)
+      .map(req => ({
+        ...req,
+        _visibility: {
+          canSee: true,
+          category: req.status === RequestStatus.APPROVED ? 'approved' : 
+                    req.status === RequestStatus.REJECTED ? 'completed' : 'pending',
+          reason: 'Own request'
+        }
+      }));
+  }
+
+  if (requests.length === 0) return [];
+
+  // Get execution states for custom workflow requests
+  const executionIds = requests.map(r => r.workflowExecutionId).filter(Boolean);
+  if (executionIds.length === 0) return [];
+
+  const executions = await ExecutionState.find({ _id: { $in: executionIds } });
+  
+  // Get workflows to check current nodes
+  const workflowIds = [...new Set(executions.map(e => e.workflowId))];
+  const workflows = await WorkflowConfiguration.find({ _id: { $in: workflowIds } });
+  
+  // Check which custom workflow requests the user should see
+  const visibleRequests = requests.filter(request => {
+    const execution = executions.find(e => e._id.toString() === request.workflowExecutionId?.toString());
+    if (!execution) {
+      console.log('[DEBUG] No execution found for request:', request._id);
+      return false;
+    }
+    
+    const workflow = workflows.find(w => w._id.toString() === execution.workflowId.toString());
+    if (!workflow) {
+      console.log('[DEBUG] No workflow found for execution:', execution._id);
+      return false;
+    }
+    
+    const currentNode = workflow.nodes.find((n: any) => n.id === execution.currentNodeId);
+    if (!currentNode || currentNode.type !== 'approval') {
+      console.log('[DEBUG] Current node not found or not approval type:', execution.currentNodeId, currentNode?.type);
+      return false;
+    }
+    
+    // Check if user's role matches the current node's role
+    const nodeRoleName = currentNode.label || currentNode.data?.label;
+    const matches = nodeRoleName === userRoleName;
+    
+    console.log('[DEBUG] Role matching for request', request._id, ':', {
+      nodeRoleName,
+      userRoleName,
+      matches,
+      currentNodeId: execution.currentNodeId
+    });
+    
+    return matches;
+  });
+
+  // Add visibility metadata for consistency
+  return visibleRequests.map(req => ({
+    ...req,
+    _visibility: {
+      canSee: true,
+      category: 'pending',
+      reason: 'Current approver in custom workflow'
+    }
+  }));
+}
 
 // Function to get role-based filter for pending approvals
 function getPendingApprovalsFilter(userRole: UserRole, userId: any) {
@@ -43,7 +135,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userRoleName = user.role.name.toLowerCase().replace(/ /g, '_');
+    const userRoleName = user.role.name;
     const permissions = {
       ...user.role.permissions,
       isSystemAdmin: user.role.isSystemAdmin
@@ -66,12 +158,12 @@ export async function GET(request: NextRequest) {
 
     console.log('[DEBUG] Query params:', { page, limit, statusFilter });
 
-    // Get user's database record
+    // Get user's database record with role populated
     let dbUser = null;
     if (mongoose.Types.ObjectId.isValid(user.id)) {
-      dbUser = await User.findById(user.id);
+      dbUser = await User.findById(user.id).populate('role');
     } else {
-      dbUser = await User.findOne({ email: user.email });
+      dbUser = await User.findOne({ email: user.email }).populate('role');
     }
 
     if (!dbUser) {
@@ -87,130 +179,73 @@ export async function GET(request: NextRequest) {
 
     console.log('[DEBUG] Total requests in system:', allRequests.length);
 
-    // Debug: Check if there are any MANAGER_REVIEW requests
-    const managerReviewRequests = allRequests.filter(r => r.status === RequestStatus.MANAGER_REVIEW);
-    console.log('[DEBUG] Total MANAGER_REVIEW requests in system:', managerReviewRequests.length);
-
-    // Determine visibility mode based on status filter
-    let visibleRequests: any[] = [];
-
-    if (statusFilter === 'approved') {
-      // Show all requests that the user has approved (not just finally approved ones)
-      visibleRequests = filterRequestsByVisibility(
-        allRequests,
-        userRoleName,
-        dbUser._id.toString(),
-        dbUser.college,
-        permissions,
-        'approved'
-      );
-      console.log('[DEBUG] Filtered to user-approved requests:', visibleRequests.length);
-    } else if (statusFilter === 'rejected') {
-      // Manual filter for rejection category as defined in request-visibility
-      visibleRequests = allRequests.filter(req => {
-        const visibility = analyzeRequestVisibility(req, userRoleName, dbUser._id.toString(), dbUser.college, permissions);
-        return visibility.canSee && (statusFilter === 'rejected' ? visibility.userAction === 'reject' || (req.status === 'rejected' && visibility.userAction === 'approve') : true);
-      });
-      // Better way: use the filter function
-      visibleRequests = filterRequestsByVisibility(
-        allRequests,
-        userRoleName,
-        dbUser._id.toString(),
-        dbUser.college,
-        permissions
-      ).filter(req => {
-         if (req.status !== RequestStatus.REJECTED) return false;
-         
-         // User-specific rejection logic similar to stats/route.ts
-         const userHasRejected = req.history?.some((h: any) =>
-          (h.actor?._id?.toString() === dbUser._id.toString() || h.actor?.toString() === dbUser._id.toString()) &&
-          h.action === ActionType.REJECT
-        );
-
-        const userHasApproved = req.history?.some((h: any) =>
-          (h.actor?._id?.toString() === dbUser._id.toString() || h.actor?.toString() === dbUser._id.toString()) &&
-          (h.action === ActionType.APPROVE || h.action === ActionType.FORWARD)
-        );
-
-        return userHasRejected || userHasApproved;
-      });
-    } else if (statusFilter === 'in_progress') {
-      visibleRequests = filterRequestsByVisibility(
-        allRequests,
-        userRoleName,
-        dbUser._id.toString(),
-        dbUser.college,
-        permissions,
-        'in_progress'
-      );
-    } else if (statusFilter === 'all') {
-      visibleRequests = filterRequestsByVisibility(
-        allRequests,
-        userRoleName,
-        dbUser._id.toString(),
-        dbUser.college,
-        permissions
-      );
-    } else {
-      // Default: show only pending approvals
-      visibleRequests = filterRequestsByVisibility(
-        allRequests,
-        userRoleName,
-        dbUser._id.toString(),
-        dbUser.college,
-        permissions,
-        'pending'
-      );
+    // All requests should be custom workflow requests now
+    const customWorkflowRequests = allRequests.filter(r => r.useCustomWorkflow && r.workflowExecutionId);
+    const nonWorkflowRequests = allRequests.filter(r => !r.useCustomWorkflow || !r.workflowExecutionId);
+    
+    console.log('[DEBUG] Custom workflow requests:', customWorkflowRequests.length);
+    if (nonWorkflowRequests.length > 0) {
+      console.warn('[WARN] Found', nonWorkflowRequests.length, 'requests without custom workflow - these should not exist');
     }
 
-    // Debug: Show visibility analysis for MANAGER_REVIEW requests
-    if (managerReviewRequests.length > 0 && !statusFilter) {
-      console.log('[DEBUG] MANAGER_REVIEW requests visibility analysis:');
-      managerReviewRequests.forEach(req => {
-        const visibility = analyzeRequestVisibility(req, userRoleName, dbUser._id.toString(), dbUser.college, permissions);
+    // Apply custom workflow filtering
+    const visibleRequests = await filterCustomWorkflowRequests(
+      customWorkflowRequests,
+      dbUser.role.name,
+      dbUser._id.toString(),
+      permissions
+    );
 
-        // Check if this is a post-parallel-verification scenario
-        const hasParallelVerificationHistory = req.history?.some((h: any) =>
-          h.newStatus === RequestStatus.PARALLEL_VERIFICATION ||
-          h.newStatus === RequestStatus.SOP_COMPLETED ||
-          h.newStatus === RequestStatus.BUDGET_COMPLETED
-        );
+    console.log('[DEBUG] Visible requests after filtering:', visibleRequests.length);
 
-        // Check if manager has previously acted
-        const managerPreviousActions = req.history?.filter((h: any) =>
-          (h.actor?._id?.toString() === dbUser._id.toString() || h.actor?.toString() === dbUser._id.toString())
-        );
+    // Determine visibility mode based on status filter
+    let filteredRequests: any[] = [];
 
-        // Check when request was last set to manager_review
-        const lastManagerReviewChange = req.history
-          ?.filter((h: any) => h.newStatus === RequestStatus.MANAGER_REVIEW)
-          ?.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+    if (statusFilter === 'approved') {
+      // Show all requests that the user has approved
+      filteredRequests = visibleRequests.filter(req => req._visibility?.category === 'approved');
+      console.log('[DEBUG] Filtered to user-approved requests:', filteredRequests.length);
+    } else if (statusFilter === 'rejected') {
+      // Show rejected requests
+      filteredRequests = visibleRequests.filter(req => req._visibility?.category === 'completed' && req.status === RequestStatus.REJECTED);
+    } else if (statusFilter === 'in_progress') {
+      filteredRequests = visibleRequests.filter(req => req._visibility?.category === 'in_progress');
+    } else if (statusFilter === 'all') {
+      filteredRequests = visibleRequests;
+    } else {
+      // Default: show only pending approvals
+      filteredRequests = visibleRequests.filter(req => req._visibility?.category === 'pending');
+    }
 
-        // Check if manager has acted after the last status change
-        const managerActionsAfterStatusChange = lastManagerReviewChange ? req.history?.filter((h: any) =>
-          (h.actor?._id?.toString() === dbUser._id.toString() || h.actor?.toString() === dbUser._id.toString()) &&
-          new Date(h.timestamp) > new Date(lastManagerReviewChange.timestamp)
-        ) : [];
-
-        console.log(`[DEBUG] Request ${req._id}:`);
-        console.log(`  - canSee=${visibility.canSee}, category=${visibility.category}, reason=${visibility.reason}`);
-        console.log(`  - hasParallelVerificationHistory=${hasParallelVerificationHistory}`);
-        console.log(`  - managerPreviousActions=${managerPreviousActions?.length || 0}`);
-        console.log(`  - currentStatus=${req.status}`);
-        console.log(`  - lastManagerReviewChange=${lastManagerReviewChange ? new Date(lastManagerReviewChange.timestamp).toISOString() : 'none'}`);
-        console.log(`  - managerActionsAfterStatusChange=${managerActionsAfterStatusChange?.length || 0}`);
-      });
+    // Debug: Show visibility analysis for custom workflow requests
+    if (customWorkflowRequests.length > 0 && !statusFilter) {
+      console.log('[DEBUG] Custom workflow requests visibility analysis:');
+      for (const req of customWorkflowRequests.slice(0, 3)) { // Only show first 3 for brevity
+        if (req.workflowExecutionId) {
+          const execution = await ExecutionState.findById(req.workflowExecutionId);
+          const workflow = execution ? await WorkflowConfiguration.findById(execution.workflowId) : null;
+          const currentNode = workflow?.nodes.find((n: any) => n.id === execution?.currentNodeId);
+          
+          console.log(`[DEBUG] Request ${req._id}:`);
+          console.log(`  - useCustomWorkflow=${req.useCustomWorkflow}`);
+          console.log(`  - workflowExecutionId=${req.workflowExecutionId}`);
+          console.log(`  - currentNodeId=${execution?.currentNodeId}`);
+          console.log(`  - currentNodeLabel=${currentNode?.label || currentNode?.data?.label}`);
+          console.log(`  - userRoleName=${dbUser.role?.name || 'unknown'}`);
+          console.log(`  - matches=${(currentNode?.label || currentNode?.data?.label) === (dbUser.role?.name || 'unknown')}`);
+        }
+      }
     }
 
     // Apply pagination
     const skip = (page - 1) * limit;
-    const filteredRequests = visibleRequests.slice(skip, skip + limit);
-    const total = visibleRequests.length;
+    const paginatedRequests = filteredRequests.slice(skip, skip + limit);
+    const total = filteredRequests.length;
 
-    console.log('[DEBUG] Returning', filteredRequests.length, 'requests after pagination');
+    console.log('[DEBUG] Returning', paginatedRequests.length, 'requests after pagination');
 
     return NextResponse.json({
-      requests: filteredRequests,
+      requests: paginatedRequests,
       pagination: {
         page,
         limit,
