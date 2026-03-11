@@ -209,8 +209,6 @@ function ApprovalsPageContent() {
     };
     return statusMap[status] || 'In Progress';
   };
-    return status === 'parallel_verification' ? 'VERIFICATION' : status.replace(/_/g, ' ').toUpperCase();
-  };
 
   const getPageTitle = () => {
     switch (activeTab) {

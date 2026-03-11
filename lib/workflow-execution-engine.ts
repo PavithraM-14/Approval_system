@@ -2,6 +2,9 @@ import mongoose from 'mongoose';
 import WorkflowConfiguration, { IWorkflowNode, IWorkflowEdge } from '@/models/WorkflowConfiguration';
 import ExecutionState, { IExecutionState, IParallelPath } from '@/models/ExecutionState';
 import UserRoleAssignment from '@/models/UserRoleAssignment';
+import User from '@/models/User';
+import Request from '@/models/Request';
+import { notifyApprovalPending } from './notification-service';
 
 /**
  * WorkflowExecutionEngine
@@ -162,7 +165,8 @@ export class WorkflowExecutionEngine {
     executionId: string,
     action: 'approved' | 'rejected',
     userId: string,
-    notes?: string
+    notes?: string,
+    isForward: boolean = false
   ): Promise<IExecutionState> {
     // Validate input parameters
     if (!executionId || !action || !userId) {
@@ -215,15 +219,57 @@ export class WorkflowExecutionEngine {
       throw new Error(`Approval node ${currentNode.id} does not have a roleId specified`);
     }
 
-    // Verify the user has the required role
-    const userRoleAssignment = await UserRoleAssignment.findOne({
-      userId: new mongoose.Types.ObjectId(userId),
-      roleId: currentNode.data.roleId,
-      companyId: executionState.companyId,
-    });
+    // Skip role validation for forward actions - forwarders don't need the approval role
+    if (!isForward) {
+      // Verify the user has the required role
+      // Check both UserRoleAssignment and the user's primary role
+      const User = (await import('../models/User')).default;
+      const CustomRole = (await import('../models/CustomRole')).default;
+      const dbUser = await User.findById(userId).populate('role');
+      
+      // Get all user role assignments
+      const allUserRoleAssignments = await UserRoleAssignment.find({
+        userId: new mongoose.Types.ObjectId(userId)
+      }).populate('roleId');
+      
+      // Get the required role details
+      const requiredRole = await CustomRole.findById(currentNode.data.roleId);
+      
+      const userHasPrimaryRole = dbUser?.role?._id?.toString() === currentNode.data.roleId.toString();
+      const userHasAssignedRole = allUserRoleAssignments.some(assignment => 
+        assignment.roleId._id?.toString() === currentNode.data.roleId.toString()
+      );
+      
+      // Also check by role name in case the role ID doesn't match but the name does
+      const userHasRoleByName = allUserRoleAssignments.some(assignment => 
+        assignment.roleId.name === requiredRole?.name
+      ) || dbUser?.role?.name === requiredRole?.name;
+      
+      const userRoleAssignment = await UserRoleAssignment.findOne({
+        userId: new mongoose.Types.ObjectId(userId),
+        roleId: currentNode.data.roleId,
+        companyId: executionState.companyId,
+      });
 
-    if (!userRoleAssignment) {
-      throw new Error(`User ${userId} is not assigned to the required role for this approval step`);
+      console.log('[DEBUG] Role validation:', {
+        userId,
+        requiredRoleId: currentNode.data.roleId?.toString(),
+        requiredRoleName: requiredRole?.name,
+        userPrimaryRoleId: dbUser?.role?._id?.toString(),
+        userPrimaryRoleName: dbUser?.role?.name,
+        userHasPrimaryRole,
+        userHasAssignedRole,
+        userHasRoleByName,
+        userRoleAssignmentWithCompanyFound: !!userRoleAssignment,
+        allUserRoleIds: allUserRoleAssignments.map(a => a.roleId._id?.toString()),
+        allUserRoleNames: allUserRoleAssignments.map(a => a.roleId.name),
+        companyId: executionState.companyId
+      });
+
+      // Allow if user has the required role in any form (by ID or by name)
+      if (!userRoleAssignment && !userHasPrimaryRole && !userHasAssignedRole && !userHasRoleByName) {
+        throw new Error(`User ${userId} is not assigned to the required role for this approval step`);
+      }
     }
 
     // Record the action in execution history
@@ -286,6 +332,47 @@ export class WorkflowExecutionEngine {
 
     // Save the updated execution state
     await executionState.save();
+
+    // Send notifications to users who need to approve at the next node
+    if (nextNode.type === 'approval' && nextNode.data.roleId) {
+      try {
+        // Find all users assigned to the role for the next approval node
+        const roleAssignments = await UserRoleAssignment.find({
+          roleId: nextNode.data.roleId,
+          companyId: executionState.companyId,
+        }).lean();
+
+        // Get the request details for the notification
+        const request = await Request.findOne({ 
+          workflowExecutionId: executionState._id 
+        }).populate('requester', 'name email').lean();
+
+        if (request && roleAssignments.length > 0) {
+          // Send notification to each user with the required role
+          for (const assignment of roleAssignments) {
+            const user = await User.findById(assignment.userId).lean();
+            if (user) {
+              await notifyApprovalPending(
+                user._id.toString(),
+                request._id.toString(),
+                request.title,
+                request.requester.name
+              );
+              console.log('[NOTIFICATION] Sent approval pending notification to:', {
+                userId: user._id,
+                userName: user.name,
+                userEmail: user.email,
+                requestId: request._id,
+                requestTitle: request.title
+              });
+            }
+          }
+        }
+      } catch (notificationError) {
+        // Log error but don't fail the workflow
+        console.error('[ERROR] Failed to send approval notifications:', notificationError);
+      }
+    }
 
     return executionState;
   }

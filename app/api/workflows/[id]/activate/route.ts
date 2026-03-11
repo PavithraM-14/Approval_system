@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
+import Role from '@/models/Role';
 import WorkflowConfiguration from '@/models/WorkflowConfiguration';
 import { getCurrentUser } from '@/lib/auth';
 import { WorkflowValidator } from '@/lib/workflow-validator';
+import CustomRole from '@/models/CustomRole';
+import UserRoleAssignment from '@/models/UserRoleAssignment';
+import mongoose from 'mongoose';
 
 /**
  * POST /api/workflows/:id/activate
@@ -83,7 +87,56 @@ export async function POST(
       );
     }
 
-    // Validate roles
+    // Convert regular Role IDs to CustomRole IDs BEFORE validation
+    console.log('[WORKFLOW ACTIVATION] Converting Role IDs to CustomRole IDs...');
+    let workflowModified = false;
+    
+    for (const node of workflow.nodes) {
+      if (node.type === 'approval' && node.data?.roleId) {
+        const roleId = node.data.roleId;
+        
+        // Check if it's already a CustomRole
+        let customRole = await CustomRole.findById(roleId);
+        
+        if (!customRole) {
+          // Try to find as regular Role
+          const sourceRole = await Role.findById(roleId);
+          
+          if (sourceRole) {
+            console.log('[WORKFLOW ACTIVATION] Converting Role to CustomRole:', {
+              roleId,
+              roleName: sourceRole.name
+            });
+            
+            // Create CustomRole from regular Role
+            customRole = await CustomRole.create({
+              name: sourceRole.name,
+              description: sourceRole.description || `Custom role for ${sourceRole.name}`,
+              companyId: companyId,
+              permissions: sourceRole.permissions,
+              sourceRoleId: roleId
+            });
+            
+            // Update node to use CustomRole ID
+            node.data.roleId = customRole._id;
+            workflowModified = true;
+            
+            console.log('[WORKFLOW ACTIVATION] Created CustomRole:', {
+              customRoleId: customRole._id,
+              name: customRole.name
+            });
+          }
+        }
+      }
+    }
+    
+    // Save workflow if we converted any Role IDs
+    if (workflowModified) {
+      await workflow.save();
+      console.log('[WORKFLOW ACTIVATION] Workflow updated with CustomRole IDs');
+    }
+
+    // Validate roles (now all should be CustomRoles)
     const roleValidation = await validator.validateRoles(
       workflow,
       companyId.toString()
@@ -114,6 +167,130 @@ export async function POST(
     // Activate the specified workflow
     workflow.isActive = true;
     await workflow.save();
+
+    // Automatically create UserRoleAssignment records for all users
+    try {
+      console.log('[WORKFLOW ACTIVATION] Auto-assigning users to roles...');
+      
+      // Get all users in the company
+      const users = await User.find({ company: companyId }).populate('role');
+      console.log('[WORKFLOW ACTIVATION] Found users in company:', users.length);
+      
+      // For each user, ensure they have a CustomRole and UserRoleAssignment
+      for (const user of users) {
+        if (!user.role) {
+          console.log('[WORKFLOW ACTIVATION] User has no role:', user._id, user.name);
+          continue;
+        }
+        
+        const userRoleName = user.role.name;
+        const userRoleId = user.role._id;
+        
+        console.log('[WORKFLOW ACTIVATION] Processing user:', {
+          userId: user._id,
+          userName: user.name,
+          roleName: userRoleName,
+          roleId: userRoleId
+        });
+        
+        // Check if CustomRole exists for this role
+        let customRole = await CustomRole.findOne({
+          companyId: companyId,
+          name: userRoleName
+        });
+        
+        // If not, create it
+        if (!customRole) {
+          console.log('[WORKFLOW ACTIVATION] Creating CustomRole for:', userRoleName);
+          
+          customRole = await CustomRole.create({
+            name: userRoleName,
+            description: `Custom role for ${userRoleName}`,
+            companyId: companyId,
+            sourceRoleId: userRoleId
+          });
+          
+          console.log('[WORKFLOW ACTIVATION] Created CustomRole:', {
+            customRoleId: customRole._id,
+            name: customRole.name
+          });
+        }
+        
+        // Check if UserRoleAssignment exists
+        const existingAssignment = await UserRoleAssignment.findOne({
+          userId: user._id,
+          roleId: customRole._id,
+          companyId: companyId
+        });
+        
+        if (!existingAssignment) {
+          const newAssignment = await UserRoleAssignment.create({
+            userId: user._id,
+            roleId: customRole._id,
+            companyId: companyId
+          });
+          
+          console.log('[WORKFLOW ACTIVATION] ✅ Created role assignment:', {
+            assignmentId: newAssignment._id,
+            userId: user._id,
+            userName: user.name,
+            roleId: customRole._id,
+            roleName: customRole.name
+          });
+        } else {
+          console.log('[WORKFLOW ACTIVATION] ℹ️ Role assignment already exists:', {
+            userId: user._id,
+            userName: user.name,
+            roleName: customRole.name
+          });
+        }
+      }
+      
+      console.log('[WORKFLOW ACTIVATION] ✅ User role assignment completed');
+      
+      // Fix existing workflow executions to use the updated workflow
+      console.log('[WORKFLOW ACTIVATION] Fixing existing workflow executions...');
+      
+      try {
+        const ExecutionState = mongoose.model('ExecutionState');
+        
+        // Find all in-progress executions for this company
+        const executions = await ExecutionState.find({
+          companyId: companyId,
+          status: 'in_progress'
+        });
+        
+        console.log('[WORKFLOW ACTIVATION] Found in-progress executions:', executions.length);
+        
+        for (const execution of executions) {
+          // Get the current node from the execution
+          const currentNode = workflow.nodes.find((n: any) => n.id === execution.currentNodeId);
+          
+          if (!currentNode) {
+            console.log('[WORKFLOW ACTIVATION] Current node not found in workflow:', execution.currentNodeId);
+            continue;
+          }
+          
+          // If it's an approval node, verify it has the correct roleId
+          if (currentNode.type === 'approval' && currentNode.data?.roleId) {
+            console.log('[WORKFLOW ACTIVATION] Execution using updated workflow:', {
+              executionId: execution._id,
+              currentNodeId: execution.currentNodeId,
+              nodeLabel: currentNode.label,
+              roleId: currentNode.data.roleId
+            });
+          }
+        }
+        
+        console.log('[WORKFLOW ACTIVATION] ✅ Execution verification completed');
+      } catch (executionFixError) {
+        console.error('[WORKFLOW ACTIVATION] ❌ Failed to verify executions:', executionFixError);
+      }
+      
+    } catch (roleAssignmentError) {
+      console.error('[WORKFLOW ACTIVATION] ❌ Failed to auto-assign roles:', roleAssignmentError);
+      // Don't fail the activation, just log the error
+    }
 
     return NextResponse.json(
       {

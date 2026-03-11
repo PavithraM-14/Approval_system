@@ -20,10 +20,11 @@ interface ApprovalModalProps {
     budgetAvailable?: boolean;
   };
   user: User | null;
-  initialAction?: 'approve' | 'reject' | 'reject_with_clarification';
+  initialAction?: 'approve' | 'reject' | 'reject_with_clarification' | 'forward';
   onApprove: (notes: string, attachments: string[], signature?: string) => void;
   onReject: (notes: string) => void;
   onRejectWithClarification: (queryRequest: string, attachments: string[]) => void;
+  onForward?: (notes: string) => void;
   loading?: boolean;
 }
 
@@ -36,6 +37,7 @@ export default function ApprovalModal({
   onApprove,
   onReject,
   onRejectWithClarification,
+  onForward,
   loading = false
 }: ApprovalModalProps) {
   const permissions = user?.role?.permissions || {
@@ -50,7 +52,7 @@ export default function ApprovalModal({
     canRaiseQueries: false,
   };
 
-  const [action, setAction] = useState<'approve' | 'reject' | 'reject_with_clarification'>(() => {
+  const [action, setAction] = useState<'approve' | 'reject' | 'reject_with_clarification' | 'forward'>(() => {
     return initialAction || 'approve';
   });
   const [notes, setNotes] = useState('');
@@ -101,6 +103,11 @@ export default function ApprovalModal({
           return;
         }
         onRejectWithClarification(notes, attachments);
+        break;
+      case 'forward':
+        if (onForward) {
+          onForward(notes || 'Forwarded to next approver');
+        }
         break;
     }
   };
@@ -364,11 +371,20 @@ export default function ApprovalModal({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
               disabled={loading}
             >
-              <option value="approve">
-                {permissions.canApprove && !permissions.canForward ? 'Approve' : 'Approve & Forward'}
-              </option>
+              {permissions.canApprove && (
+                <option value="approve">
+                  Approve
+                </option>
+              )}
+              {permissions.canForward && (
+                <option value="forward">
+                  Forward to Next Approver
+                </option>
+              )}
               <option value="reject">Reject</option>
-              <option value="reject_with_clarification">Raise Query</option>
+              {permissions.canRaiseQueries && (
+                <option value="reject_with_clarification">Raise Query</option>
+              )}
             </select>
 
             {/* Action Options Display */}
@@ -377,14 +393,22 @@ export default function ApprovalModal({
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                   <div className="flex items-center">
                     <CheckCircleIcon className="w-5 h-5 text-green-600 mr-2" />
-                    <span className="font-medium text-green-700">
-                      {permissions.canApprove && !permissions.canForward ? 'Approve' : 'Approve & Forward'}
-                    </span>
+                    <span className="font-medium text-green-700">Approve</span>
                   </div>
                   <p className="text-sm text-green-600 mt-1">
-                    {permissions.canApprove && !permissions.canForward 
-                      ? 'Approve this request (final approval)' 
-                      : 'Approve and forward to next step in workflow'}
+                    Approve this request and move to next step in workflow
+                  </p>
+                </div>
+              )}
+
+              {action === 'forward' && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center">
+                    <CheckCircleIcon className="w-5 h-5 text-blue-600 mr-2" />
+                    <span className="font-medium text-blue-700">Forward</span>
+                  </div>
+                  <p className="text-sm text-blue-600 mt-1">
+                    Forward this request to the next approver in the workflow
                   </p>
                 </div>
               )}
@@ -416,7 +440,7 @@ export default function ApprovalModal({
           {/* Notes Section */}
           <div>
             <h4 className="text-lg font-medium text-gray-900 mb-3">
-              {action === 'approve' ? 'Comments (Optional)' : 'Notes'}
+              {action === 'approve' || action === 'forward' ? 'Comments (Optional)' : 'Notes'}
             </h4>
             <textarea
               value={notes}
@@ -424,14 +448,16 @@ export default function ApprovalModal({
               placeholder={
                 action === 'approve'
                   ? "Add any comments or notes for this approval..."
-                  : action === 'reject_with_clarification'
-                    ? "What query do you have for the requester?"
-                    : "Please provide a reason for rejection..."
+                  : action === 'forward'
+                    ? "Add any comments for forwarding..."
+                    : action === 'reject_with_clarification'
+                      ? "What query do you have for the requester?"
+                      : "Please provide a reason for rejection..."
               }
               className="w-full h-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
               disabled={loading}
             />
-            {action === 'approve' && (
+            {(action === 'approve' || action === 'forward') && (
               <p className="text-xs text-gray-500 mt-1">
                 Comments are optional. You can leave this blank if no additional notes are needed.
               </p>
@@ -471,7 +497,7 @@ export default function ApprovalModal({
             <button
               onClick={handleSubmit}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:opacity-50"
-              disabled={loading || (action !== 'approve' && !notes.trim())}
+              disabled={loading || ((action === 'reject' || action === 'reject_with_clarification') && !notes.trim())}
             >
               {loading ? 'Processing...' : 'Submit'}
             </button>

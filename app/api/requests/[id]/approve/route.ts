@@ -48,10 +48,15 @@ export async function POST(
       requestId: params.id,
       userRole: user.role.name,
       userEmail: user.email,
-      action
+      action,
+      permissions: {
+        canApprove: permissions.canApprove,
+        canForward: permissions.canForward,
+        canRaiseQueries: permissions.canRaiseQueries
+      }
     });
 
-    // Permission check for approval
+    // Permission check for approval and forward
     if (action === 'approve' && !permissions.canApprove) {
       return NextResponse.json({ error: 'Permission Denied: You do not have approval rights.' }, { status: 403 });
     }
@@ -60,10 +65,10 @@ export async function POST(
        return NextResponse.json({ error: 'Signature required for approval' }, { status: 400 });
     }
 
-    // Validate action - only approve, reject, and reject_with_clarification are supported
-    if (!['approve', 'reject', 'reject_with_clarification'].includes(action)) {
+    // Validate action - only approve, reject, reject_with_clarification, and forward are supported
+    if (!['approve', 'reject', 'reject_with_clarification', 'forward'].includes(action)) {
       console.log('[DEBUG] Invalid action:', action);
-      return NextResponse.json({ error: 'Invalid action. Only approve, reject, and reject_with_clarification are supported.' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid action. Only approve, reject, reject_with_clarification, and forward are supported.' }, { status: 400 });
     }
 
     const requestRecord = await Request.findById(params.id);
@@ -243,8 +248,132 @@ export async function POST(
       }
     }
 
+    // Handle forward action (move to next node without approval)
+    if (action === 'forward') {
+      // Check if user has permission to forward
+      if (!permissions.canForward) {
+        return NextResponse.json({ error: 'Permission Denied: You do not have permission to forward requests.' }, { status: 403 });
+      }
+
+      try {
+        console.log('[DEBUG] Forwarding request through custom workflow:', {
+          workflowExecutionId: requestRecord.workflowExecutionId
+        });
+
+        // Process the forward action through the workflow execution engine
+        // Forward is treated as an approval that moves to the next node
+        const updatedExecutionState = await workflowExecutionEngine.processAction(
+          requestRecord.workflowExecutionId.toString(),
+          'approved', // Forward uses approved action to move to next node
+          user.id,
+          notes || 'Forwarded to next approver',
+          true // isForward: skip role validation for forwarders
+        );
+
+        console.log('[DEBUG] Workflow forward processed:', {
+          executionStatus: updatedExecutionState.status,
+          currentNodeId: updatedExecutionState.currentNodeId
+        });
+
+        // Update request status based on workflow completion
+        let newRequestStatus = requestRecord.status;
+        if (updatedExecutionState.status === 'completed') {
+          newRequestStatus = RequestStatus.APPROVED;
+          console.log('[DEBUG] Workflow completed - marking request as APPROVED');
+        } else if (updatedExecutionState.status === 'rejected') {
+          newRequestStatus = RequestStatus.REJECTED;
+          console.log('[DEBUG] Workflow rejected - marking request as REJECTED');
+        }
+
+        // Update the request with new status and add history entry
+        const historyEntry: any = {
+          action: ActionType.FORWARD,
+          actor: user.id,
+          previousStatus: requestRecord.status,
+          newStatus: newRequestStatus,
+          timestamp: new Date(),
+          notes: notes || 'Forwarded to next approver',
+        };
+
+        const updateData: any = {
+          $push: { history: historyEntry },
+        };
+
+        if (newRequestStatus !== requestRecord.status) {
+          updateData.$set = { status: newRequestStatus, lastReminderSent: null };
+        }
+
+        const updatedRequest = await Request.findByIdAndUpdate(
+          params.id,
+          updateData,
+          { new: true }
+        )
+          .populate('requester', 'name email empId role')
+          .populate('history.actor', 'name email empId role');
+
+        console.log('[DEBUG] Request forwarded via custom workflow:', {
+          requestId: params.id,
+          newStatus: newRequestStatus,
+          executionStatus: updatedExecutionState.status
+        });
+
+        // Send notifications to next approver if workflow is still in progress
+        if (updatedExecutionState.status === 'in_progress' && updatedExecutionState.currentNodeId) {
+          try {
+            const activeWorkflow = await WorkflowConfiguration.findById(updatedExecutionState.workflowId);
+            if (activeWorkflow) {
+              const currentNode = activeWorkflow.nodes.find((n: any) => n.id === updatedExecutionState.currentNodeId);
+              if (currentNode && currentNode.type === 'approval' && currentNode.data?.roleId) {
+                console.log('[DEBUG] Looking for users with roleId:', currentNode.data.roleId);
+                
+                // Find users with this role in the company
+                const roleAssignments = await UserRoleAssignment.find({
+                  companyId: getCompanyId(requestRecord.requester.company || user.company),
+                  roleId: currentNode.data.roleId
+                }).populate('userId');
+                
+                console.log('[DEBUG] Notifying', roleAssignments.length, 'users for next approval role:', currentNode.label);
+                
+                for (const assignment of roleAssignments) {
+                  if (assignment.userId) {
+                    console.log('[DEBUG] Sending notification to user:', assignment.userId._id);
+                    await notifyApprovalPending(
+                      assignment.userId._id.toString(),
+                      params.id,
+                      updatedRequest.title,
+                      user.name
+                    );
+                  }
+                }
+              }
+            }
+          } catch (notificationError) {
+            console.error('[ERROR] Failed to send next approver notifications:', notificationError);
+          }
+        }
+
+        return NextResponse.json(updatedRequest);
+
+      } catch (workflowError) {
+        console.error('[ERROR] Forward action failed:', workflowError);
+        const errorMessage = workflowError instanceof Error ? workflowError.message : 'Unknown workflow error';
+        return NextResponse.json(
+          {
+            error: `Failed to forward request: ${errorMessage}`,
+            details: errorMessage,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     // Handle reject_with_clarification (query workflow)
     if (action === 'reject_with_clarification') {
+      // Check if user has permission to raise queries
+      if (!permissions.canRaiseQueries) {
+        return NextResponse.json({ error: 'Permission Denied: You do not have permission to raise queries.' }, { status: 403 });
+      }
+
       // Validate that query request is provided
       if (!notes || notes.trim() === '') {
         return NextResponse.json({ error: 'Query message is required when raising queries' }, { status: 400 });

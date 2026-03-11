@@ -199,9 +199,62 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showApprovalHistory, setShowApprovalHistory] = useState(false);
   const [processingApproval, setProcessingApproval] = useState(false);
+  const [userHasApproved, setUserHasApproved] = useState(false);
 
   const activeUserRoleName = currentUser?.role?.name.toLowerCase().replace(/ /g, '_') || '';
   const permissions = currentUser?.role?.permissions;
+  
+  // Check if user has already approved this request
+  useEffect(() => {
+    const checkUserApprovalStatus = async () => {
+      const userId = currentUser?._id || currentUser?.id;
+      
+      if (!request?.workflowExecutionId || !userId) {
+        console.log('[DEBUG] Cannot check approval status:', {
+          hasWorkflowExecutionId: !!request?.workflowExecutionId,
+          hasCurrentUserId: !!userId,
+          currentUser
+        });
+        setUserHasApproved(false);
+        return;
+      }
+      
+      try {
+        console.log('[DEBUG] Checking approval status for:', {
+          workflowExecutionId: request.workflowExecutionId,
+          currentUserId: userId
+        });
+        
+        const response = await fetch(`/api/executions/${request.workflowExecutionId}`);
+        if (response.ok) {
+          const execution = await response.json();
+          console.log('[DEBUG] Execution history:', execution.history);
+          
+          const hasApproved = execution.history?.some((entry: any) => {
+            const matches = entry.userId?.toString() === userId.toString() && 
+                          entry.action === 'approved';
+            console.log('[DEBUG] Checking history entry:', {
+              entryUserId: entry.userId?.toString(),
+              currentUserId: userId.toString(),
+              action: entry.action,
+              matches
+            });
+            return matches;
+          });
+          
+          console.log('[DEBUG] User has approved:', hasApproved);
+          setUserHasApproved(hasApproved);
+        } else {
+          console.error('[DEBUG] Failed to fetch execution:', response.status);
+        }
+      } catch (error) {
+        console.error('Error checking approval status:', error);
+        setUserHasApproved(false);
+      }
+    };
+    
+    checkUserApprovalStatus();
+  }, [request?.workflowExecutionId, currentUser?._id, currentUser?.id, currentUser]);
 
   // Helper function to generate external URLs
   const getExternalUrl = (type: string, id: string): string => {
@@ -336,7 +389,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
     }
   }, [searchParams, request, currentUser]);
 
-  const handleForward = async (notes: string, attachments: string[]) => {
+  const handleForward = async (notes: string) => {
     try {
       setProcessingApproval(true);
       const response = await fetch(`/api/requests/${params.id}/approve`, {
@@ -344,8 +397,7 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'forward',
-          notes,
-          attachments
+          notes
         }),
       });
       
@@ -1065,6 +1117,22 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             // IMPORTANT: Only those with canCreate (requesters) and DEAN (in Dean-mediated cases) can provide responses to queries
             const needsClarification = request.pendingQuery && request.queryLevel === activeUserRoleName;
             
+            // If user has already approved, don't show action buttons
+            if (userHasApproved) {
+              return (
+                <div className="mt-4 sm:mt-6">
+                  <div className="p-3 bg-green-50 border border-green-200 rounded flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-xs sm:text-sm text-green-800">
+                      You have already approved this request.
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+            
             // SPECIAL CASE: Dean handling mediated rejection (regardless of pendingQuery status)
             // The Dean should always see the "Handle Rejection" button when it's a Dean-mediated case
             if (activeUserRoleName === 'dean' && queryEngine.isDeanMediatedClarification(request)) {
@@ -1169,8 +1237,8 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
               let isAuthorized = false;
               
               if (request.useCustomWorkflow && request.workflowExecutionId) {
-                // For custom workflows, user is authorized if they have canApprove permission
-                isAuthorized = permissions?.canApprove || false;
+                // For custom workflows, user is authorized if they have canApprove, canForward, or canRaiseQueries permission
+                isAuthorized = permissions?.canApprove || permissions?.canForward || permissions?.canRaiseQueries || false;
               } else {
                 // For legacy workflows, use the old approval engine logic
                 const requiredApprovers = approvalEngine.getRequiredApprover(request.status as RequestStatus);
@@ -1181,12 +1249,17 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                 <div className="mt-4 sm:mt-6 flex flex-col gap-3">
                   {banner}
                   <div className="flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
-                    <button
-                      onClick={() => setIsApprovalModalOpen(true)}
-                      className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm"
-                    >
-                      Process Request
-                    </button>
+                    {(permissions?.canApprove || permissions?.canForward) && (
+                      <button
+                        onClick={() => {
+                          setInitialApprovalAction(permissions?.canApprove ? 'approve' : 'forward');
+                          setIsApprovalModalOpen(true);
+                        }}
+                        className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm"
+                      >
+                        {permissions?.canApprove ? 'Process Request' : 'Forward Request'}
+                      </button>
+                    )}
                     {permissions?.canRaiseQueries && (
                       <button
                         onClick={() => setIsDirectQueryModalOpen(true)}
@@ -1205,9 +1278,9 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             let isAuthorized = false;
             
             if (request.useCustomWorkflow && request.workflowExecutionId) {
-              // For custom workflows, user is authorized if they have canApprove permission
+              // For custom workflows, user is authorized if they have canApprove, canForward, or canRaiseQueries permission
               // The backend will verify they have the correct role for the current node
-              isAuthorized = permissions?.canApprove || false;
+              isAuthorized = permissions?.canApprove || permissions?.canForward || permissions?.canRaiseQueries || false;
             } else {
               // For legacy workflows, use the old approval engine logic
               const requiredApprovers = approvalEngine.getRequiredApprover(request.status as RequestStatus);
@@ -1217,12 +1290,17 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             return isAuthorized ? (
               <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
                 {/* Main Process Request Button */}
-                <button
-                  onClick={() => setIsApprovalModalOpen(true)}
-                  className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm"
-                >
-                  Process Request
-                </button>
+                {(permissions?.canApprove || permissions?.canForward) && (
+                  <button
+                    onClick={() => {
+                      setInitialApprovalAction(permissions?.canApprove ? 'approve' : 'forward');
+                      setIsApprovalModalOpen(true);
+                    }}
+                    className="w-full sm:w-auto min-w-[200px] px-4 sm:px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm sm:text-base font-medium active:scale-95 shadow-sm"
+                  >
+                    {permissions?.canApprove ? 'Process Request' : 'Forward Request'}
+                  </button>
+                )}
                 
                 {/* Dedicated Raise Query Button */}
                 {permissions?.canRaiseQueries && (
@@ -1321,10 +1399,6 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         onReject={handleReject}
         onRejectWithClarification={handleRejectWithClarification}
         onForward={handleForward}
-        onClarify={handleClarify}
-        onSendToDean={handleSendToDean}
-        onSendToVP={handleSendToVP}
-        onSendToChairman={handleSendToChairman}
         loading={processingApproval}
       />
 

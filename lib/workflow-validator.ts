@@ -185,8 +185,8 @@ export class WorkflowValidator implements IWorkflowValidator {
   async validateRoles(workflow: IWorkflowConfiguration, companyId: string): Promise<ValidationResult> {
     const errors: string[] = [];
     
-    // Import Role model dynamically to avoid circular dependencies
-    const Role = (await import('../models/Role')).default;
+    // Import CustomRole model dynamically to avoid circular dependencies
+    const CustomRole = (await import('../models/CustomRole')).default;
     
     // Extract all roleId references from approval nodes
     const roleIds = workflow.nodes
@@ -203,9 +203,9 @@ export class WorkflowValidator implements IWorkflowValidator {
     
     // Query database to verify each roleId exists and belongs to the company
     for (const roleId of uniqueRoleIds) {
-      const role = await Role.findOne({
+      const role = await CustomRole.findOne({
         _id: roleId,
-        company: companyId,
+        companyId: companyId,
       });
       
       if (!role) {

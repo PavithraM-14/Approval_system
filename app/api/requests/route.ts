@@ -13,6 +13,7 @@ import WorkflowConfiguration from '../../../models/WorkflowConfiguration';
 import { workflowExecutionEngine } from '../../../lib/workflow-execution-engine';
 import ExecutionState from '../../../models/ExecutionState';
 import UserRoleAssignment from '../../../models/UserRoleAssignment';
+import CustomRole from '../../../models/CustomRole';
 
 // Helper function to extract company ID from populated or non-populated company field
 function getCompanyId(company: any): string {
@@ -57,6 +58,12 @@ async function filterRequestsWithCustomWorkflow(
       }));
   }
 
+  // Users with canView or canForward can see requests they're assigned to in the workflow
+  if (permissions?.canView || permissions?.canForward) {
+    // These users should see requests where they're assigned in the workflow
+    // Continue to workflow-based filtering below
+  }
+
   // For approvers: check custom workflow requests
   const customWorkflowRequests = requests.filter(r => r.useCustomWorkflow && r.workflowExecutionId);
   
@@ -67,9 +74,9 @@ async function filterRequestsWithCustomWorkflow(
   // Get user's role assignments to check against workflow nodes
   const userRoleAssignments = await UserRoleAssignment.find({
     userId: new mongoose.Types.ObjectId(userId)
-  }).populate('roleId');
+  }).lean();
 
-  const userRoleIds = userRoleAssignments.map(assignment => assignment.roleId._id.toString());
+  const userRoleIds = userRoleAssignments.map(assignment => assignment.roleId.toString());
 
   // Also get the user's primary role ID from their User record
   const dbUser = await User.findById(userId).populate('role');
@@ -98,49 +105,75 @@ async function filterRequestsWithCustomWorkflow(
   const workflows = await WorkflowConfiguration.find({ _id: { $in: workflowIds } });
   
   // Check which custom workflow requests the user should see
-  const visibleCustomRequests = customWorkflowRequests.filter(request => {
+  const visibleCustomRequests = customWorkflowRequests.map(request => {
     const execution = executions.find(e => e._id.toString() === request.workflowExecutionId?.toString());
     if (!execution) {
       console.log('[DEBUG] No execution found for request:', request._id);
-      return false;
+      return null;
     }
     
     const workflow = workflows.find(w => w._id.toString() === execution.workflowId.toString());
     if (!workflow) {
       console.log('[DEBUG] No workflow found for execution:', execution._id);
-      return false;
+      return null;
     }
     
+    // Check if user has interacted with this request in the history
+    const userHistoryEntry = execution.history.find((entry: any) => 
+      entry.userId?.toString() === userId && 
+      (entry.action === 'approved' || entry.action === 'rejected')
+    );
+    
+    // Check if user is the current approver
     const currentNode = workflow.nodes.find((n: any) => n.id === execution.currentNodeId);
-    if (!currentNode || currentNode.type !== 'approval') {
-      console.log('[DEBUG] Current node not found or not approval type:', execution.currentNodeId, currentNode?.type);
-      return false;
+    const nodeRoleId = currentNode?.data?.roleId?.toString();
+    const isCurrentApprover = currentNode?.type === 'approval' && nodeRoleId && allUserRoleIds.includes(nodeRoleId);
+    
+    // Check if user's role is assigned to ANY node in the workflow (for forwarders/viewers)
+    const isAssignedToWorkflow = workflow.nodes.some((node: any) => 
+      node.type === 'approval' && 
+      node.data?.roleId && 
+      allUserRoleIds.includes(node.data.roleId.toString())
+    );
+    
+    // User can see the request if they're the current approver OR if they've interacted with it before
+    // For forwarders: only show if they're the current approver (not just assigned to workflow)
+    if (isCurrentApprover) {
+      return {
+        ...request,
+        _visibility: {
+          canSee: true,
+          category: 'pending',
+          reason: 'Current approver in custom workflow'
+        }
+      };
+    } else if (userHistoryEntry) {
+      // User has already interacted with this request
+      let category = 'in_progress';
+      if (request.status === RequestStatus.APPROVED) {
+        category = 'approved';
+      } else if (request.status === RequestStatus.REJECTED) {
+        category = 'completed';
+      } else if (userHistoryEntry.action === 'approved') {
+        category = 'approved'; // User approved it, even if workflow is still in progress
+      }
+      
+      return {
+        ...request,
+        _visibility: {
+          canSee: true,
+          category,
+          reason: `Previously ${userHistoryEntry.action} by user`
+        }
+      };
     }
     
-    // Check if user has the role required by the current node
-    const nodeRoleId = currentNode.data?.roleId?.toString();
-    const hasRequiredRole = nodeRoleId && allUserRoleIds.includes(nodeRoleId);
-    
-    console.log('[DEBUG] Role matching for request', request._id, ':', {
-      nodeRoleId,
-      allUserRoleIds,
-      hasRequiredRole,
-      currentNodeId: execution.currentNodeId,
-      nodeLabel: currentNode.label
-    });
-    
-    return hasRequiredRole;
-  });
+    return null;
+  }).filter(Boolean); // Remove null entries
 
-  // Add visibility metadata
-  return visibleCustomRequests.map(req => ({
-    ...req,
-    _visibility: {
-      canSee: true,
-      category: 'pending',
-      reason: 'Current approver in custom workflow'
-    }
-  }));
+  console.log('[DEBUG] Visible custom workflow requests:', visibleCustomRequests.length);
+
+  return visibleCustomRequests;
 }
 
 export async function GET(request: NextRequest) {
@@ -430,6 +463,36 @@ export async function POST(request: NextRequest) {
                   nodeId: currentNode.id,
                   nodeName: nodeName
                 });
+                
+                // Send notifications to users who need to approve at this node
+                if (currentNode.data.roleId) {
+                  try {
+                    const roleAssignments = await UserRoleAssignment.find({
+                      roleId: currentNode.data.roleId,
+                      companyId: getCompanyId(requesterUser.company),
+                    }).lean();
+
+                    for (const assignment of roleAssignments) {
+                      const approver = await User.findById(assignment.userId).lean();
+                      if (approver) {
+                        await notifyApprovalPending(
+                          approver._id.toString(),
+                          requestId,
+                          validatedData.title,
+                          requesterUser.name
+                        );
+                        console.log('[NOTIFICATION] Sent initial approval notification to:', {
+                          userId: approver._id,
+                          userName: approver.name,
+                          userEmail: approver.email
+                        });
+                      }
+                    }
+                  } catch (notificationError) {
+                    console.error('[ERROR] Failed to send initial notifications:', notificationError);
+                  }
+                }
+                
                 break;
               }
               
