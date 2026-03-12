@@ -67,10 +67,11 @@ export default function WorkflowBuilderPage() {
               position: node.position,
               data: {
                 label: node.label,
-                roleId: node.data?.roleId,
-                condition: node.data?.condition,
-                description: node.data?.description,
-              }
+                ...node.data, // Preserve all node data including groupScope
+              },
+              // Preserve parent-child relationships for grouping nodes
+              ...(node.parentId && { parentId: node.parentId }),
+              ...(node.extent && { extent: node.extent }),
             }));
             
             console.log('Transformed nodes:', transformedNodes);
@@ -91,10 +92,11 @@ export default function WorkflowBuilderPage() {
               position: node.position,
               data: {
                 label: node.label,
-                roleId: node.data?.roleId,
-                condition: node.data?.condition,
-                description: node.data?.description,
-              }
+                ...node.data, // Preserve all node data including groupScope
+              },
+              // Preserve parent-child relationships for grouping nodes
+              ...(node.parentId && { parentId: node.parentId }),
+              ...(node.extent && { extent: node.extent }),
             }));
             
             console.log('Transformed nodes:', transformedNodes);
@@ -133,10 +135,11 @@ export default function WorkflowBuilderPage() {
         label: node.data?.label || node.type || 'Untitled',
         position: node.position,
         data: {
-          roleId: node.data?.roleId,
-          condition: node.data?.condition,
-          description: node.data?.description,
-        }
+          ...node.data, // Preserve all node data including groupScope and grouping properties
+        },
+        // Preserve parent-child relationships for grouping nodes
+        ...(node.parentId && { parentId: node.parentId }),
+        ...(node.extent && { extent: node.extent }),
       }));
 
       const workflowData = {

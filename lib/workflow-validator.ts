@@ -59,7 +59,6 @@ export class WorkflowValidator implements IWorkflowValidator {
    * Checks:
    * - All nodes are reachable from start node
    * - Parallel split-join matching
-   * - Conditional nodes have exactly two outputs (true/false)
    * 
    * @param workflow - The workflow configuration to validate
    * @returns ValidationResult with valid flag and any error messages
@@ -106,24 +105,7 @@ export class WorkflowValidator implements IWorkflowValidator {
       errors.push(`Node '${node.label}' (${node.id}) is not reachable from the start node`);
     });
 
-    // Check 2: Conditional Node Outputs (Requirement 12.6)
-    const conditionalNodes = workflow.nodes.filter(node => node.type === 'conditional');
-    conditionalNodes.forEach(node => {
-      const outgoingEdges = workflow.edges.filter(edge => edge.source === node.id);
-      
-      if (outgoingEdges.length !== 2) {
-        errors.push(`Conditional node '${node.label}' (${node.id}) must have exactly 2 outgoing edges (found ${outgoingEdges.length})`);
-      } else {
-        const labels = outgoingEdges.map(edge => edge.label?.toLowerCase()).sort();
-        const expectedLabels = ['false', 'true'];
-        
-        if (labels[0] !== expectedLabels[0] || labels[1] !== expectedLabels[1]) {
-          errors.push(`Conditional node '${node.label}' (${node.id}) must have edges labeled 'true' and 'false' (found: ${outgoingEdges.map(e => e.label || 'unlabeled').join(', ')})`);
-        }
-      }
-    });
-
-    // Check 3: Parallel Split-Join Matching (Requirement 5.4)
+    // Check 2: Parallel Split-Join Matching (Requirement 5.4)
     const parallelSplits = workflow.nodes.filter(node => node.type === 'parallel_split');
     const parallelJoins = workflow.nodes.filter(node => node.type === 'parallel_join');
 
@@ -237,7 +219,7 @@ export class WorkflowValidator implements IWorkflowValidator {
    * 
    * Validation checks performed:
    * - Structure validation: Exactly one start node, at least one end node
-   * - Connection validation: Node reachability, parallel split-join matching, conditional outputs
+   * - Connection validation: Node reachability, parallel split-join matching
    * 
    * Note: Role validation (validateRoles) is not included in this method as it requires
    * async database queries. Call validateRoles separately when needed.

@@ -1,0 +1,24 @@
+
+> sead-approval-system@1.0.0 university
+> tsx scripts/seed-university.ts
+
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+Connecting to database...
+Connected to database.
+Using existing Company: Fenma University
+Workflow already exists. Deleting it to recreate...
+Created Workflow Configuration: University Request Flow
+
+--- Seed Complete ---
+Login Details (Password is password123):
+- Faculty: faculty@fenma.edu
+- HOD: hod@fenma.edu
+- Institution Manager: institution_manager@fenma.edu
+- Accountant: accountant@fenma.edu
+- SOP Verifier: sop_verifier@fenma.edu
+- Security: security@fenma.edu
+- VP Admin: vp_admin@fenma.edu
+- VP Academics: vp_academics@fenma.edu
+- Principal: principal@fenma.edu
+- Dean: dean@fenma.edu
+- Chairman: chairman@fenma.edu

@@ -15,7 +15,8 @@ import {
   LinkIcon,
   UserGroupIcon,
   RectangleGroupIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { UserRole } from '../../lib/types';
 import { AuthUser } from '../../lib/auth';
@@ -43,6 +44,7 @@ const navigation: NavItem[] = [
     icon: ClipboardDocumentListIcon,
     requiresAnyPermission: ['canApprove', 'canForward', 'canManageBudget']
   },
+  { name: 'Escalation Requests', href: '/dashboard/admin/escalations', icon: ExclamationTriangleIcon, roles: [], adminOnly: true },
   { name: 'Integrations', href: '/dashboard/integrations', icon: LinkIcon, roles: [], adminOnly: true },
   { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon, roles: [], adminOnly: true },
   { name: 'Compliance', href: '/dashboard/compliance', icon: HomeIcon, roles: [], adminOnly: true },

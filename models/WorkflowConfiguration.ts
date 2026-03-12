@@ -3,21 +3,37 @@ import mongoose, { Schema, Document } from 'mongoose';
 // Node data interface for different node types
 export interface INodeData {
   roleId?: mongoose.Types.ObjectId;
+  groupScope?: {
+    enabled: boolean;
+    groupIds?: mongoose.Types.ObjectId[]; // Specific groups this node applies to
+    matchType?: 'any' | 'all'; // Match any group or all groups
+  };
   condition?: {
     field: string;
     operator: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains';
     value: any;
   };
   description?: string;
+  options?: string[];
+  // Grouping node specific properties
+  groupType?: string;
+  width?: number;
+  height?: number;
+  backgroundColor?: string;
+  borderColor?: string;
+  level?: number; // For subgroup nesting level
+  parentGroupId?: string; // For subgroup parent reference
 }
 
 // Workflow node interface
 export interface IWorkflowNode {
   id: string;
-  type: 'start' | 'end' | 'approval' | 'parallel_split' | 'parallel_join' | 'conditional';
+  type: 'start' | 'end' | 'approval' | 'parallel_split' | 'parallel_join' | 'options' | 'grouping' | 'subgroup';
   label: string;
   position: { x: number; y: number };
   data: INodeData;
+  parentId?: string; // For nodes that are children of grouping nodes
+  extent?: 'parent'; // For nodes constrained within parent bounds
 }
 
 // Workflow edge interface
@@ -26,7 +42,7 @@ export interface IWorkflowEdge {
   source: string;
   target: string;
   label?: string;
-  type?: 'default' | 'conditional';
+  type?: 'default';
 }
 
 // Main workflow configuration interface
@@ -50,6 +66,18 @@ const NodeDataSchema = new Schema<INodeData>(
       type: Schema.Types.ObjectId,
       ref: 'Role',
     },
+    groupScope: {
+      enabled: { type: Boolean, default: false },
+      groupIds: [{
+        type: Schema.Types.ObjectId,
+        ref: 'Group',
+      }],
+      matchType: {
+        type: String,
+        enum: ['any', 'all'],
+        default: 'any',
+      },
+    },
     condition: {
       field: { type: String },
       operator: {
@@ -59,6 +87,15 @@ const NodeDataSchema = new Schema<INodeData>(
       value: { type: Schema.Types.Mixed },
     },
     description: { type: String },
+    options: [{ type: String }],
+    // Grouping node specific properties
+    groupType: { type: String },
+    width: { type: Number },
+    height: { type: Number },
+    backgroundColor: { type: String },
+    borderColor: { type: String },
+    level: { type: Number },
+    parentGroupId: { type: String },
   },
   { _id: false }
 );
@@ -72,7 +109,7 @@ const WorkflowNodeSchema = new Schema<IWorkflowNode>(
     },
     type: {
       type: String,
-      enum: ['start', 'end', 'approval', 'parallel_split', 'parallel_join', 'conditional'],
+      enum: ['start', 'end', 'approval', 'parallel_split', 'parallel_join', 'options', 'grouping', 'subgroup'],
       required: true,
     },
     label: {
@@ -87,6 +124,8 @@ const WorkflowNodeSchema = new Schema<IWorkflowNode>(
       type: NodeDataSchema,
       required: true,
     },
+    parentId: { type: String }, // For nodes that are children of grouping nodes
+    extent: { type: String, enum: ['parent'] }, // For nodes constrained within parent bounds
   },
   { _id: false }
 );
@@ -109,7 +148,7 @@ const WorkflowEdgeSchema = new Schema<IWorkflowEdge>(
     label: { type: String },
     type: {
       type: String,
-      enum: ['default', 'conditional'],
+      enum: ['default'],
     },
   },
   { _id: false }

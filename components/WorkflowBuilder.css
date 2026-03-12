@@ -78,3 +78,145 @@
 .workflow-viewer-pending-node {
   opacity: 0.4;
 }
+/* Grouping node styles */
+.react-flow__node-grouping {
+  z-index: -1 !important;
+  pointer-events: all;
+}
+
+/* Ensure other nodes are above grouping nodes */
+.react-flow__node:not(.react-flow__node-grouping) {
+  z-index: 1 !important;
+}
+
+/* Grouping node selection styles */
+.react-flow__node-grouping.selected {
+  border-color: #6366f1 !important;
+  border-width: 3px !important;
+}
+
+/* Handle styles for grouping nodes */
+.react-flow__node-grouping .react-flow__handle {
+  background: #3b82f6 !important;
+  border: 2px solid white !important;
+  width: 12px !important;
+  height: 12px !important;
+}
+
+/* Resize handle styles */
+.grouping-resize-handle {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 12px;
+  height: 12px;
+  background: #3b82f6;
+  border-radius: 3px 0 0 0;
+  cursor: se-resize;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.grouping-resize-handle:hover {
+  opacity: 1;
+}
+
+/* SubGroup node styles */
+.react-flow__node-subgroup {
+  pointer-events: all;
+}
+
+/* Ensure proper z-index layering for nested groups */
+.react-flow__node-subgroup[data-level="1"] {
+  z-index: -0.5 !important;
+}
+
+.react-flow__node-subgroup[data-level="2"] {
+  z-index: -1 !important;
+}
+
+.react-flow__node-subgroup[data-level="3"] {
+  z-index: -1.5 !important;
+}
+
+.react-flow__node-subgroup[data-level="4"] {
+  z-index: -2 !important;
+}
+
+.react-flow__node-subgroup[data-level="5"] {
+  z-index: -2.5 !important;
+}
+
+/* SubGroup selection styles */
+.react-flow__node-subgroup.selected {
+  border-color: #f97316 !important;
+  border-width: 3px !important;
+}
+
+/* Handle styles for subgroup nodes */
+.react-flow__node-subgroup .react-flow__handle {
+  background: #f97316 !important;
+  border: 2px solid white !important;
+  width: 12px !important;
+  height: 12px !important;
+}
+
+/* Nesting level indicators */
+.subgroup-level-indicator {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.subgroup-level-dot {
+  width: 4px;
+  height: 16px;
+  background: #f97316;
+  border-radius: 2px;
+  opacity: 0.6;
+}
+
+/* Hierarchy lines for nested subgroups */
+.subgroup-hierarchy-line-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(to right, #fed7aa, transparent);
+  opacity: 0.3;
+}
+
+.subgroup-hierarchy-line-left {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(to bottom, #fed7aa, transparent);
+  opacity: 0.3;
+}
+
+/* Hover effects for subgroups */
+.react-flow__node-subgroup:hover {
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+  transition: box-shadow 0.2s ease;
+}
+
+/* Resize handle for subgroups */
+.subgroup-resize-handle {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 12px;
+  height: 12px;
+  background: #f97316;
+  border-radius: 3px 0 0 0;
+  cursor: se-resize;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.subgroup-resize-handle:hover {
+  opacity: 1;
+}

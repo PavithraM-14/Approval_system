@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo } from 'react';
+import React from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 
 interface ApprovalNodeData {
@@ -8,60 +8,76 @@ interface ApprovalNodeData {
   roleId?: string;
   roleName?: string;
   description?: string;
+  groupScope?: {
+    enabled: boolean;
+    groupIds?: string[];
+    matchType?: 'any' | 'all';
+  };
 }
 
-const ApprovalNode: React.FC<NodeProps<ApprovalNodeData>> = ({ data, selected }) => {
+export default function ApprovalNode({ data, selected }: NodeProps<ApprovalNodeData>) {
+  const hasGroupScope = data.groupScope?.enabled && data.groupScope?.groupIds?.length > 0;
+  const groupCount = data.groupScope?.groupIds?.length || 0;
+
   return (
-    <div
-      className={`px-5 py-4 rounded-lg border-2 bg-blue-50 min-w-[180px] ${
-        selected ? 'border-blue-600 shadow-lg' : 'border-blue-400'
-      } transition-all`}
-      title={`Approval Node${data?.roleName ? ` - Role: ${data.roleName}` : ''}`}
-    >
+    <div className={`
+      px-4 py-3 shadow-lg rounded-lg bg-white border-2 min-w-[150px] relative
+      ${selected ? 'border-indigo-500' : 'border-gray-300'}
+      ${hasGroupScope ? 'border-l-4 border-l-blue-500' : ''}
+    `}>
+      {/* Left handle */}
       <Handle
         type="target"
         position={Position.Left}
-        className="w-3 h-3 bg-blue-500 border-2 border-white"
-        title="Connect from previous step"
+        className="w-3 h-3 !bg-blue-500 !border-2 !border-white"
+        style={{ left: '-6px', top: '50%' }}
       />
-      <div className="flex items-start gap-2">
-        <div className="flex-shrink-0 mt-1">
-          <svg
-            className="w-5 h-5 text-blue-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-blue-900 text-sm">
-            {data?.label || 'Approval'}
-          </div>
-          {data?.roleName && (
-            <div className="text-xs text-blue-700 mt-1 font-medium">
-              Role: {data.roleName}
-            </div>
-          )}
-          {data?.description && (
-            <div className="text-xs text-blue-600 mt-1">{data.description}</div>
-          )}
-        </div>
-      </div>
+      
+      {/* Right handle */}
       <Handle
         type="source"
         position={Position.Right}
-        className="w-3 h-3 bg-blue-500 border-2 border-white"
-        title="Connect to next step"
+        className="w-3 h-3 !bg-blue-500 !border-2 !border-white"
+        style={{ right: '-6px', top: '50%' }}
       />
+      
+      <div className="flex items-center gap-2 mb-1">
+        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+        <div className="font-medium text-gray-900 text-sm">
+          {data.label || 'User Node'}
+        </div>
+      </div>
+
+      {data.roleName && (
+        <div className="text-xs text-gray-600 mb-1">
+          Role: {data.roleName}
+        </div>
+      )}
+
+      {data.description && (
+        <div className="text-xs text-gray-500 mb-2">
+          {data.description}
+        </div>
+      )}
+
+      {/* Group Scope Indicator */}
+      {hasGroupScope && (
+        <div className="flex items-center gap-1 mt-2">
+          <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 rounded-full">
+            <svg className="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span className="text-xs text-blue-700 font-medium">
+              {groupCount} group{groupCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="text-xs text-gray-500">
+            ({data.groupScope?.matchType || 'any'})
+          </div>
+        </div>
+      )}
     </div>
   );
-};
-
-export default memo(ApprovalNode);
+}

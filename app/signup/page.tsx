@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Role } from '../../lib/types';
 import PasswordInput from '../../components/PasswordInput';
 import OTPVerification from '../../components/OTPVerification';
+import DynamicSignupForm from '../../components/DynamicSignupForm';
 import SeadLogo from '../../components/SeadLogo';
 
 type SignupType = 'company' | 'employee';
@@ -38,6 +39,7 @@ export default function SignupPage() {
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [useDynamicForm, setUseDynamicForm] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -121,6 +123,53 @@ export default function SignupPage() {
     }
   };
 
+  const handleDynamicFormSubmit = async (formData: Record<string, any>) => {
+    setLoading(true);
+    setError('');
+
+    try {
+      // Send OTP first
+      const otpResponse = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          type: 'signup',
+        }),
+      });
+
+      if (!otpResponse.ok) {
+        const otpError = await otpResponse.json();
+        throw new Error(otpError.error || 'Failed to send OTP');
+      }
+
+      const otpData = await otpResponse.json();
+      
+      // Store form data for OTP verification
+      setOtpData({
+        otp: otpData.otp,
+        otpTimestamp: otpData.otpTimestamp,
+      });
+
+      // Store all form data in state for later use
+      setName(formData.name || '');
+      setEmail(formData.email || '');
+      setContactNo(formData.contactNo || '');
+      setPassword(formData.password || '');
+      setEmpId(formData.empId || '');
+
+      // Store additional form data
+      (window as any).dynamicFormData = formData;
+
+      setStep('otp');
+    } catch (err) {
+      console.error('Dynamic form submission error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to process signup');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -191,22 +240,47 @@ export default function SignupPage() {
         ? '/api/auth/signup-company' 
         : '/api/auth/signup-employee';
 
-      const payload = signupType === 'company'
-        ? {
+      let payload;
+      
+      if (signupType === 'company') {
+        payload = {
+          email,
+          otp,
+          type: 'signup',
+          companyData: {
+            companyName,
+            adminName: name,
+            adminEmail: email,
+            adminContactNo: formattedContactNo,
+            password,
+            otp: otpData?.otp,
+            otpTimestamp: otpData?.otpTimestamp,
+          },
+        };
+      } else {
+        // Check if we have dynamic form data
+        const dynamicFormData = (window as any).dynamicFormData;
+        
+        if (dynamicFormData) {
+          // Use dynamic form data
+          const { groupIds, ...otherFields } = dynamicFormData;
+          payload = {
             email,
             otp,
             type: 'signup',
-            companyData: {
-              companyName,
-              adminName: name,
-              adminEmail: email,
-              adminContactNo: formattedContactNo,
-              password,
+            employeeData: {
+              ...otherFields,
+              contactNo: formattedContactNo,
+              companyId: selectedCompanyId,
+              roleId: selectedRoleId,
+              groupIds: groupIds || [],
               otp: otpData?.otp,
               otpTimestamp: otpData?.otpTimestamp,
             },
-          }
-        : {
+          };
+        } else {
+          // Use traditional form data
+          payload = {
             email,
             otp,
             type: 'signup',
@@ -222,6 +296,8 @@ export default function SignupPage() {
               otpTimestamp: otpData?.otpTimestamp,
             },
           };
+        }
+      }
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -479,200 +555,280 @@ export default function SignupPage() {
             ) : (
               <>
                 {/* Employee Signup Form */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Enter your full name"
-                    autoComplete="off"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
+                {useDynamicForm && selectedCompanyId && selectedRoleId ? (
+                  <DynamicSignupForm
+                    companyId={selectedCompanyId}
+                    roleId={selectedRoleId}
+                    onSubmit={handleDynamicFormSubmit}
+                    loading={loading}
                   />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Employee ID *</label>
-                  <input
-                    type="text"
-                    required
-                    value={empId}
-                    onChange={(e) => setEmpId(e.target.value)}
-                    placeholder="Enter your employee ID"
-                    autoComplete="off"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@company.com"
-                    autoComplete="off"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Contact Number *</label>
-                  <input
-                    type="tel"
-                    required
-                    value={contactNo}
-                    onChange={(e) => setContactNo(e.target.value)}
-                    onBlur={validateContactNo}
-                    placeholder="Enter 10-digit contact number"
-                    autoComplete="off"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
-                  />
-                </div>
-
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Company *</label>
-                  <input
-                    type="text"
-                    required
-                    value={companySearchQuery}
-                    onChange={(e) => {
-                      setCompanySearchQuery(e.target.value);
-                      setShowCompanyDropdown(true);
-                    }}
-                    onFocus={() => setShowCompanyDropdown(true)}
-                    placeholder="Click to select or search for your company"
-                    autoComplete="off"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
-                  />
-                  {showCompanyDropdown && filteredCompanies.length > 0 && (
-                    <>
-                      <div 
-                        className="fixed inset-0 z-10" 
-                        onClick={() => setShowCompanyDropdown(false)}
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Enter your full name"
+                        autoComplete="off"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
                       />
-                      <div className="absolute z-20 mt-2 w-full max-h-60 overflow-y-auto bg-white border border-gray-300 rounded-lg shadow-lg">
-                        {filteredCompanies.map((company) => (
-                          <button
-                            key={company._id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedCompanyId(company._id);
-                              setCompanySearchQuery(company.name);
-                              setShowCompanyDropdown(false);
-                            }}
-                            className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 ${
-                              selectedCompanyId === company._id 
-                                ? 'bg-indigo-50 text-indigo-600 font-semibold' 
-                                : 'text-gray-900'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span>{company.name}</span>
-                              {selectedCompanyId === company._id && (
-                                <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                            </div>
-                          </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Employee ID *</label>
+                      <input
+                        type="text"
+                        required
+                        value={empId}
+                        onChange={(e) => setEmpId(e.target.value)}
+                        placeholder="Enter your employee ID"
+                        autoComplete="off"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="name@company.com"
+                        autoComplete="off"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Contact Number *</label>
+                      <input
+                        type="tel"
+                        required
+                        value={contactNo}
+                        onChange={(e) => setContactNo(e.target.value)}
+                        onBlur={validateContactNo}
+                        placeholder="Enter 10-digit contact number"
+                        autoComplete="off"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
+                      />
+                    </div>
+
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Select Company *</label>
+                      <input
+                        type="text"
+                        required
+                        value={companySearchQuery}
+                        onChange={(e) => {
+                          setCompanySearchQuery(e.target.value);
+                          setShowCompanyDropdown(true);
+                        }}
+                        onFocus={() => setShowCompanyDropdown(true)}
+                        placeholder="Click to select or search for your company"
+                        autoComplete="off"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
+                      />
+                      {showCompanyDropdown && filteredCompanies.length > 0 && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-10" 
+                            onClick={() => setShowCompanyDropdown(false)}
+                          />
+                          <div className="absolute z-20 mt-2 w-full max-h-60 overflow-y-auto bg-white border border-gray-300 rounded-lg shadow-lg">
+                            {filteredCompanies.map((company) => (
+                              <button
+                                key={company._id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedCompanyId(company._id);
+                                  setCompanySearchQuery(company.name);
+                                  setShowCompanyDropdown(false);
+                                }}
+                                className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 ${
+                                  selectedCompanyId === company._id 
+                                    ? 'bg-indigo-50 text-indigo-600 font-semibold' 
+                                    : 'text-gray-900'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span>{company.name}</span>
+                                  {selectedCompanyId === company._id && (
+                                    <svg className="w-5 h-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                      {showCompanyDropdown && filteredCompanies.length === 0 && companySearchQuery && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-10" 
+                            onClick={() => setShowCompanyDropdown(false)}
+                          />
+                          <div className="absolute z-20 mt-2 w-full bg-white border border-gray-300 rounded-lg shadow-lg p-4">
+                            <p className="text-gray-500 text-sm text-center">
+                              No companies found matching "{companySearchQuery}"
+                            </p>
+                            <p className="text-gray-400 text-xs text-center mt-2">
+                              Please check the spelling or contact your administrator
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Role *</label>
+                      <select
+                        required
+                        value={selectedRoleId}
+                        onChange={async (e) => {
+                          const roleId = e.target.value;
+                          setSelectedRoleId(roleId);
+                          
+                          // Check if this role has a dynamic signup form
+                          if (roleId && selectedCompanyId) {
+                            try {
+                              const response = await fetch(`/api/signup-forms/public?companyId=${selectedCompanyId}&roleId=${roleId}`);
+                              if (response.ok) {
+                                const data = await response.json();
+                                setUseDynamicForm(!!data.configuration);
+                              } else {
+                                setUseDynamicForm(false);
+                              }
+                            } catch (err) {
+                              console.error('Failed to check for dynamic form:', err);
+                              setUseDynamicForm(false);
+                            }
+                          } else {
+                            setUseDynamicForm(false);
+                          }
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900"
+                        disabled={!selectedCompanyId}
+                      >
+                        <option value="">
+                          {!selectedCompanyId 
+                            ? 'Please select a company first' 
+                            : roles.length === 0 
+                            ? 'No roles available' 
+                            : 'Select a role'}
+                        </option>
+                        {roles.map((role) => (
+                          <option key={role._id} value={role._id}>
+                            {role.name}
+                          </option>
                         ))}
-                      </div>
-                    </>
-                  )}
-                  {showCompanyDropdown && filteredCompanies.length === 0 && companySearchQuery && (
-                    <>
-                      <div 
-                        className="fixed inset-0 z-10" 
-                        onClick={() => setShowCompanyDropdown(false)}
-                      />
-                      <div className="absolute z-20 mt-2 w-full bg-white border border-gray-300 rounded-lg shadow-lg p-4">
-                        <p className="text-gray-500 text-sm text-center">
-                          No companies found matching "{companySearchQuery}"
+                      </select>
+                      {!selectedCompanyId && (
+                        <p className="text-slate-400 text-xs mt-1">
+                          Select your company to see available roles
                         </p>
-                        <p className="text-gray-400 text-xs text-center mt-2">
-                          Please check the spelling or contact your administrator
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </div>
+                      )}
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Role *</label>
-                  <select
-                    required
-                    value={selectedRoleId}
-                    onChange={(e) => setSelectedRoleId(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900"
-                    disabled={!selectedCompanyId}
-                  >
-                    <option value="">
-                      {!selectedCompanyId 
-                        ? 'Please select a company first' 
-                        : roles.length === 0 
-                        ? 'No roles available' 
-                        : 'Select a role'}
-                    </option>
-                    {roles.map((role) => (
-                      <option key={role._id} value={role._id}>
-                        {role.name}
-                      </option>
-                    ))}
-                  </select>
-                  {!selectedCompanyId && (
-                    <p className="text-slate-400 text-xs mt-1">
-                      Select your company to see available roles
-                    </p>
-                  )}
-                </div>
+                    {/* Common Password Fields */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Password *</label>
+                      <PasswordInput
+                        value={password}
+                        onChange={setPassword}
+                        required
+                        placeholder="Enter your password"
+                        autoComplete="new-password"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password *</label>
+                      <PasswordInput
+                        value={confirmPassword}
+                        onChange={setConfirmPassword}
+                        required
+                        placeholder="Confirm your password"
+                        autoComplete="new-password"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {loading ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Processing...
+                        </>
+                      ) : (
+                        'Continue to Verification'
+                      )}
+                    </button>
+                  </>
+                )}
               </>
             )}
 
-            {/* Common Password Fields */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Password *</label>
-              <PasswordInput
-                value={password}
-                onChange={setPassword}
-                required
-                placeholder="Enter your password"
-                autoComplete="new-password"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
-              />
-            </div>
+            {/* Company signup still shows password fields */}
+            {signupType === 'company' && (
+              <>
+                {/* Common Password Fields */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Password *</label>
+                  <PasswordInput
+                    value={password}
+                    onChange={setPassword}
+                    required
+                    placeholder="Enter your password"
+                    autoComplete="new-password"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password *</label>
-              <PasswordInput
-                value={confirmPassword}
-                onChange={setConfirmPassword}
-                required
-                placeholder="Confirm your password"
-                autoComplete="new-password"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
-              />
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password *</label>
+                  <PasswordInput
+                    value={confirmPassword}
+                    onChange={setConfirmPassword}
+                    required
+                    placeholder="Confirm your password"
+                    autoComplete="new-password"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-gray-900 placeholder-gray-500"
+                  />
+                </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Processing...
-                </>
-              ) : (
-                'Continue to Verification'
-              )}
-            </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : (
+                    'Continue to Verification'
+                  )}
+                </button>
+              </>
+            )}
           </form>
 
           {/* Login Link */}

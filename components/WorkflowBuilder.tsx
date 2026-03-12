@@ -14,6 +14,7 @@ import {
   Node,
   BackgroundVariant,
   ReactFlowInstance,
+  Position,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import './WorkflowBuilder.css';
@@ -87,13 +88,34 @@ const nodePaletteItems: NodePaletteItem[] = [
       </svg>
     ),
   },
+
   {
-    type: 'conditional',
-    label: 'Conditional',
-    description: 'Route based on condition',
+    type: 'grouping',
+    label: 'Group',
+    description: 'Visual grouping container',
     icon: (
-      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+      </svg>
+    ),
+  },
+  {
+    type: 'subgroup',
+    label: 'SubGroup',
+    description: 'Nested grouping container',
+    icon: (
+      <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+  {
+    type: 'options',
+    label: 'Options',
+    description: 'Forward to multiple users',
+    icon: (
+      <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
       </svg>
     ),
   },
@@ -135,7 +157,13 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({
   // Update state when props change (for loading workflows)
   React.useEffect(() => {
     if (initialNodes.length > 0) {
-      setNodes(initialNodes);
+      // Add sourcePosition and targetPosition to existing nodes if they don't have them
+      const updatedNodes = initialNodes.map(node => ({
+        ...node,
+        sourcePosition: node.sourcePosition || Position.Right,
+        targetPosition: node.targetPosition || Position.Left,
+      }));
+      setNodes(updatedNodes);
     }
   }, [initialNodes, setNodes]);
 
@@ -280,8 +308,8 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({
         case 'parallel_split':
         case 'parallel_join':
           return { width: 160, height: 70 };
-        case 'conditional':
-          return { width: 160, height: 80 };
+        case 'options':
+          return { width: 180, height: 90 };
         default:
           return { width: 150, height: 70 };
       }
@@ -402,14 +430,14 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({
         if (outgoingCount >= 1) return false;
       }
       
-      // Conditional: one incoming, two outgoing (true/false)
-      if (sourceType === 'conditional') {
-        const outgoingCount = edges.filter((e) => e.source === source).length;
-        if (outgoingCount >= 2) return false;
-      }
-      if (targetType === 'conditional') {
+      // Options: one incoming, multiple outgoing (up to 5 for UI)
+      if (targetType === 'options') {
         const incomingCount = edges.filter((e) => e.target === target).length;
         if (incomingCount >= 1) return false;
+      }
+      if (sourceType === 'options') {
+        const outgoingCount = edges.filter((e) => e.source === source).length;
+        if (outgoingCount >= 5) return false; // Limit to 5 options for UI
       }
       
       return true;
@@ -557,6 +585,154 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({
     target.style.opacity = '1';
   };
 
+  // Helper function to detect and update parent-child relationships for subgroups
+  const updateSubGroupRelationships = useCallback(() => {
+    setNodes((currentNodes) => {
+      return currentNodes.map((node) => {
+        if (node.type === 'subgroup') {
+          // Find potential parent groups/subgroups
+          let parentGroupId = '';
+          let detectedLevel = 1;
+          
+          for (const otherNode of currentNodes) {
+            if ((otherNode.type === 'grouping' || otherNode.type === 'subgroup') && 
+                otherNode.id !== node.id && otherNode.data) {
+              
+              const otherX = otherNode.position.x;
+              const otherY = otherNode.position.y;
+              const otherWidth = otherNode.data.width || (otherNode.type === 'grouping' ? 300 : 250);
+              const otherHeight = otherNode.data.height || (otherNode.type === 'grouping' ? 200 : 150);
+              
+              // Check if this subgroup is inside the other group/subgroup
+              if (node.position.x >= otherX && 
+                  node.position.x + (node.data?.width || 250) <= otherX + otherWidth &&
+                  node.position.y >= otherY && 
+                  node.position.y + (node.data?.height || 150) <= otherY + otherHeight) {
+                
+                const otherLevel = otherNode.data.level || (otherNode.type === 'grouping' ? 0 : 1);
+                const newLevel = otherLevel + 1;
+                
+                if (newLevel > detectedLevel) {
+                  detectedLevel = newLevel;
+                  parentGroupId = otherNode.id;
+                }
+              }
+            }
+          }
+          
+          // Update the node if relationships changed
+          if (node.data?.parentGroupId !== parentGroupId || node.data?.level !== detectedLevel) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                parentGroupId,
+                level: detectedLevel,
+                // Update visual properties based on new level
+                width: Math.max(200, 300 - (detectedLevel * 25)),
+                height: Math.max(120, 200 - (detectedLevel * 25)),
+                backgroundColor: `rgba(139, 69, 19, ${0.03 + (detectedLevel * 0.02)})`,
+              },
+              zIndex: -detectedLevel * 0.5,
+            };
+          }
+        }
+        return node;
+      });
+    });
+  }, [setNodes]);
+
+  // Update relationships when nodes change position
+  React.useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      updateSubGroupRelationships();
+    }, 500); // Debounce to avoid excessive updates
+
+    return () => clearTimeout(timeoutId);
+  }, [nodes.map(n => `${n.id}-${n.position.x}-${n.position.y}`).join(','), updateSubGroupRelationships]);
+  const detectNestingLevel = useCallback((position: { x: number; y: number }, nodes: Node[]) => {
+    let maxLevel = 0;
+    
+    // Check if the position is inside any existing groups or subgroups
+    for (const node of nodes) {
+      if ((node.type === 'grouping' || node.type === 'subgroup') && node.data) {
+        const nodeX = node.position.x;
+        const nodeY = node.position.y;
+        const nodeWidth = node.data.width || (node.type === 'grouping' ? 300 : 250);
+        const nodeHeight = node.data.height || (node.type === 'grouping' ? 200 : 150);
+        
+        // Check if position is inside this group/subgroup
+        if (position.x >= nodeX && position.x <= nodeX + nodeWidth &&
+            position.y >= nodeY && position.y <= nodeY + nodeHeight) {
+          const nodeLevel = node.data.level || (node.type === 'grouping' ? 0 : 1);
+          maxLevel = Math.max(maxLevel, nodeLevel + 1);
+        }
+      }
+    }
+    
+    return Math.max(1, maxLevel);
+  }, []);
+
+  // Create new node with proper data structure
+  const createNewNode = useCallback((type: string, position: { x: number; y: number }) => {
+    const defaultLabels: Record<string, string> = {
+      start: 'Start',
+      end: 'End',
+      approval: 'User Node',
+      parallel_split: 'Parallel Split',
+      parallel_join: 'Parallel Join',
+      grouping: 'Group',
+      subgroup: 'SubGroup',
+      options: 'Options',
+    };
+
+    let nodeData: any = { 
+      label: defaultLabels[type] || type 
+    };
+
+    // Add type-specific default data
+    if (type === 'grouping') {
+      nodeData = {
+        ...nodeData,
+        description: 'Drag nodes into this group',
+        groupType: 'region',
+        width: 300,
+        height: 200,
+        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+        borderColor: '#3b82f6',
+        level: 0, // Groups are level 0
+      };
+    } else if (type === 'subgroup') {
+      const nestingLevel = detectNestingLevel(position, nodes);
+      nodeData = {
+        ...nodeData,
+        description: `Level ${nestingLevel} subgroup`,
+        subGroupType: 'department',
+        width: Math.max(200, 300 - (nestingLevel * 25)), // Smaller as nesting increases
+        height: Math.max(120, 200 - (nestingLevel * 25)),
+        backgroundColor: `rgba(139, 69, 19, ${0.03 + (nestingLevel * 0.02)})`,
+        borderColor: '#8b4513',
+        level: nestingLevel,
+      };
+    }
+
+    const newNode: Node = {
+      id: getNodeId(),
+      type,
+      position,
+      data: nodeData,
+      // Set z-index based on type and level
+      zIndex: type === 'grouping' ? -1 : 
+              type === 'subgroup' ? -(nodeData.level || 1) * 0.5 : 
+              1,
+      // Set handle positions to left/right for all nodes
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+    };
+
+    return newNode;
+  }, [detectNestingLevel, nodes]);
+
   // Handle drop on canvas
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
@@ -575,26 +751,10 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({
         y: event.clientY,
       });
 
-      // Create default data and labels based on node type
-      const defaultLabels: Record<string, string> = {
-        start: 'Start',
-        end: 'End',
-        approval: 'User Node',
-        parallel_split: 'Parallel Split',
-        parallel_join: 'Parallel Join',
-        conditional: 'Condition',
-      };
-
-      const newNode: Node = {
-        id: getNodeId(),
-        type,
-        position,
-        data: { label: defaultLabels[type] || type },
-      };
-
+      const newNode = createNewNode(type, position);
       setNodes((nds) => nds.concat(newNode));
     },
-    [reactFlowInstance, setNodes]
+    [reactFlowInstance, setNodes, createNewNode]
   );
 
   // Allow drop on canvas
@@ -605,6 +765,11 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({
 
   // Handle node selection
   const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    setSelectedNode(node);
+  }, []);
+
+  // Handle double-click to edit node properties
+  const onNodeDoubleClick = useCallback((_event: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
   }, []);
 
@@ -620,7 +785,13 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({
   }, []);
 
   // Handle node data update from property editor
-  const handleUpdateNode = useCallback((nodeId: string, data: Record<string, any>) => {
+  const handleUpdateNode = useCallback((nodeId: string, data: Record<string, any> | null) => {
+    if (data === null) {
+      // Close the property editor
+      setSelectedNode(null);
+      return;
+    }
+    
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === nodeId) {
@@ -883,6 +1054,7 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({
             onDrop={onDrop}
             onDragOver={onDragOver}
             onNodeClick={onNodeClick}
+            onNodeDoubleClick={onNodeDoubleClick}
             onPaneClick={onPaneClick}
             onEdgeClick={onEdgeClick}
             nodeTypes={nodeTypes as any}
@@ -902,12 +1074,14 @@ const WorkflowBuilder: React.FC<WorkflowBuilderProps> = ({
         </div>
 
         {/* Property Editor Panel */}
-        <NodePropertyEditor
-          selectedNode={selectedNode}
-          companyId={companyId}
-          onUpdateNode={handleUpdateNode}
-          onDeleteNode={handleDeleteNode}
-        />
+        {selectedNode && (
+          <NodePropertyEditor
+            selectedNode={selectedNode}
+            companyId={companyId}
+            onUpdateNode={handleUpdateNode}
+            onDeleteNode={handleDeleteNode}
+          />
+        )}
       </div>
     </div>
   );

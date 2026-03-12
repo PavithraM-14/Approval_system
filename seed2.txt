@@ -1,0 +1,45 @@
+
+> sead-approval-system@1.0.0 university
+> tsx scripts/seed-university.ts
+
+[dotenv@17.2.2] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
+Connecting to database...
+Connected to database.
+Seed Error: Error: Company validation failed: adminContactNo: Path `adminContactNo` is required., adminEmail: Path `adminEmail` is required.
+    at ValidationError.inspect (C:\Users\mdkhu\SEAD\node_modules\mongoose\lib\error\validation.js:52:26)
+    at formatValue (node:internal/util/inspect:877:19)
+    at inspect (node:internal/util/inspect:404:10)
+    at formatWithOptionsInternal (node:internal/util/inspect:2407:40)
+    at formatWithOptions (node:internal/util/inspect:2269:10)
+    at console.value (node:internal/console/constructor:345:14)
+    at console.error (node:internal/console/constructor:412:61)
+    at seedUniversity (C:\Users\mdkhu\SEAD\scripts\seed-university.ts:275:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  errors: {
+    adminContactNo: ValidatorError: Path `adminContactNo` is required.
+        at validate (C:\Users\mdkhu\SEAD\node_modules\mongoose\lib\schemaType.js:1413:13)
+        at SchemaType.doValidate (C:\Users\mdkhu\SEAD\node_modules\mongoose\lib\schemaType.js:1397:7)
+        at C:\Users\mdkhu\SEAD\node_modules\mongoose\lib\document.js:3111:18
+        at process.processTicksAndRejections (node:internal/process/task_queues:85:11) {
+      properties: [Object],
+      kind: 'required',
+      path: 'adminContactNo',
+      value: undefined,
+      reason: undefined,
+      [Symbol(mongoose#validatorError)]: true
+    },
+    adminEmail: ValidatorError: Path `adminEmail` is required.
+        at validate (C:\Users\mdkhu\SEAD\node_modules\mongoose\lib\schemaType.js:1413:13)
+        at SchemaType.doValidate (C:\Users\mdkhu\SEAD\node_modules\mongoose\lib\schemaType.js:1397:7)
+        at C:\Users\mdkhu\SEAD\node_modules\mongoose\lib\document.js:3111:18
+        at process.processTicksAndRejections (node:internal/process/task_queues:85:11) {
+      properties: [Object],
+      kind: 'required',
+      path: 'adminEmail',
+      value: undefined,
+      reason: undefined,
+      [Symbol(mongoose#validatorError)]: true
+    }
+  },
+  _message: 'Company validation failed'
+}

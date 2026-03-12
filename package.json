@@ -11,13 +11,17 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "tsx scripts/seed.ts",
+    "small": "tsx scripts/seed-standard-workflow.ts",
+    "medium": "tsx scripts/seed-medium-workflow.ts",
     "test": "jest --watch",
     "test:ci": "jest",
     "reminders": "tsx scripts/sendReminders.ts",
     "retention": "tsx scripts/applyRetention.ts",
     "backup": "tsx scripts/createBackup.ts",
     "renewals": "tsx scripts/processRenewals.ts",
-    "clear-db": "tsx scripts/clear-database.ts"
+    "clear-db": "tsx scripts/clear-database.ts",
+    "university": "tsx scripts/seed-university.ts",
+    "large": "tsx scripts/seed-large-workflow.ts"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",

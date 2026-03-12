@@ -3,6 +3,7 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ApprovalModal from '../../../../components/ApprovalModal';
+import OptionsModal from '../../../../components/OptionsModal';
 import QueryModal from '../../../../components/QueryModal';
 import QueryIndicator from '../../../../components/QueryIndicator';
 import DeanQueryModal from '../../../../components/DeanQueryModal';
@@ -11,6 +12,8 @@ import ApprovalWorkflow from '../../../../components/ApprovalWorkflow';
 import AttachmentList from '../../../../components/AttachmentList';
 import SendRequestAttachmentsButton from '../../../../components/SendRequestAttachmentsButton';
 import IntegrationLinks from '../../../../components/IntegrationLinks';
+import AdminOverridePanel from '../../../../components/AdminOverridePanel';
+import GmailComposeModal from '../../../../components/GmailComposeModal';
 import { RequestStatus, ActionType, UserRole } from '../../../../lib/types';
 import { approvalEngine } from '../../../../lib/approval-engine';
 import { queryEngine } from '../../../../lib/query-engine';
@@ -192,10 +195,12 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
-  const [initialApprovalAction, setInitialApprovalAction] = useState<'approve' | 'reject' | null>(null);
+  const [initialApprovalAction, setInitialApprovalAction] = useState<'approve' | 'reject' | 'forward' | null>(null);
+  const [isOptionsModalOpen, setIsOptionsModalOpen] = useState(false);
   const [isQueryModalOpen, setIsQueryModalOpen] = useState(false);
   const [isDeanQueryModalOpen, setIsDeanQueryModalOpen] = useState(false);
   const [isDirectQueryModalOpen, setIsDirectQueryModalOpen] = useState(false);
+  const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showApprovalHistory, setShowApprovalHistory] = useState(false);
   const [processingApproval, setProcessingApproval] = useState(false);
@@ -411,6 +416,34 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
 
     } catch (err) {
       console.error('Forward error:', err);
+      throw err;
+    } finally {
+      setProcessingApproval(false);
+    }
+  };
+
+  const handleOptions = async (selectedOptions: string[], notes: string) => {
+    try {
+      setProcessingApproval(true);
+      const response = await fetch(`/api/requests/${params.id}/options`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selectedOptions,
+          notes
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to process options selection');
+      }
+
+      await fetchRequest();
+      setIsOptionsModalOpen(false);
+
+    } catch (err) {
+      console.error('Options error:', err);
       throw err;
     } finally {
       setProcessingApproval(false);
@@ -697,6 +730,41 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
     } finally {
       setProcessingApproval(false);
     }
+  };
+
+  // Admin override handler
+  const handleAdminOverride = async (action: 'approve' | 'reject' | 'forward', notes: string) => {
+    try {
+      setProcessingApproval(true);
+      const response = await fetch(`/api/requests/${params.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          notes: notes || `[ADMIN OVERRIDE] ${action.toUpperCase()} by system administrator`,
+          adminOverride: true
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to ${action} request`);
+      }
+
+      await fetchRequest();
+      alert(`Request ${action}d successfully via admin override`);
+
+    } catch (err) {
+      console.error('Admin override error:', err);
+      throw err;
+    } finally {
+      setProcessingApproval(false);
+    }
+  };
+
+  // Gmail compose handler
+  const handleOpenGmailCompose = () => {
+    setIsGmailModalOpen(true);
   };
 
   const handleSendToVP = async (notes: string, attachments: string[]) => {
@@ -1318,6 +1386,15 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         </div>
       </div>
 
+      {/* Admin Override Panel */}
+      <AdminOverridePanel
+        request={request}
+        currentUser={currentUser}
+        onAction={handleAdminOverride}
+        onSendEmail={handleOpenGmailCompose}
+        loading={processingApproval}
+      />
+
       {/* Workflow + History (hidden for SOP, Accountant) */}
       {!hideWorkflowAndHistory && (
         <div className="space-y-4 sm:space-y-6">
@@ -1372,10 +1449,6 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                 </svg>
                 <p className="text-xs sm:text-sm">Click the toggle above to view approval history</p>
               </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Approval Modal */}
       <ApprovalModal
@@ -1399,6 +1472,26 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         onReject={handleReject}
         onRejectWithClarification={handleRejectWithClarification}
         onForward={handleForward}
+        loading={processingApproval}
+      />
+
+      {/* Options Modal */}
+      <OptionsModal
+        isOpen={isOptionsModalOpen}
+        onClose={() => setIsOptionsModalOpen(false)}
+        request={{
+          _id: request._id,
+          title: request.title,
+          purpose: request.purpose,
+          requester: { name: request.requester.name }
+        }}
+        user={currentUser}
+        availableOptions={[
+          { id: 'option-1', label: 'Account Node', description: 'Forward to accounting department' },
+          { id: 'option-2', label: 'SOP Verifier', description: 'Forward to SOP verification team' },
+          { id: 'option-3', label: 'Security Node', description: 'Forward to security department' }
+        ]}
+        onSubmit={handleOptions}
         loading={processingApproval}
       />
 
@@ -1496,6 +1589,22 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         loading={processingApproval}
       />
 
+    </div>
+  );
+}
+          requester: { name: request.requester.name }
+        }}
+        onSubmit={handleRejectWithClarification}
+        loading={processingApproval}
+      />
+
+      {/* Gmail Compose Modal */}
+      <GmailComposeModal
+        isOpen={isGmailModalOpen}
+        onClose={() => setIsGmailModalOpen(false)}
+        request={request}
+        currentUser={currentUser}
+      />
     </div>
   );
 }

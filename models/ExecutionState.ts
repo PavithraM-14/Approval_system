@@ -31,6 +31,7 @@ export interface IExecutionState extends Document {
   status: 'in_progress' | 'completed' | 'rejected';
   parallelPaths: IParallelPath[];
   history: IExecutionHistoryEntry[];
+  requesterGroupIds: mongoose.Types.ObjectId[]; // Groups the requester belongs to
   startedAt: Date;
   completedAt?: Date;
 }
@@ -143,6 +144,11 @@ const ExecutionStateSchema = new Schema<IExecutionState>(
     },
     history: {
       type: [ExecutionHistoryEntrySchema],
+      default: [],
+    },
+    requesterGroupIds: {
+      type: [Schema.Types.ObjectId],
+      ref: 'Group',
       default: [],
     },
     startedAt: {

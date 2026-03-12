@@ -1,0 +1,58 @@
+
+> sead-approval-system@1.0.0 university
+> tsx scripts/seed-university.ts
+
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 📡 version env with Radar: https://dotenvx.com/radar
+Connecting to database...
+Connected to database.
+Created Company: Fenma University
+Created Group: College
+Created Group: Department
+Created Role: Faculty
+Created User: Faculty (faculty@fenma.edu)
+Assigned User Faculty to Group Department
+Created Role: HOD
+Created User: HOD (hod@fenma.edu)
+Assigned User HOD to Group Department
+Created Role: Institution Manager
+Created User: Institution Manager (institution_manager@fenma.edu)
+Assigned User Institution Manager to Group College
+Created Role: Accountant
+Created User: Accountant (accountant@fenma.edu)
+Assigned User Accountant to Group College
+Created Role: SOP Verifier
+Created User: SOP Verifier (sop_verifier@fenma.edu)
+Assigned User SOP Verifier to Group College
+Created Role: Security
+Created User: Security (security@fenma.edu)
+Assigned User Security to Group College
+Created Role: VP Admin
+Created User: VP Admin (vp_admin@fenma.edu)
+Assigned User VP Admin to Group College
+Created Role: VP Academics
+Created User: VP Academics (vp_academics@fenma.edu)
+Assigned User VP Academics to Group College
+Created Role: Principal
+Created User: Principal (principal@fenma.edu)
+Assigned User Principal to Group College
+Created Role: Dean
+Created User: Dean (dean@fenma.edu)
+Assigned User Dean to Group College
+Created Role: Chairman
+Created User: Chairman (chairman@fenma.edu)
+Assigned User Chairman to Group College
+Created Workflow Configuration: University Request Flow
+
+--- Seed Complete ---
+Login Details (Password is password123):
+- Faculty: faculty@fenma.edu
+- HOD: hod@fenma.edu
+- Institution Manager: institution_manager@fenma.edu
+- Accountant: accountant@fenma.edu
+- SOP Verifier: sop_verifier@fenma.edu
+- Security: security@fenma.edu
+- VP Admin: vp_admin@fenma.edu
+- VP Academics: vp_academics@fenma.edu
+- Principal: principal@fenma.edu
+- Dean: dean@fenma.edu
+- Chairman: chairman@fenma.edu

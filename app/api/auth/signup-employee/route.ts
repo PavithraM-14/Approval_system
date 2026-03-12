@@ -3,6 +3,9 @@ import connectDB from '../../../../lib/mongodb';
 import User from '../../../../models/User';
 import Company from '../../../../models/Company';
 import Role from '../../../../models/Role';
+import UserGroupAssignment from '../../../../models/UserGroupAssignment';
+import Group from '../../../../models/Group';
+import mongoose from 'mongoose';
 
 /**
  * POST /api/auth/signup-employee - Register a new employee for existing company
@@ -29,8 +32,10 @@ export async function POST(request: NextRequest) {
       password,
       companyId,
       roleId,
+      groupIds,
       otp: storedOtp,
       otpTimestamp,
+      ...customFields
     } = employeeData;
 
     // Verify OTP
@@ -93,8 +98,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create employee user
-    const employee = await User.create({
+    // Validate groups if provided
+    if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
+      const groups = await Group.find({
+        _id: { $in: groupIds.map(id => new mongoose.Types.ObjectId(id)) },
+        companyId: new mongoose.Types.ObjectId(companyId),
+        isActive: true,
+      });
+
+      if (groups.length !== groupIds.length) {
+        return NextResponse.json(
+          { error: 'Some selected groups are invalid or inactive' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Create employee user with custom fields
+    const userData: any = {
       name,
       empId,
       email: employeeEmail,
@@ -104,7 +125,27 @@ export async function POST(request: NextRequest) {
       company: companyId,
       isVerified: true,
       isActive: true,
+    };
+
+    // Add custom fields to user data
+    Object.keys(customFields).forEach(key => {
+      if (customFields[key] !== undefined && customFields[key] !== null) {
+        userData[key] = customFields[key];
+      }
     });
+
+    const employee = await User.create(userData);
+
+    // Create group assignments if groups were selected
+    if (groupIds && Array.isArray(groupIds) && groupIds.length > 0) {
+      const groupAssignments = groupIds.map(groupId => ({
+        userId: employee._id,
+        groupId: new mongoose.Types.ObjectId(groupId),
+        companyId: new mongoose.Types.ObjectId(companyId),
+      }));
+
+      await UserGroupAssignment.insertMany(groupAssignments);
+    }
 
     return NextResponse.json({
       success: true,

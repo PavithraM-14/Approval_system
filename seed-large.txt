@@ -1,0 +1,58 @@
+
+> sead-approval-system@1.0.0 large
+> tsx scripts/seed-large-workflow.ts
+
+[dotenv@17.2.2] injecting env (0) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+Connecting to database...
+Connected to database.
+Created Company: Global Enterprise Solutions
+Created Group: Enterprise Group
+Created Group: Country Subgroup
+Created Role: Employee
+Created User: Employee (employee@global-ent.com)
+Assigned User Employee to Group Country Subgroup
+Created Role: Team Lead
+Created User: Team Lead (team_lead@global-ent.com)
+Assigned User Team Lead to Group Country Subgroup
+Created Role: Regional Director
+Created User: Regional Director (regional_director@global-ent.com)
+Assigned User Regional Director to Group Enterprise Group
+Created Role: Global VP
+Created User: Global VP (global_vp@global-ent.com)
+Assigned User Global VP to Group Enterprise Group
+Created Role: Tax
+Created User: Tax (tax@global-ent.com)
+Assigned User Tax to Group Enterprise Group
+Created Role: Legal
+Created User: Legal (legal@global-ent.com)
+Assigned User Legal to Group Enterprise Group
+Created Role: Security
+Created User: Security (security@global-ent.com)
+Assigned User Security to Group Enterprise Group
+Created Role: CEO
+Created User: CEO (ceo@global-ent.com)
+Assigned User CEO to Group Enterprise Group
+Created Role: Board
+Created User: Board (board@global-ent.com)
+Assigned User Board to Group Enterprise Group
+Created Role: Investors
+Created User: Investors (investors@global-ent.com)
+Assigned User Investors to Group Enterprise Group
+Created Role: Regulators
+Created User: Regulators (regulators@global-ent.com)
+Assigned User Regulators to Group Enterprise Group
+Created Workflow Configuration: Large Global Workflow
+
+--- Seed Complete ---
+Login Details (Password is password123):
+- Employee: employee@global-ent.com
+- Team Lead: team_lead@global-ent.com
+- Regional Director: regional_director@global-ent.com
+- Global VP: global_vp@global-ent.com
+- Tax: tax@global-ent.com
+- Legal: legal@global-ent.com
+- Security: security@global-ent.com
+- CEO: ceo@global-ent.com
+- Board: board@global-ent.com
+- Investors: investors@global-ent.com
+- Regulators: regulators@global-ent.com

@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import connectDB from '../../../../lib/mongodb';
 import Request from '../../../../models/Request';
+import User from '../../../../models/User';
+import Role from '../../../../models/Role';
 import { getCurrentUser } from '../../../../lib/auth';
-import { RequestStatus } from '../../../../lib/types';
+import { RequestStatus, ActionType } from '../../../../lib/types';
 
 // SLA targets in hours
-const SLA_TARGETS = {
+const SLA_TARGETS: Record<string, number> = {
   [RequestStatus.MANAGER_REVIEW]: 24,
   [RequestStatus.BUDGET_CHECK]: 48,
   [RequestStatus.VP_APPROVAL]: 72,
@@ -26,92 +28,177 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get all completed requests from last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-    const requests = await Request.find({
-      createdAt: { $gte: thirtyDaysAgo }
-    }).lean();
+    const requests = await Request.find({}).lean();
 
-    // Calculate SLA metrics
-    const slaMetrics = {
-      totalRequests: requests.length,
-      withinSLA: 0,
-      breachedSLA: 0,
-      averageTurnaroundHours: 0,
-      byStatus: {} as Record<string, any>,
-      breachedRequests: [] as any[]
+    // Header KPIs
+    let totalCompletedHours = 0;
+    let completedCount = 0;
+    let documentsPending = 0;
+    let overdueCount = 0;
+    let completedThisMonth = 0;
+    let completedLastMonth = 0;
+
+    const pipeline = {
+      Draft: 0,
+      Submitted: 0,
+      UnderReview: 0,
+      Approved: 0,
+      Rejected: 0
     };
 
-    let totalHours = 0;
+    const agingReport = [];
+    const now = new Date().getTime();
 
     for (const request of requests) {
-      const history = request.history || [];
-      
-      // Calculate time spent at each status
-      for (let i = 0; i < history.length - 1; i++) {
-        const current = history[i];
-        const next = history[i + 1];
-        const status = current.newStatus;
-        
-        if (!status || !SLA_TARGETS[status]) continue;
+      const isCompleted = request.status === RequestStatus.APPROVED || request.status === RequestStatus.REJECTED;
+      const createdAt = new Date(request.createdAt).getTime();
+      const updatedAt = new Date(request.updatedAt).getTime();
 
-        const timeSpent = (new Date(next.timestamp).getTime() - new Date(current.timestamp).getTime()) / (1000 * 60 * 60);
-        const slaTarget = SLA_TARGETS[status];
-        
-        if (!slaMetrics.byStatus[status]) {
-          slaMetrics.byStatus[status] = {
-            total: 0,
-            withinSLA: 0,
-            breached: 0,
-            avgTime: 0,
-            totalTime: 0
-          };
+      // Pipeline
+      if (request.status === RequestStatus.SUBMITTED) pipeline.Submitted++;
+      else if (request.status === RequestStatus.APPROVED) pipeline.Approved++;
+      else if (request.status === RequestStatus.REJECTED) pipeline.Rejected++;
+      else pipeline.UnderReview++;
+
+      if (isCompleted) {
+        if (createdAt >= thirtyDaysAgo.getTime()) {
+          completedThisMonth++;
+        } else if (createdAt >= sixtyDaysAgo.getTime() && createdAt < thirtyDaysAgo.getTime()) {
+          completedLastMonth++;
+        }
+        totalCompletedHours += (updatedAt - createdAt) / (1000 * 60 * 60);
+        completedCount++;
+      } else {
+        documentsPending++;
+
+        let daysWaiting = Math.floor((now - updatedAt) / (1000 * 60 * 60 * 24));
+        const hoursWaiting = (now - updatedAt) / (1000 * 60 * 60);
+
+        let statusColor = 'green';
+        const slaHours = SLA_TARGETS[request.status] || 48;
+
+        if (hoursWaiting > slaHours) {
+          statusColor = 'red';
+          overdueCount++;
+        } else if (hoursWaiting > slaHours * 0.75) {
+          statusColor = 'amber';
         }
 
-        slaMetrics.byStatus[status].total++;
-        slaMetrics.byStatus[status].totalTime += timeSpent;
-
-        if (timeSpent <= slaTarget) {
-          slaMetrics.byStatus[status].withinSLA++;
-          slaMetrics.withinSLA++;
-        } else {
-          slaMetrics.byStatus[status].breached++;
-          slaMetrics.breachedSLA++;
-          
-          slaMetrics.breachedRequests.push({
-            requestId: request.requestId,
-            title: request.title,
-            status,
-            timeSpent: Math.round(timeSpent),
-            slaTarget,
-            breach: Math.round(timeSpent - slaTarget)
-          });
-        }
-      }
-
-      // Calculate total turnaround time
-      if (request.status === RequestStatus.APPROVED || request.status === RequestStatus.REJECTED) {
-        const turnaround = (new Date(request.updatedAt).getTime() - new Date(request.createdAt).getTime()) / (1000 * 60 * 60);
-        totalHours += turnaround;
+        agingReport.push({
+          id: request._id,
+          name: request.title,
+          type: request.expenseCategory || request.requestType || 'General',
+          status: statusColor,
+          stage: request.status.replace(/_/g, ' '),
+          daysWaiting: daysWaiting,
+          approver: 'Pending'
+        });
       }
     }
 
-    // Calculate averages
-    slaMetrics.averageTurnaroundHours = requests.length > 0 ? Math.round(totalHours / requests.length) : 0;
+    const averageTurnaroundHours = completedCount > 0 ? Math.round(totalCompletedHours / completedCount) : 0;
+    let momChange = 0;
+    if (completedLastMonth > 0) {
+      momChange = Math.round(((completedThisMonth - completedLastMonth) / completedLastMonth) * 100);
+    } else if (completedThisMonth > 0) {
+      momChange = 100;
+    }
 
-    for (const status in slaMetrics.byStatus) {
-      const data = slaMetrics.byStatus[status];
-      data.avgTime = Math.round(data.totalTime / data.total);
-      data.slaCompliance = Math.round((data.withinSLA / data.total) * 100);
+    // Forwarder Performance
+    const forwardRoles = await Role.find({ 'permissions.canForward': true }).lean();
+    const forwardRoleIds = forwardRoles.map(r => r._id);
+    const forwarders = await User.find({ role: { $in: forwardRoleIds } }).select('name _id').lean();
+
+    const forwarderPerformance = [];
+    for (const f of forwarders) {
+      let forwardedCount = 0;
+      let totalResponseHours = 0;
+
+      for (const req of requests) {
+        if (!req.history) continue;
+        let prevTimestamp = new Date(req.createdAt).getTime();
+        for (const log of req.history) {
+          const logTime = new Date(log.timestamp).getTime();
+          if (log.action === ActionType.FORWARD && log.actor?.toString() === f._id.toString()) {
+            if (logTime > thirtyDaysAgo.getTime()) {
+              forwardedCount++;
+            }
+            totalResponseHours += (logTime - prevTimestamp) / (1000 * 60 * 60);
+          }
+          prevTimestamp = logTime;
+        }
+      }
+
+      forwarderPerformance.push({
+        id: f._id,
+        name: f.name,
+        docsProcessed: forwardedCount,
+        avgResponse: forwardedCount > 0 ? Math.round(totalResponseHours / forwardedCount) : 0,
+        queueSize: 0,
+        slowest: false
+      });
+    }
+
+    if (forwarderPerformance.length > 0) {
+      let slowestVal = -1;
+      let slowestIdx = -1;
+      forwarderPerformance.forEach((fp, idx) => {
+        if (fp.avgResponse > slowestVal && fp.docsProcessed > 0) {
+          slowestVal = fp.avgResponse;
+          slowestIdx = idx;
+        }
+      });
+      if (slowestIdx > -1) {
+        forwarderPerformance[slowestIdx].slowest = true;
+      }
+    }
+
+    const slaTrend = [];
+    for (let w = 11; w >= 0; w--) {
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - (w * 7) - 7);
+      const weekEnd = new Date();
+      weekEnd.setDate(weekEnd.getDate() - (w * 7));
+
+      let weekTotal = 0;
+      let weekWithinSLA = 0;
+
+      for (const req of requests) {
+        const createdAt = new Date(req.createdAt).getTime();
+        const updatedAt = new Date(req.updatedAt).getTime();
+
+        if (createdAt >= weekStart.getTime() && createdAt < weekEnd.getTime()) {
+          weekTotal++;
+          if ((updatedAt - createdAt) / (1000 * 60 * 60) < 48) {
+            weekWithinSLA++;
+          }
+        }
+      }
+      slaTrend.push({
+        week: `W${12 - w}`,
+        compliance: weekTotal > 0 ? Math.round((weekWithinSLA / weekTotal) * 100) : 85
+      });
     }
 
     return NextResponse.json({
       success: true,
-      metrics: slaMetrics,
-      period: '30 days'
+      metrics: {
+        averageTurnaroundHours,
+        documentsPending,
+        overdueCount,
+        momChange,
+        pipeline,
+        agingReport,
+        forwarderPerformance,
+        slaTrend
+      }
     });
+
   } catch (error) {
     console.error('SLA analytics error:', error);
     return NextResponse.json({

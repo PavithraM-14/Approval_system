@@ -1,32 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import { getCurrentUser } from '@/lib/auth';
-import { WorkflowValidator } from '@/lib/workflow-validator';
+import connectDB from '../../../../../lib/mongodb';
+import { getCurrentUser } from '../../../../../lib/auth';
+import { workflowExecutionEngine } from '../../../../../lib/workflow-execution-engine';
 
-/**
- * POST /api/workflows/:id/validate
- * 
- * Validates a workflow configuration without saving it.
- * Returns detailed validation results including structure, connections, and role validation.
- * 
- * Requirements:
- * - 5.1: Validate exactly one start node
- * - 5.2: Validate at least one end node
- * - 5.3: Validate all nodes are reachable from start
- * - 5.4: Validate parallel split-join matching
- * - 5.5: Display specific error messages for validation failures
- * - 5.6: Prevent activation of invalid workflows
- * 
- * Path Parameters:
- * - id: Workflow ID (used for context, but validation is performed on request body)
- * 
- * Request Body: WorkflowConfiguration (without _id, timestamps)
- * Response: ValidationResult with valid flag and detailed errors
- * 
- * Authentication: Required
- * Authorization: User must belong to a company
- */
+export const dynamic = 'force-dynamic';
+
+// POST validate workflow configuration including group scope
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -34,128 +13,145 @@ export async function POST(
   try {
     await connectDB();
     
-    // Get authenticated user
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Authentication required' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user's company from database
-    const dbUser = await User.findById(user.id).select('company');
-    if (!dbUser || !dbUser.company) {
-      return NextResponse.json(
-        { error: 'Forbidden: User must be associated with a company' },
-        { status: 403 }
-      );
+    const companyId = (user as any).company;
+    if (!companyId) {
+      return NextResponse.json({ error: 'User not associated with a company' }, { status: 400 });
     }
 
-    const companyId = dbUser.company;
+    const { nodes, edges } = await request.json();
 
-    // Parse request body
-    const body = await request.json();
-
-    // Validate required fields
-    if (!body.name || typeof body.name !== 'string') {
-      return NextResponse.json(
-        {
-          valid: false,
-          errors: ['Validation error: name is required and must be a string'],
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!body.nodes || !Array.isArray(body.nodes)) {
-      return NextResponse.json(
-        {
-          valid: false,
-          errors: ['Validation error: nodes array is required'],
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!body.edges || !Array.isArray(body.edges)) {
-      return NextResponse.json(
-        {
-          valid: false,
-          errors: ['Validation error: edges array is required'],
-        },
-        { status: 400 }
-      );
-    }
-
-    // Create workflow object for validation
-    const workflowData = {
-      companyId,
-      name: body.name,
-      description: body.description,
-      version: body.version || 1,
-      isActive: body.isActive || false,
-      nodes: body.nodes,
-      edges: body.edges,
-      createdBy: user.id,
-    };
-
-    // Validate workflow structure and connections
-    const validator = new WorkflowValidator();
-    const validationResult = validator.validate(workflowData as any);
-
-    // If structure/connection validation fails, return immediately
-    if (!validationResult.valid) {
-      return NextResponse.json(
-        {
-          valid: false,
-          errors: validationResult.errors,
-        },
-        { status: 200 } // Return 200 with validation results
-      );
-    }
-
-    // Validate roles (async validation)
-    const roleValidationResult = await validator.validateRoles(
-      workflowData as any,
-      companyId.toString()
-    );
-
-    // Combine all validation results
-    const allErrors = [
-      ...validationResult.errors,
-      ...roleValidationResult.errors,
-    ];
-
-    const isValid = validationResult.valid && roleValidationResult.valid;
-
-    return NextResponse.json(
-      {
-        valid: isValid,
-        errors: allErrors,
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
-    console.error('Validate workflow error:', error);
+    // Validate workflow structure
+    const structuralErrors = validateWorkflowStructure(nodes, edges);
     
-    // Handle JSON parsing errors
-    if (error instanceof SyntaxError) {
-      return NextResponse.json(
-        {
-          valid: false,
-          errors: ['Invalid JSON in request body'],
-        },
-        { status: 400 }
-      );
+    // Validate group scope configuration
+    const groupScopeErrors = await workflowExecutionEngine.validateWorkflowGroupScope(
+      params.id,
+      companyId
+    );
+
+    const allErrors = [...structuralErrors, ...groupScopeErrors];
+
+    if (allErrors.length > 0) {
+      return NextResponse.json({
+        valid: false,
+        errors: allErrors,
+      }, { status: 400 });
     }
 
-    return NextResponse.json(
-      {
-        error: 'Failed to validate workflow',
-        details: error.message || 'Unknown error',
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      valid: true,
+      message: 'Workflow configuration is valid',
+    });
+  } catch (error: any) {
+    console.error('Error validating workflow:', error);
+    return NextResponse.json({ error: error.message || 'Failed to validate workflow' }, { status: 500 });
   }
+}
+
+function validateWorkflowStructure(nodes: any[], edges: any[]): string[] {
+  const errors: string[] = [];
+
+  // Check for start node
+  const startNodes = nodes.filter(node => node.type === 'start');
+  if (startNodes.length === 0) {
+    errors.push('Workflow must have exactly one start node');
+  } else if (startNodes.length > 1) {
+    errors.push('Workflow can only have one start node');
+  }
+
+  // Check for end node
+  const endNodes = nodes.filter(node => node.type === 'end');
+  if (endNodes.length === 0) {
+    errors.push('Workflow must have at least one end node');
+  }
+
+  // Check approval nodes have roles assigned
+  const approvalNodes = nodes.filter(node => node.type === 'approval');
+  for (const node of approvalNodes) {
+    if (!node.data?.roleId) {
+      errors.push(`Approval node "${node.data?.label || node.id}" must have a role assigned`);
+    }
+    
+    // Check group scope configuration
+    if (node.data?.groupScope?.enabled) {
+      if (!node.data.groupScope.groupIds || node.data.groupScope.groupIds.length === 0) {
+        errors.push(`Approval node "${node.data?.label || node.id}" has group scope enabled but no groups selected`);
+      }
+    }
+  }
+
+  // Validate subgroup hierarchy
+  const subgroupNodes = nodes.filter(node => node.type === 'subgroup');
+  for (const subgroup of subgroupNodes) {
+    if (subgroup.data?.level && subgroup.data.level > 5) {
+      errors.push(`SubGroup "${subgroup.data?.label || subgroup.id}" has too many nesting levels (max 5)`);
+    }
+    
+    // Check for circular references in parent-child relationships
+    if (subgroup.data?.parentGroupId) {
+      const visited = new Set<string>();
+      let currentId = subgroup.data.parentGroupId;
+      
+      while (currentId && !visited.has(currentId)) {
+        visited.add(currentId);
+        const parentNode = nodes.find(n => n.id === currentId);
+        
+        if (!parentNode) {
+          errors.push(`SubGroup "${subgroup.data?.label || subgroup.id}" references non-existent parent "${currentId}"`);
+          break;
+        }
+        
+        if (parentNode.id === subgroup.id) {
+          errors.push(`SubGroup "${subgroup.data?.label || subgroup.id}" has circular parent reference`);
+          break;
+        }
+        
+        currentId = parentNode.data?.parentGroupId;
+      }
+      
+      if (currentId && visited.has(currentId)) {
+        errors.push(`SubGroup hierarchy contains circular reference involving "${subgroup.data?.label || subgroup.id}"`);
+      }
+    }
+  }
+
+  // Check connectivity (exclude grouping and subgroup nodes from connectivity validation)
+  const workflowNodes = nodes.filter(node => !['grouping', 'subgroup'].includes(node.type));
+  const nodeIds = new Set(workflowNodes.map(node => node.id));
+  
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.source) && !nodes.find(n => n.id === edge.source && ['grouping', 'subgroup'].includes(n.type))) {
+      errors.push(`Edge references non-existent source node: ${edge.source}`);
+    }
+    if (!nodeIds.has(edge.target) && !nodes.find(n => n.id === edge.target && ['grouping', 'subgroup'].includes(n.type))) {
+      errors.push(`Edge references non-existent target node: ${edge.target}`);
+    }
+  }
+
+  // Check that all workflow nodes (except end nodes) have outgoing connections
+  for (const node of workflowNodes) {
+    if (node.type !== 'end') {
+      const hasOutgoing = edges.some(edge => edge.source === node.id);
+      if (!hasOutgoing) {
+        errors.push(`Node "${node.data?.label || node.id}" has no outgoing connections`);
+      }
+    }
+  }
+
+  // Check that all workflow nodes (except start nodes) have incoming connections
+  for (const node of workflowNodes) {
+    if (node.type !== 'start') {
+      const hasIncoming = edges.some(edge => edge.target === node.id);
+      if (!hasIncoming) {
+        errors.push(`Node "${node.data?.label || node.id}" has no incoming connections`);
+      }
+    }
+  }
+
+  return errors;
 }

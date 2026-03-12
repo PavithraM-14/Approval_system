@@ -29,17 +29,81 @@ export default function RolesPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [signupFormStatus, setSignupFormStatus] = useState<Record<string, 'none' | 'configured' | 'loading'>>({});
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
+    fetchCurrentUser();
     fetchRoles();
+    fetchSignupFormStatus();
   }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch('/api/auth/me', { credentials: 'include' });
+      if (response.ok) {
+        const userData = await response.json();
+        console.log('Current user data:', userData);
+        setCurrentUser(userData.user); // Extract the user object from the response
+      }
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  };
+
+  const fetchSignupFormStatus = async () => {
+    try {
+      const response = await fetch('/api/signup-forms', { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        const statusMap: Record<string, 'configured'> = {};
+        data.configurations?.forEach((config: any) => {
+          statusMap[config.roleId] = 'configured';
+        });
+        console.log('Signup form status:', statusMap);
+        setSignupFormStatus(statusMap);
+      }
+    } catch (error) {
+      console.error('Error fetching signup form status:', error);
+    }
+  };
+
+  const handleAutoGenerateSignupForm = async (roleId: string) => {
+    setSignupFormStatus(prev => ({ ...prev, [roleId]: 'loading' }));
+    
+    try {
+      const response = await fetch('/api/signup-forms/auto-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ roleId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSignupFormStatus(prev => ({ ...prev, [roleId]: 'configured' }));
+        alert(`Signup form generated successfully! ${data.analysis.hasWorkflowGroups ? 'Workflow-based group fields were automatically added.' : 'Standard fields were added.'}`);
+      } else {
+        const error = await response.json();
+        if (response.status === 409) {
+          setSignupFormStatus(prev => ({ ...prev, [roleId]: 'configured' }));
+          alert('Signup form already exists for this role.');
+        } else {
+          throw new Error(error.error || 'Failed to generate signup form');
+        }
+      }
+    } catch (error) {
+      console.error('Error generating signup form:', error);
+      setSignupFormStatus(prev => ({ ...prev, [roleId]: 'none' }));
+      alert('Failed to generate signup form. Please try again.');
+    }
+  };
 
   const fetchRoles = async () => {
     try {
       const response = await fetch('/api/roles', { credentials: 'include' });
       if (response.ok) {
         const data = await response.json();
-        // API returns roles directly as an array, not wrapped in an object
         setRoles(Array.isArray(data) ? data : (data.roles || []));
       }
     } catch (error) {
@@ -114,6 +178,9 @@ export default function RolesPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Permissions
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Signup Form
+              </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
               </th>
@@ -135,10 +202,8 @@ export default function RolesPage() {
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap gap-1">
                     {Object.entries(role.permissions).map(([key, value]) => {
-                      // Skip canView since everyone has it by default
                       if (!value || key === 'canView') return null;
                       
-                      // Custom label mapping
                       const getPermissionLabel = (permKey: string) => {
                         if (permKey === 'canCreate') return 'Create & Respond';
                         if (permKey === 'canApprove') return 'Final Approval';
@@ -159,6 +224,51 @@ export default function RolesPage() {
                         </span>
                       );
                     })}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center gap-2">
+                    {signupFormStatus[role._id] === 'configured' ? (
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Configured
+                        </span>
+                        {currentUser?.role?.isSystemAdmin && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log('Edit Fields clicked for role:', role._id);
+                              console.log('Current user:', currentUser);
+                              router.push(`/dashboard/admin/signup-forms?roleId=${role._id}`);
+                            }}
+                            className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-indigo-100 text-indigo-800 hover:bg-indigo-200 transition-colors"
+                            title="Edit signup form fields for this role"
+                          >
+                            <PencilIcon className="h-3 w-3 mr-1" />
+                            Edit Fields
+                          </button>
+                        )}
+                      </div>
+                    ) : signupFormStatus[role._id] === 'loading' ? (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        <svg className="animate-spin h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Generating...
+                      </span>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAutoGenerateSignupForm(role._id);
+                        }}
+                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+                        title="Auto-generate signup form based on workflow groups"
+                      >
+                        Generate Form
+                      </button>
+                    )}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -247,13 +357,11 @@ function RoleModal({ role, onClose, onSave }: { role: Role | null; onClose: () =
       const url = role ? `/api/roles/${role._id}` : '/api/roles';
       const method = role ? 'PUT' : 'POST';
 
-      // Automatically enable canRaiseQueries if user has Final Approval, Forward Approval, or Manage Budget
       const autoEnableRaiseQueries = 
         formData.permissions.canApprove || 
         formData.permissions.canForward || 
         formData.permissions.canManageBudget;
 
-      // Ensure canView is always true and canRaiseQueries is auto-enabled based on other permissions
       const dataToSend = {
         ...formData,
         permissions: {
@@ -342,12 +450,10 @@ function RoleModal({ role, onClose, onSave }: { role: Role | null; onClose: () =
               {Object.keys(formData.permissions)
                 .filter(key => key !== 'canView' && key !== 'canRaiseQueries')
                 .sort((a, b) => {
-                  // Define custom order: canESign before canApprove (last)
                   const order = ['canCreate', 'canEdit', 'canShare', 'canDownload', 'canForward', 'canManageBudget', 'canESign', 'canApprove'];
                   return order.indexOf(a) - order.indexOf(b);
                 })
                 .map((key) => {
-                // Custom label mapping
                 const getPermissionLabel = (permKey: string) => {
                   if (permKey === 'canCreate') return 'Create & Respond';
                   if (permKey === 'canApprove') return 'Final Approval';

@@ -13,6 +13,7 @@ export interface AuthUser {
   role: IRole;
   college?: string;
   department?: string;
+  companyId?: string;
 }
 
 function getJwtSecret(): Uint8Array {
@@ -58,6 +59,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
           role: user.role as unknown as IRole,
           college: user.college,
           department: user.department,
+          companyId: user.company?.toString(),
         };
       } catch (jwtError) {
         console.error('JWT/DB Auth Error:', jwtError);

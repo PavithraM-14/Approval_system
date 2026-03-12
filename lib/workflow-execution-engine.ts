@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import WorkflowConfiguration, { IWorkflowNode, IWorkflowEdge } from '@/models/WorkflowConfiguration';
 import ExecutionState, { IExecutionState, IParallelPath } from '@/models/ExecutionState';
 import UserRoleAssignment from '@/models/UserRoleAssignment';
+import UserGroupAssignment from '@/models/UserGroupAssignment';
 import User from '@/models/User';
 import Request from '@/models/Request';
 import { notifyApprovalPending } from './notification-service';
@@ -34,7 +35,8 @@ export class WorkflowExecutionEngine {
   async initializeExecution(
     requestId: string,
     workflowId: string,
-    companyId: string
+    companyId: string,
+    requesterId?: string
   ): Promise<IExecutionState> {
     // Validate input parameters
     if (!requestId || !workflowId || !companyId) {
@@ -47,6 +49,22 @@ export class WorkflowExecutionEngine {
     }
     if (!mongoose.Types.ObjectId.isValid(companyId)) {
       throw new Error('Invalid companyId format');
+    }
+
+    // Get requester's group memberships if requesterId is provided
+    let requesterGroupIds: mongoose.Types.ObjectId[] = [];
+    if (requesterId && mongoose.Types.ObjectId.isValid(requesterId)) {
+      const groupAssignments = await UserGroupAssignment.find({
+        userId: new mongoose.Types.ObjectId(requesterId),
+        companyId: new mongoose.Types.ObjectId(companyId),
+      }).lean();
+      requesterGroupIds = groupAssignments.map(assignment => assignment.groupId);
+      
+      console.log('[DEBUG] Requester group memberships:', {
+        requesterId,
+        groupCount: requesterGroupIds.length,
+        groupIds: requesterGroupIds.map(id => id.toString())
+      });
     }
 
     // Load the active workflow configuration for the company
@@ -110,6 +128,7 @@ export class WorkflowExecutionEngine {
       currentNodeId: firstNode.id, // Start at the first non-requester approval node
       status: 'in_progress',
       parallelPaths: [],
+      requesterGroupIds, // Store requester's groups for routing decisions
       history: [
         {
           nodeId: startNode.id,
@@ -135,7 +154,8 @@ export class WorkflowExecutionEngine {
       workflowId,
       currentNodeId: firstNode.id,
       nodeType: firstNode.type,
-      nodeLabel: firstNode.label
+      nodeLabel: firstNode.label,
+      requesterGroupCount: requesterGroupIds.length
     });
 
     return executionState;
@@ -342,15 +362,48 @@ export class WorkflowExecutionEngine {
           companyId: executionState.companyId,
         }).lean();
 
+        // Filter users based on group scope if enabled
+        let eligibleUserIds = roleAssignments.map(a => a.userId);
+        
+        if (nextNode.data.groupScope?.enabled && nextNode.data.groupScope.groupIds && nextNode.data.groupScope.groupIds.length > 0) {
+          // Node has group scope - filter users by group membership
+          const matchType = nextNode.data.groupScope.matchType || 'any';
+          const requiredGroupIds = nextNode.data.groupScope.groupIds.map(id => id.toString());
+          
+          console.log('[DEBUG] Filtering users by group scope:', {
+            nodeId: nextNode.id,
+            nodeLabel: nextNode.label,
+            requiredGroupIds,
+            matchType,
+            requesterGroupIds: executionState.requesterGroupIds.map(id => id.toString())
+          });
+          
+          // Get users who match the group criteria
+          const eligibleUsers = await this.getUsersMatchingGroupScope(
+            eligibleUserIds,
+            executionState.requesterGroupIds,
+            requiredGroupIds,
+            matchType,
+            executionState.companyId
+          );
+          
+          eligibleUserIds = eligibleUsers;
+          
+          console.log('[DEBUG] Users after group filtering:', {
+            originalCount: roleAssignments.length,
+            filteredCount: eligibleUserIds.length
+          });
+        }
+
         // Get the request details for the notification
         const request = await Request.findOne({ 
           workflowExecutionId: executionState._id 
         }).populate('requester', 'name email').lean();
 
-        if (request && roleAssignments.length > 0) {
-          // Send notification to each user with the required role
-          for (const assignment of roleAssignments) {
-            const user = await User.findById(assignment.userId).lean();
+        if (request && eligibleUserIds.length > 0) {
+          // Send notification to each eligible user
+          for (const userId of eligibleUserIds) {
+            const user = await User.findById(userId).lean();
             if (user) {
               await notifyApprovalPending(
                 user._id.toString(),
@@ -367,6 +420,13 @@ export class WorkflowExecutionEngine {
               });
             }
           }
+        } else if (eligibleUserIds.length === 0) {
+          console.warn('[WARNING] No eligible users found for approval node after group filtering:', {
+            nodeId: nextNode.id,
+            nodeLabel: nextNode.label,
+            roleId: nextNode.data.roleId,
+            groupScopeEnabled: nextNode.data.groupScope?.enabled
+          });
         }
       } catch (notificationError) {
         // Log error but don't fail the workflow
@@ -571,137 +631,6 @@ export class WorkflowExecutionEngine {
   }
 
   /**
-   * Evaluate a conditional node expression
-   *
-   * This method:
-   * 1. Retrieves the execution state and workflow configuration
-   * 2. Finds the conditional node by ID
-   * 3. Extracts the condition from the node data
-   * 4. Evaluates the condition against the request data
-   * 5. Returns true or false based on the evaluation result
-   *
-   * Supported operators:
-   * - eq: Equal to
-   * - ne: Not equal to
-   * - gt: Greater than
-   * - gte: Greater than or equal to
-   * - lt: Less than
-   * - lte: Less than or equal to
-   * - contains: String contains (case-insensitive)
-   *
-   * @param executionId - The ID of the execution state
-   * @param nodeId - The ID of the conditional node
-   * @param requestData - The request data to evaluate against
-   * @returns Promise<boolean> - True if condition evaluates to true, false otherwise
-   * @throws Error if execution not found, node not found, or node is not conditional
-   *
-   * Validates: Requirements 6.7, 12.3, 12.4, 12.5
-   */
-  async evaluateCondition(
-    executionId: string,
-    nodeId: string,
-    requestData: any
-  ): Promise<boolean> {
-    // Validate input parameters
-    if (!executionId || !nodeId || !requestData) {
-      throw new Error('Missing required parameters: executionId, nodeId, and requestData are required');
-    }
-
-    // Validate ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(executionId)) {
-      throw new Error('Invalid executionId format');
-    }
-
-    // Retrieve the execution state
-    const executionState = await ExecutionState.findById(executionId);
-    if (!executionState) {
-      throw new Error(`Execution state not found with ID ${executionId}`);
-    }
-
-    // Load the workflow configuration
-    const workflow = await WorkflowConfiguration.findById(executionState.workflowId);
-    if (!workflow) {
-      throw new Error(`Workflow not found with ID ${executionState.workflowId}`);
-    }
-
-    // Find the conditional node
-    const conditionalNode = workflow.nodes.find((node: IWorkflowNode) => node.id === nodeId);
-    if (!conditionalNode) {
-      throw new Error(`Conditional node not found with ID ${nodeId}`);
-    }
-
-    // Verify the node is a conditional node
-    if (conditionalNode.type !== 'conditional') {
-      throw new Error(`Node ${nodeId} is not a conditional node. Node type: ${conditionalNode.type}`);
-    }
-
-    // Verify the node has a condition defined
-    if (!conditionalNode.data.condition) {
-      throw new Error(`Conditional node ${nodeId} does not have a condition defined`);
-    }
-
-    const condition = conditionalNode.data.condition;
-
-    // Extract the field value from request data
-    const fieldValue = requestData[condition.field];
-
-    // Evaluate the condition based on the operator
-    let result: boolean;
-
-    switch (condition.operator) {
-      case 'eq':
-        result = fieldValue === condition.value;
-        break;
-
-      case 'ne':
-        result = fieldValue !== condition.value;
-        break;
-
-      case 'gt':
-        result = fieldValue > condition.value;
-        break;
-
-      case 'gte':
-        result = fieldValue >= condition.value;
-        break;
-
-      case 'lt':
-        result = fieldValue < condition.value;
-        break;
-
-      case 'lte':
-        result = fieldValue <= condition.value;
-        break;
-
-      case 'contains':
-        // Case-insensitive string contains check
-        if (typeof fieldValue === 'string' && typeof condition.value === 'string') {
-          result = fieldValue.toLowerCase().includes(condition.value.toLowerCase());
-        } else {
-          result = false;
-        }
-        break;
-
-      default:
-        throw new Error(`Unsupported operator: ${condition.operator}`);
-    }
-
-    // Record the routing decision in execution history
-    executionState.history.push({
-      nodeId: conditionalNode.id,
-      nodeType: conditionalNode.type,
-      action: 'routed',
-      timestamp: new Date(),
-      routingDecision: result,
-    });
-
-    await executionState.save();
-
-    return result;
-  }
-
-
-  /**
    * Helper method to find the parallel join node for a given split node
    *
    * This method traverses the workflow graph to find the parallel_join node
@@ -785,6 +714,149 @@ export class WorkflowExecutionEngine {
     return joinNodes;
   }
 
+  /**
+   * Get users matching group scope criteria
+   * 
+   * Filters users based on group membership matching between requester and approvers.
+   * Supports 'any' (at least one common group) and 'all' (all required groups) match types.
+   * 
+   * @param candidateUserIds - User IDs to filter
+   * @param requesterGroupIds - Groups the requester belongs to
+   * @param requiredGroupIds - Groups required by the node
+   * @param matchType - 'any' or 'all' matching strategy
+   * @param companyId - Company ID for scoping
+   * @returns Promise<mongoose.Types.ObjectId[]> - Filtered user IDs
+   */
+  private async getUsersMatchingGroupScope(
+    candidateUserIds: mongoose.Types.ObjectId[],
+    requesterGroupIds: mongoose.Types.ObjectId[],
+    requiredGroupIds: string[],
+    matchType: 'any' | 'all',
+    companyId: mongoose.Types.ObjectId
+  ): Promise<mongoose.Types.ObjectId[]> {
+    if (candidateUserIds.length === 0) {
+      return [];
+    }
+
+    // Get group assignments for all candidate users
+    const userGroupAssignments = await UserGroupAssignment.find({
+      userId: { $in: candidateUserIds },
+      companyId: companyId,
+    }).lean();
+
+    // Build a map of userId -> groupIds
+    const userGroupMap = new Map<string, Set<string>>();
+    for (const assignment of userGroupAssignments) {
+      const userId = assignment.userId.toString();
+      if (!userGroupMap.has(userId)) {
+        userGroupMap.set(userId, new Set());
+      }
+      userGroupMap.get(userId)!.add(assignment.groupId.toString());
+    }
+
+    // Convert requester groups to strings for comparison
+    const requesterGroupSet = new Set(requesterGroupIds.map(id => id.toString()));
+    const requiredGroupSet = new Set(requiredGroupIds);
+
+    // Filter users based on match type
+    const matchingUserIds: mongoose.Types.ObjectId[] = [];
+
+    for (const userId of candidateUserIds) {
+      const userGroups = userGroupMap.get(userId.toString()) || new Set<string>();
+      
+      if (matchType === 'any') {
+        // User must be in at least one group that matches requester's groups
+        // AND that group must be in the required groups
+        let hasMatch = false;
+        for (const groupId of userGroups) {
+          if (requiredGroupSet.has(groupId) && requesterGroupSet.has(groupId)) {
+            hasMatch = true;
+            break;
+          }
+        }
+        if (hasMatch) {
+          matchingUserIds.push(userId);
+        }
+      } else if (matchType === 'all') {
+        // User must be in ALL required groups that the requester is also in
+        const requiredAndRequesterGroups = [...requiredGroupSet].filter(g => requesterGroupSet.has(g));
+        const hasAllGroups = requiredAndRequesterGroups.every(groupId => userGroups.has(groupId));
+        if (hasAllGroups && requiredAndRequesterGroups.length > 0) {
+          matchingUserIds.push(userId);
+        }
+      }
+    }
+
+    return matchingUserIds;
+  }
+
+  /**
+   * Validate workflow configuration for group scope issues
+   * 
+   * Checks that nodes with group scope have at least one eligible user.
+   * Returns validation errors if any nodes would have no approvers.
+   * 
+   * @param workflowId - The workflow configuration ID
+   * @param companyId - Company ID
+   * @returns Promise<string[]> - Array of validation error messages (empty if valid)
+   */
+  async validateWorkflowGroupScope(
+    workflowId: string,
+    companyId: string
+  ): Promise<string[]> {
+    const errors: string[] = [];
+
+    if (!mongoose.Types.ObjectId.isValid(workflowId)) {
+      errors.push('Invalid workflowId format');
+      return errors;
+    }
+
+    const workflow = await WorkflowConfiguration.findById(workflowId);
+    if (!workflow) {
+      errors.push('Workflow not found');
+      return errors;
+    }
+
+    // Check each approval node with group scope
+    for (const node of workflow.nodes) {
+      if (node.type === 'approval' && node.data.roleId && node.data.groupScope?.enabled) {
+        const groupIds = node.data.groupScope.groupIds || [];
+        
+        if (groupIds.length === 0) {
+          errors.push(`Node "${node.label}" has group scope enabled but no groups selected`);
+          continue;
+        }
+
+        // Find users with the required role
+        const roleAssignments = await UserRoleAssignment.find({
+          roleId: node.data.roleId,
+          companyId: new mongoose.Types.ObjectId(companyId),
+        }).lean();
+
+        if (roleAssignments.length === 0) {
+          errors.push(`Node "${node.label}" has no users assigned to the required role`);
+          continue;
+        }
+
+        // Check if any users have the required group memberships
+        const userIds = roleAssignments.map(a => a.userId);
+        const userGroupAssignments = await UserGroupAssignment.find({
+          userId: { $in: userIds },
+          groupId: { $in: groupIds },
+          companyId: new mongoose.Types.ObjectId(companyId),
+        }).lean();
+
+        if (userGroupAssignments.length === 0) {
+          errors.push(
+            `Node "${node.label}" has group scope restrictions but no users with the required role belong to the specified groups`
+          );
+        }
+      }
+    }
+
+    return errors;
+  }
+
 
 
   /**
@@ -803,6 +875,165 @@ export class WorkflowExecutionEngine {
     
     if (!executionState) {
       throw new Error(`Execution state not found with ID ${executionId}`);
+    }
+
+    return executionState;
+  }
+
+  /**
+   * Process Options node forwarding
+   * 
+   * This method handles forwarding from Options nodes to multiple target nodes
+   * 
+   * @param executionId - The ID of the execution state
+   * @param selectedOptions - Array of selected option IDs (e.g., ['option-1', 'option-2'])
+   * @param userId - The ID of the user making the selection
+   * @param notes - Optional notes from the user
+   * @returns Promise<IExecutionState> - The updated execution state
+   * @throws Error if execution not found, user unauthorized, or invalid options
+   */
+  async processOptionsAction(
+    executionId: string,
+    selectedOptions: string[],
+    userId: string,
+    notes?: string
+  ): Promise<IExecutionState> {
+    // Validate input parameters
+    if (!executionId || !selectedOptions || !userId) {
+      throw new Error('Missing required parameters: executionId, selectedOptions, and userId are required');
+    }
+
+    // Validate ObjectId formats
+    if (!mongoose.Types.ObjectId.isValid(executionId)) {
+      throw new Error('Invalid executionId format');
+    }
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new Error('Invalid userId format');
+    }
+
+    // Retrieve the execution state
+    const executionState = await ExecutionState.findById(executionId);
+    if (!executionState) {
+      throw new Error(`Execution state not found with ID ${executionId}`);
+    }
+
+    // Check if execution is still in progress
+    if (executionState.status !== 'in_progress') {
+      throw new Error(`Execution is not in progress. Current status: ${executionState.status}`);
+    }
+
+    // Load the workflow configuration
+    const workflow = await WorkflowConfiguration.findById(executionState.workflowId);
+    if (!workflow) {
+      throw new Error(`Workflow not found with ID ${executionState.workflowId}`);
+    }
+
+    // Find the current node
+    const currentNode = workflow.nodes.find((node: IWorkflowNode) => node.id === executionState.currentNodeId);
+    if (!currentNode) {
+      throw new Error(`Current node not found with ID ${executionState.currentNodeId}`);
+    }
+
+    // Verify the current node is an Options node
+    if (currentNode.type !== 'options') {
+      throw new Error(`Current node is not an Options node. Node type: ${currentNode.type}`);
+    }
+
+    // Validate selected options
+    const validOptions = ['option-1', 'option-2', 'option-3', 'option-4', 'option-5'];
+    const invalidOptions = selectedOptions.filter(option => !validOptions.includes(option));
+    if (invalidOptions.length > 0) {
+      throw new Error(`Invalid options selected: ${invalidOptions.join(', ')}`);
+    }
+
+    // Find all outgoing edges from the Options node
+    const outgoingEdges = workflow.edges.filter((edge: IWorkflowEdge) => edge.source === currentNode.id);
+    
+    // Find target nodes for selected options
+    const selectedEdges = outgoingEdges.filter(edge => 
+      selectedOptions.includes(edge.sourceHandle || 'option-1')
+    );
+
+    if (selectedEdges.length === 0) {
+      throw new Error('No valid target nodes found for selected options');
+    }
+
+    // Record the options selection in execution history
+    executionState.history.push({
+      nodeId: currentNode.id,
+      nodeType: currentNode.type,
+      action: 'options_selected',
+      userId: new mongoose.Types.ObjectId(userId),
+      notes,
+      timestamp: new Date(),
+      selectedOptions,
+    });
+
+    // Create parallel paths for each selected option
+    const parallelPaths: IParallelPath[] = selectedEdges.map(edge => ({
+      pathId: `path_${edge.target}_${Date.now()}`,
+      nodeId: edge.target,
+      status: 'active',
+      createdAt: new Date(),
+    }));
+
+    // Update execution state for parallel processing
+    executionState.parallelPaths = parallelPaths;
+    executionState.currentNodeId = null; // No single current node when in parallel
+    executionState.lastActionAt = new Date();
+
+    // Add history entries for entering parallel paths
+    for (const path of parallelPaths) {
+      const targetNode = workflow.nodes.find((node: IWorkflowNode) => node.id === path.nodeId);
+      if (targetNode) {
+        executionState.history.push({
+          nodeId: targetNode.id,
+          nodeType: targetNode.type,
+          action: 'entered',
+          timestamp: new Date(),
+        });
+      }
+    }
+
+    await executionState.save();
+
+    // Send notifications to users who need to approve at the target nodes
+    for (const path of parallelPaths) {
+      const targetNode = workflow.nodes.find((node: IWorkflowNode) => node.id === path.nodeId);
+      if (targetNode && targetNode.type === 'approval' && targetNode.data.roleId) {
+        try {
+          // Find all users assigned to the role for the target approval node
+          const roleAssignments = await UserRoleAssignment.find({
+            roleId: targetNode.data.roleId,
+            companyId: executionState.companyId,
+          }).populate('userId');
+
+          if (roleAssignments.length > 0) {
+            // Get request details for notification
+            const request = await Request.findById(executionState.requestId);
+            if (request) {
+              // Send notifications to all assigned users
+              for (const assignment of roleAssignments) {
+                const user = assignment.userId as any;
+                if (user && user.email) {
+                  await notifyApprovalPending({
+                    requestId: executionState.requestId,
+                    userId: user._id.toString(),
+                    userEmail: user.email,
+                    userName: user.name,
+                    requestTitle: request.title,
+                    workflowNodeLabel: targetNode.label || 'Approval Required',
+                    companyName: executionState.companyId.toString(),
+                  });
+                }
+              }
+            }
+          }
+        } catch (notificationError) {
+          console.error('Failed to send notification for Options node:', notificationError);
+          // Don't fail the execution if notification fails
+        }
+      }
     }
 
     return executionState;
