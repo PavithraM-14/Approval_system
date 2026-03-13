@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import Role from '../models/Role';
+import CustomRole from '../models/CustomRole';
 import WorkflowConfiguration from '../models/WorkflowConfiguration';
 import UserRoleAssignment from '../models/UserRoleAssignment';
 
@@ -30,8 +30,8 @@ class RoleService {
       }
 
       // Create the role
-      const role = await Role.create({
-        company: new mongoose.Types.ObjectId(companyId),
+      const role = await CustomRole.create({
+        companyId: new mongoose.Types.ObjectId(companyId),
         name: roleData.name.trim(),
         description: roleData.description?.trim(),
         isSystemAdmin: false,
@@ -74,7 +74,7 @@ class RoleService {
       throw new Error('Valid role ID is required');
     }
 
-    const role = await Role.findById(roleId);
+    const role = await CustomRole.findById(roleId);
     if (!role) {
       throw new Error('Role not found');
     }
@@ -111,9 +111,9 @@ class RoleService {
     }
 
     // Check if role exists and belongs to company
-    const role = await Role.findOne({
+    const role = await CustomRole.findOne({
       _id: roleId,
-      company: new mongoose.Types.ObjectId(companyId),
+      companyId: new mongoose.Types.ObjectId(companyId),
     });
 
     if (!role) {
@@ -135,7 +135,7 @@ class RoleService {
     await UserRoleAssignment.deleteMany({ roleId: new mongoose.Types.ObjectId(roleId) });
 
     // Delete the role
-    await Role.findByIdAndDelete(roleId);
+    await CustomRole.findByIdAndDelete(roleId);
   }
 
   /**
@@ -148,8 +148,8 @@ class RoleService {
       throw new Error('Valid company ID is required');
     }
 
-    return await Role.find({
-      company: new mongoose.Types.ObjectId(companyId),
+    return await CustomRole.find({
+      companyId: new mongoose.Types.ObjectId(companyId),
     }).sort({ name: 1 });
   }
 
@@ -168,7 +168,7 @@ class RoleService {
     }
 
     // Get role to get company
-    const role = await Role.findById(roleId);
+    const role = await CustomRole.findById(roleId);
     if (!role) {
       throw new Error('Role not found');
     }
@@ -177,7 +177,7 @@ class RoleService {
     const assignment = new UserRoleAssignment({
       userId: new mongoose.Types.ObjectId(userId),
       roleId: new mongoose.Types.ObjectId(roleId),
-      companyId: role.company,
+      companyId: role.companyId,
     });
 
     try {

@@ -63,12 +63,16 @@ export default function NodePropertyEditor({
     try {
       console.log('NodePropertyEditor: Fetching groups...');
       const response = await fetch('/api/groups');
+      console.log('NodePropertyEditor: Groups response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
         console.log('NodePropertyEditor: Groups fetched:', data);
         setGroups(data.groups || []);
       } else {
+        const errorText = await response.text();
         console.error('NodePropertyEditor: Failed to fetch groups, status:', response.status);
+        console.error('NodePropertyEditor: Error response:', errorText);
       }
     } catch (err) {
       console.error('Failed to fetch groups:', err);

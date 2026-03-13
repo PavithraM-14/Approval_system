@@ -13,6 +13,7 @@ import WorkflowConfiguration from '../../../models/WorkflowConfiguration';
 import { workflowExecutionEngine } from '../../../lib/workflow-execution-engine';
 import ExecutionState from '../../../models/ExecutionState';
 import UserRoleAssignment from '../../../models/UserRoleAssignment';
+import UserGroupAssignment from '../../../models/UserGroupAssignment';
 import CustomRole from '../../../models/CustomRole';
 
 // Helper function to extract company ID from populated or non-populated company field
@@ -43,8 +44,14 @@ async function filterRequestsWithCustomWorkflow(
     }));
   }
 
-  // Users with canCreate see only their own requests
-  if (permissions?.canCreate) {
+  // Users with ONLY canCreate see only their own requests
+  // Users with canView, canForward, or canApprove can see requests assigned to them
+  const isOnlyRequester = permissions?.canCreate && 
+                         !permissions?.canView && 
+                         !permissions?.canForward && 
+                         !permissions?.canApprove;
+  
+  if (isOnlyRequester) {
     return requests
       .filter(req => req.requester._id?.toString() === userId || req.requester.toString() === userId)
       .map(req => ({
@@ -104,8 +111,42 @@ async function filterRequestsWithCustomWorkflow(
   const workflowIds = [...new Set(executions.map(e => e.workflowId))];
   const workflows = await WorkflowConfiguration.find({ _id: { $in: workflowIds } });
   
+  // Get user's group memberships once (for efficiency)
+  const userGroupAssignments = await UserGroupAssignment.find({
+    userId: new mongoose.Types.ObjectId(userId),
+  }).lean();
+  const userGroupIds = userGroupAssignments.map((a: any) => a.groupId.toString());
+  
+  console.log('[DEBUG] User group memberships for filtering:', {
+    userId,
+    userGroupCount: userGroupIds.length,
+    userGroupIds
+  });
+  
   // Check which custom workflow requests the user should see
-  const visibleCustomRequests = customWorkflowRequests.map(request => {
+  const visibleCustomRequests = await Promise.all(customWorkflowRequests.map(async (request) => {
+    // First check: Is the user the requester? If yes, they should always see their own request
+    const isRequester = request.requester._id?.toString() === userId || request.requester.toString() === userId;
+    
+    if (isRequester) {
+      console.log('[DEBUG] Request visible - user is requester:', request._id);
+      let category = 'pending';
+      if (request.status === RequestStatus.APPROVED) {
+        category = 'approved';
+      } else if (request.status === RequestStatus.REJECTED) {
+        category = 'completed';
+      }
+      
+      return {
+        ...request,
+        _visibility: {
+          canSee: true,
+          category,
+          reason: 'Own request'
+        }
+      };
+    }
+    
     const execution = executions.find(e => e._id.toString() === request.workflowExecutionId?.toString());
     if (!execution) {
       console.log('[DEBUG] No execution found for request:', request._id);
@@ -118,6 +159,15 @@ async function filterRequestsWithCustomWorkflow(
       return null;
     }
     
+    console.log('[DEBUG] Checking request visibility:', {
+      requestId: request._id,
+      requestTitle: request.title,
+      executionStatus: execution.status,
+      currentNodeId: execution.currentNodeId,
+      requesterGroupCount: execution.requesterGroupIds?.length || 0,
+      requesterGroupIds: execution.requesterGroupIds?.map((id: any) => id.toString()) || []
+    });
+    
     // Check if user has interacted with this request in the history
     const userHistoryEntry = execution.history.find((entry: any) => 
       entry.userId?.toString() === userId && 
@@ -127,7 +177,94 @@ async function filterRequestsWithCustomWorkflow(
     // Check if user is the current approver
     const currentNode = workflow.nodes.find((n: any) => n.id === execution.currentNodeId);
     const nodeRoleId = currentNode?.data?.roleId?.toString();
-    const isCurrentApprover = currentNode?.type === 'approval' && nodeRoleId && allUserRoleIds.includes(nodeRoleId);
+    let isCurrentApprover = currentNode?.type === 'approval' && nodeRoleId && allUserRoleIds.includes(nodeRoleId);
+    
+    // Also check parallel paths - user might be an approver in one of the parallel branches
+    let isParallelApprover = false;
+    if (execution.parallelPaths && execution.parallelPaths.length > 0) {
+      for (const path of execution.parallelPaths) {
+        if (path.status === 'active') {
+          const pathNode = workflow.nodes.find((n: any) => n.id === path.currentNodeId);
+          if (pathNode && pathNode.type === 'approval' && pathNode.data?.roleId) {
+            const pathRoleId = pathNode.data.roleId.toString();
+            if (allUserRoleIds.includes(pathRoleId)) {
+              isParallelApprover = true;
+              
+              // Check group scope for parallel path node
+              if (pathNode.data.groupScope?.enabled && pathNode.data.groupScope.groupIds?.length > 0) {
+                const requesterGroupIds = execution.requesterGroupIds.map((id: any) => id.toString());
+                const requiredGroupIds = pathNode.data.groupScope.groupIds.map((id: any) => id.toString());
+                const matchType = pathNode.data.groupScope.matchType || 'any';
+                
+                let hasGroupMatch = false;
+                if (matchType === 'any') {
+                  hasGroupMatch = userGroupIds.some(groupId => 
+                    requiredGroupIds.includes(groupId) && requesterGroupIds.includes(groupId)
+                  );
+                } else if (matchType === 'all') {
+                  const requiredAndRequesterGroups = requiredGroupIds.filter(g => requesterGroupIds.includes(g));
+                  hasGroupMatch = requiredAndRequesterGroups.length > 0 && 
+                                 requiredAndRequesterGroups.every(groupId => userGroupIds.includes(groupId));
+                }
+                
+                isParallelApprover = hasGroupMatch;
+              }
+              
+              if (isParallelApprover) break;
+            }
+          }
+        }
+      }
+    }
+    
+    console.log('[DEBUG] Current node check:', {
+      requestId: request._id,
+      currentNodeId: execution.currentNodeId,
+      currentNodeLabel: currentNode?.label,
+      currentNodeType: currentNode?.type,
+      nodeRoleId,
+      userRoleIds: allUserRoleIds,
+      isCurrentApproverByRole: isCurrentApprover,
+      isParallelApprover,
+      parallelPathCount: execution.parallelPaths?.length || 0,
+      hasGroupScope: currentNode?.data?.groupScope?.enabled
+    });
+    
+    // If node has group scope enabled, also check if user is in matching groups
+    if (isCurrentApprover && currentNode?.data?.groupScope?.enabled && currentNode?.data?.groupScope?.groupIds?.length > 0) {
+      // Get requester's group memberships from execution state
+      const requesterGroupIds = execution.requesterGroupIds.map((id: any) => id.toString());
+      const requiredGroupIds = currentNode.data.groupScope.groupIds.map((id: any) => id.toString());
+      const matchType = currentNode.data.groupScope.matchType || 'any';
+      
+      console.log('[DEBUG] Group scope filtering:', {
+        requestId: request._id,
+        userId,
+        userGroupIds,
+        requesterGroupIds,
+        requiredGroupIds,
+        matchType
+      });
+      
+      // Check if user matches the group criteria
+      let hasGroupMatch = false;
+      if (matchType === 'any') {
+        // User must be in at least one group that matches requester's groups AND is in required groups
+        hasGroupMatch = userGroupIds.some(groupId => 
+          requiredGroupIds.includes(groupId) && requesterGroupIds.includes(groupId)
+        );
+      } else if (matchType === 'all') {
+        // User must be in ALL required groups that the requester is also in
+        const requiredAndRequesterGroups = requiredGroupIds.filter(g => requesterGroupIds.includes(g));
+        hasGroupMatch = requiredAndRequesterGroups.length > 0 && 
+                       requiredAndRequesterGroups.every(groupId => userGroupIds.includes(groupId));
+      }
+      
+      console.log('[DEBUG] Group match result:', { hasGroupMatch, isCurrentApprover: hasGroupMatch });
+      
+      // Override isCurrentApprover based on group match
+      isCurrentApprover = hasGroupMatch;
+    }
     
     // Check if user's role is assigned to ANY node in the workflow (for forwarders/viewers)
     const isAssignedToWorkflow = workflow.nodes.some((node: any) => 
@@ -138,13 +275,14 @@ async function filterRequestsWithCustomWorkflow(
     
     // User can see the request if they're the current approver OR if they've interacted with it before
     // For forwarders: only show if they're the current approver (not just assigned to workflow)
-    if (isCurrentApprover) {
+    if (isCurrentApprover || isParallelApprover) {
+      console.log('[DEBUG] Request visible - user is current approver:', request._id);
       return {
         ...request,
         _visibility: {
           canSee: true,
           category: 'pending',
-          reason: 'Current approver in custom workflow'
+          reason: isParallelApprover ? 'Current approver in parallel branch' : 'Current approver in custom workflow'
         }
       };
     } else if (userHistoryEntry) {
@@ -168,12 +306,22 @@ async function filterRequestsWithCustomWorkflow(
       };
     }
     
+    console.log('[DEBUG] Request NOT visible - no match:', {
+      requestId: request._id,
+      isCurrentApprover,
+      isParallelApprover,
+      hasHistoryEntry: !!userHistoryEntry
+    });
+    
     return null;
-  }).filter(Boolean); // Remove null entries
+  }));
+  
+  // Filter out null entries
+  const filteredRequests = visibleCustomRequests.filter(Boolean);
 
-  console.log('[DEBUG] Visible custom workflow requests:', visibleCustomRequests.length);
+  console.log('[DEBUG] Visible custom workflow requests:', filteredRequests.length);
 
-  return visibleCustomRequests;
+  return filteredRequests;
 }
 
 export async function GET(request: NextRequest) {
@@ -221,16 +369,21 @@ export async function GET(request: NextRequest) {
       isSystemAdmin: user.role.isSystemAdmin
     };
 
-    // Permission-based filtering: Users with canCreate see only their requests
-    const hasCanCreate = permissions.canCreate && !permissions.isSystemAdmin;
+    // Permission-based filtering: Users with ONLY canCreate see only their requests
+    // Users with canView, canForward, or canApprove can see requests assigned to them
+    const isOnlyRequester = permissions.canCreate && 
+                           !permissions.canView && 
+                           !permissions.canForward && 
+                           !permissions.canApprove && 
+                           !permissions.isSystemAdmin;
     
     let baseQuery: any = {};
     
-    if (hasCanCreate) {
-      // Users with canCreate permission can only see their own requests
+    if (isOnlyRequester) {
+      // Users with ONLY canCreate permission can only see their own requests
       baseQuery.requester = dbUser._id;
     }
-    // Approvers and admins see all requests (no additional filter)
+    // Approvers, forwarders, viewers, and admins see all requests (no additional filter)
 
     // Apply basic filters
     if (college) {
@@ -414,7 +567,8 @@ export async function POST(request: NextRequest) {
       const executionState = await workflowExecutionEngine.initializeExecution(
         requestId,
         activeWorkflow._id.toString(),
-        companyId
+        companyId,
+        requesterUser._id.toString()
       );
 
       useCustomWorkflow = true;
@@ -429,85 +583,9 @@ export async function POST(request: NextRequest) {
         currentNode: executionState.currentNodeId
       });
 
-      // Advance to the first approval node automatically
-      try {
-        // Find the start node
-        const startNode = activeWorkflow.nodes.find((n: any) => n.type === 'start');
-        if (startNode) {
-          // Find the edge from start node
-          const nextEdge = activeWorkflow.edges.find((e: any) => e.source === startNode.id);
-          if (nextEdge) {
-            const nextNode = activeWorkflow.nodes.find((n: any) => n.id === nextEdge.target);
-            
-            // Skip requester nodes and advance to first actual approver
-            let currentEdge = nextEdge;
-            let currentNode = nextNode;
-            
-            while (currentNode && currentNode.type === 'approval') {
-              const nodeName = currentNode.label || currentNode.data?.label || '';
-              const isRequesterNode = nodeName.toLowerCase().includes('requester') || 
-                                     nodeName.toLowerCase().includes('creator');
-              
-              if (!isRequesterNode) {
-                // Found the first actual approver node
-                executionState.currentNodeId = currentNode.id;
-                executionState.history.push({
-                  nodeId: currentNode.id,
-                  nodeType: currentNode.type,
-                  action: 'entered',
-                  timestamp: new Date(),
-                });
-                await executionState.save();
-                
-                console.log('[DEBUG] Advanced to first approver node:', {
-                  nodeId: currentNode.id,
-                  nodeName: nodeName
-                });
-                
-                // Send notifications to users who need to approve at this node
-                if (currentNode.data.roleId) {
-                  try {
-                    const roleAssignments = await UserRoleAssignment.find({
-                      roleId: currentNode.data.roleId,
-                      companyId: getCompanyId(requesterUser.company),
-                    }).lean();
-
-                    for (const assignment of roleAssignments) {
-                      const approver = await User.findById(assignment.userId).lean();
-                      if (approver) {
-                        await notifyApprovalPending(
-                          approver._id.toString(),
-                          requestId,
-                          validatedData.title,
-                          requesterUser.name
-                        );
-                        console.log('[NOTIFICATION] Sent initial approval notification to:', {
-                          userId: approver._id,
-                          userName: approver.name,
-                          userEmail: approver.email
-                        });
-                      }
-                    }
-                  } catch (notificationError) {
-                    console.error('[ERROR] Failed to send initial notifications:', notificationError);
-                  }
-                }
-                
-                break;
-              }
-              
-              // Skip this requester node and move to next
-              const skipEdge = activeWorkflow.edges.find((e: any) => e.source === currentNode.id);
-              if (!skipEdge) break;
-              
-              currentNode = activeWorkflow.nodes.find((n: any) => n.id === skipEdge.target);
-            }
-          }
-        }
-      } catch (advanceError) {
-        console.error('[ERROR] Failed to advance to first approver:', advanceError);
-        // Continue anyway - the workflow can still function
-      }
+      // The initializeExecution already handles skipping requester nodes and sending notifications
+      // No need for duplicate logic here
+      
     } catch (workflowError) {
       console.error('[ERROR] Failed to initialize custom workflow:', workflowError);
       return NextResponse.json({ 

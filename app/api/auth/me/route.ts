@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../../lib/auth';
 import connectDB from '../../../../lib/mongodb';
 import User from '../../../../models/User';
+import CustomRole from '../../../../models/CustomRole';
+import UserRoleAssignment from '../../../../models/UserRoleAssignment';
 // Import Company model to ensure it's registered with Mongoose
 import '../../../../models/Company';
 
@@ -16,13 +18,19 @@ export async function GET() {
     // Fetch full user data from database including Google integration status
     await connectDB();
     
-    // First, get the user without populating to check if company exists
+    // Get the user
     const user = await User.findById(currentUser.id)
-      .populate('role')
       .select('-password -gmailAccessToken -gmailRefreshToken -driveAccessToken -driveRefreshToken -otp');
     
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Get role through UserRoleAssignment
+    const roleAssignment = await UserRoleAssignment.findOne({ userId: user._id });
+    let role = null;
+    if (roleAssignment) {
+      role = await CustomRole.findById(roleAssignment.roleId);
     }
 
     // Populate company only if it exists
@@ -30,7 +38,6 @@ export async function GET() {
     if (user.company) {
       try {
         populatedUser = await User.findById(currentUser.id)
-          .populate('role')
           .populate('company')
           .select('-password -gmailAccessToken -gmailRefreshToken -driveAccessToken -driveRefreshToken -otp');
       } catch (populateError) {
@@ -45,7 +52,7 @@ export async function GET() {
         email: populatedUser.email,
         name: populatedUser.name,
         empId: populatedUser.empId,
-        role: populatedUser.role,
+        role: role,
         company: populatedUser.company || null,
         companyId: populatedUser.company?._id?.toString() || null,
         college: populatedUser.college,

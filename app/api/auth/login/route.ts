@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '../../../../lib/mongodb';
 import User from '../../../../models/User';
-import Role from '../../../../models/Role';
+import CustomRole from '../../../../models/CustomRole';
+import UserRoleAssignment from '../../../../models/UserRoleAssignment';
 import bcrypt from 'bcryptjs';
 import { jwtVerify, SignJWT } from 'jose';
 
@@ -40,12 +41,20 @@ export async function POST(request: NextRequest) {
     }*/
     
     // Find user and populate role
-    const user = await User.findOne({ email }).populate({
-      path: 'role',
-      model: Role
-    });
+    const user = await User.findOne({ email });
     if (!user) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    }
+    
+    // Get user's role through UserRoleAssignment
+    const roleAssignment = await UserRoleAssignment.findOne({ userId: user._id });
+    if (!roleAssignment) {
+      return NextResponse.json({ error: 'User role not found' }, { status: 500 });
+    }
+    
+    const role = await CustomRole.findById(roleAssignment.roleId);
+    if (!role) {
+      return NextResponse.json({ error: 'Role not found' }, { status: 500 });
     }
     
     // Check password
@@ -55,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Extract role name for JWT
-    const roleName = (user.role as any).name.toLowerCase().replace(/ /g, '_');
+    const roleName = role.name.toLowerCase().replace(/ /g, '_');
     
     // Create JWT token
     const secret = getJwtSecret();

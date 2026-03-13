@@ -8,6 +8,8 @@ import mongoose from 'mongoose';
 import connectDB from '../lib/mongodb';
 import User from '../models/User';
 import Role from '../models/Role';
+import CustomRole from '../models/CustomRole';
+import UserRoleAssignment from '../models/UserRoleAssignment';
 import Company from '../models/Company';
 import Request from '../models/Request';
 import BudgetRecord from '../models/BudgetRecord';
@@ -27,6 +29,8 @@ async function seed() {
 
     // Clear existing data
     await Role.deleteMany({});
+    await CustomRole.deleteMany({});
+    await UserRoleAssignment.deleteMany({});
     await User.deleteMany({});
     await Company.deleteMany({});
     await Request.deleteMany({});
@@ -44,7 +48,27 @@ async function seed() {
 
     // 2. Create System Admin Role
     console.log('🛡️ Creating System Admin Role...');
-    const adminRole = await Role.create({
+    const adminRole = await CustomRole.create({
+      name: 'System Admin',
+      description: 'Full system access with all permissions',
+      companyId: company._id,
+      isSystemAdmin: true,
+      permissions: {
+        canView: true,
+        canCreate: true,
+        canEdit: true,
+        canShare: true,
+        canDownload: true,
+        canForward: true,
+        canManageBudget: true,
+        canESign: true,
+        canApprove: true,
+        canRaiseQueries: true,
+      }
+    });
+
+    // Also create in old Role model for backward compatibility
+    const legacyAdminRole = await Role.create({
       name: 'System Admin',
       description: 'Full system access with all permissions',
       company: company._id,
@@ -65,6 +89,46 @@ async function seed() {
 
     // 3. Create Standard Role Templates (Optional, but helpful)
     console.log('👥 Creating standard role templates...');
+    await CustomRole.create([
+      {
+        name: 'Requester',
+        description: 'Basic user who can create and view their own requests',
+        companyId: company._id,
+        isSystemAdmin: false,
+        permissions: {
+          canView: true,
+          canCreate: true,
+          canEdit: true,
+          canShare: false,
+          canDownload: true,
+          canForward: false,
+          canManageBudget: false,
+          canESign: false,
+          canApprove: false,
+          canRaiseQueries: false,
+        }
+      },
+      {
+        name: 'Approver',
+        description: 'Standard approver with e-signature rights',
+        companyId: company._id,
+        isSystemAdmin: false,
+        permissions: {
+          canView: true,
+          canCreate: false,
+          canEdit: false,
+          canShare: true,
+          canDownload: true,
+          canForward: false,
+          canManageBudget: false,
+          canESign: true,
+          canApprove: true,
+          canRaiseQueries: true,
+        }
+      }
+    ]);
+
+    // Also create in old Role model for backward compatibility
     await Role.create([
       {
         name: 'Requester',
@@ -112,13 +176,22 @@ async function seed() {
       empId: 'ADM001',
       contactNo: '+91 9999999999',
       password: 'adminPassword123',
-      role: adminRole._id,
+      role: legacyAdminRole._id, // Use legacy role for User model
       company: company._id,
       isVerified: true,
       isActive: true
     });
 
-    // 5. Update company with admin user reference
+    // 5. Create UserRoleAssignment for the admin user
+    console.log('🔗 Creating role assignment...');
+    await UserRoleAssignment.create({
+      userId: adminUser._id,
+      roleId: adminRole._id,
+      companyId: company._id,
+      assignedAt: new Date()
+    });
+
+    // 6. Update company with admin user reference
     company.adminUserId = adminUser._id;
     await company.save();
 

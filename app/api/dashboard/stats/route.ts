@@ -30,8 +30,14 @@ async function filterCustomWorkflowRequests(
     }));
   }
 
-  // Users with canCreate see only their own requests (shouldn't be here but handle it)
-  if (permissions?.canCreate) {
+  // Users with ONLY canCreate see only their own requests
+  // Users with canView, canForward, or canApprove can see requests assigned to them
+  const isOnlyRequester = permissions?.canCreate && 
+                         !permissions?.canView && 
+                         !permissions?.canForward && 
+                         !permissions?.canApprove;
+  
+  if (isOnlyRequester) {
     return requests
       .filter(req => req.requester._id?.toString() === userId || req.requester.toString() === userId)
       .map(req => ({
@@ -63,8 +69,36 @@ async function filterCustomWorkflowRequests(
   const workflowIds = [...new Set(executions.map(e => e.workflowId))];
   const workflows = await WorkflowConfiguration.find({ _id: { $in: workflowIds } });
   
+  // Get user's group memberships once (for efficiency)
+  const UserGroupAssignment = (await import('../../../../models/UserGroupAssignment')).default;
+  const userGroupAssignments = await UserGroupAssignment.find({
+    userId: new mongoose.Types.ObjectId(userId),
+  }).lean();
+  const userGroupIds = userGroupAssignments.map((a: any) => a.groupId.toString());
+  
   // Check which custom workflow requests the user should see
-  const visibleRequests = requests.map(request => {
+  const visibleRequests = await Promise.all(requests.map(async (request) => {
+    // First check: Is the user the requester? If yes, they should always see their own request
+    const isRequester = request.requester._id?.toString() === userId || request.requester.toString() === userId;
+    
+    if (isRequester) {
+      let category = 'pending';
+      if (request.status === RequestStatus.APPROVED) {
+        category = 'approved';
+      } else if (request.status === RequestStatus.REJECTED) {
+        category = 'completed';
+      }
+      
+      return {
+        ...request,
+        _visibility: {
+          canSee: true,
+          category,
+          reason: 'Own request'
+        }
+      };
+    }
+    
     const execution = executions.find(e => e._id.toString() === request.workflowExecutionId?.toString());
     if (!execution) {
       return null;
@@ -84,7 +118,65 @@ async function filterCustomWorkflowRequests(
     // Check if user is the current approver
     const currentNode = workflow.nodes.find((n: any) => n.id === execution.currentNodeId);
     const nodeRoleId = currentNode?.data?.roleId?.toString();
-    const isCurrentApprover = currentNode?.type === 'approval' && nodeRoleId && allUserRoleIds.includes(nodeRoleId);
+    let isCurrentApprover = currentNode?.type === 'approval' && nodeRoleId && allUserRoleIds.includes(nodeRoleId);
+    
+    // Also check parallel paths - user might be an approver in one of the parallel branches
+    let isParallelApprover = false;
+    if (execution.parallelPaths && execution.parallelPaths.length > 0) {
+      for (const path of execution.parallelPaths) {
+        if (path.status === 'active') {
+          const pathNode = workflow.nodes.find((n: any) => n.id === path.currentNodeId);
+          if (pathNode && pathNode.type === 'approval' && pathNode.data?.roleId) {
+            const pathRoleId = pathNode.data.roleId.toString();
+            if (allUserRoleIds.includes(pathRoleId)) {
+              isParallelApprover = true;
+              
+              // Check group scope for parallel path node
+              if (pathNode.data.groupScope?.enabled && pathNode.data.groupScope.groupIds?.length > 0) {
+                const requesterGroupIds = execution.requesterGroupIds.map((id: any) => id.toString());
+                const requiredGroupIds = pathNode.data.groupScope.groupIds.map((id: any) => id.toString());
+                const matchType = pathNode.data.groupScope.matchType || 'any';
+                
+                let hasGroupMatch = false;
+                if (matchType === 'any') {
+                  hasGroupMatch = userGroupIds.some(groupId => 
+                    requiredGroupIds.includes(groupId) && requesterGroupIds.includes(groupId)
+                  );
+                } else if (matchType === 'all') {
+                  const requiredAndRequesterGroups = requiredGroupIds.filter(g => requesterGroupIds.includes(g));
+                  hasGroupMatch = requiredAndRequesterGroups.length > 0 && 
+                                 requiredAndRequesterGroups.every(groupId => userGroupIds.includes(groupId));
+                }
+                
+                isParallelApprover = hasGroupMatch;
+              }
+              
+              if (isParallelApprover) break;
+            }
+          }
+        }
+      }
+    }
+    
+    // If node has group scope enabled, also check if user is in matching groups
+    if (isCurrentApprover && currentNode?.data?.groupScope?.enabled && currentNode?.data?.groupScope?.groupIds?.length > 0) {
+      const requesterGroupIds = execution.requesterGroupIds.map((id: any) => id.toString());
+      const requiredGroupIds = currentNode.data.groupScope.groupIds.map((id: any) => id.toString());
+      const matchType = currentNode.data.groupScope.matchType || 'any';
+      
+      let hasGroupMatch = false;
+      if (matchType === 'any') {
+        hasGroupMatch = userGroupIds.some(groupId => 
+          requiredGroupIds.includes(groupId) && requesterGroupIds.includes(groupId)
+        );
+      } else if (matchType === 'all') {
+        const requiredAndRequesterGroups = requiredGroupIds.filter(g => requesterGroupIds.includes(g));
+        hasGroupMatch = requiredAndRequesterGroups.length > 0 && 
+                       requiredAndRequesterGroups.every(groupId => userGroupIds.includes(groupId));
+      }
+      
+      isCurrentApprover = hasGroupMatch;
+    }
     
     // Check if user's role is assigned to ANY node in the workflow (for forwarders/viewers)
     const isAssignedToWorkflow = workflow.nodes.some((node: any) => 
@@ -95,13 +187,13 @@ async function filterCustomWorkflowRequests(
     
     // User can see the request if they're the current approver OR if they've interacted with it before
     // For forwarders: only show if they're the current approver (not just assigned to workflow)
-    if (isCurrentApprover) {
+    if (isCurrentApprover || isParallelApprover) {
       return {
         ...request,
         _visibility: {
           canSee: true,
           category: 'pending',
-          reason: 'Current approver in custom workflow'
+          reason: isParallelApprover ? 'Current approver in parallel branch' : 'Current approver in custom workflow'
         }
       };
     } else if (userHistoryEntry) {
@@ -126,9 +218,9 @@ async function filterCustomWorkflowRequests(
     }
     
     return null;
-  }).filter(Boolean); // Remove null entries
+  }));
 
-  return visibleRequests;
+  return visibleRequests.filter(Boolean); // Remove null entries
 }
 
 
@@ -185,7 +277,14 @@ export async function GET() {
     let totalRequests: number;
     let visibleRequests: any[];
 
-    if (permissions.canCreate && !permissions.isSystemAdmin) {
+    // Determine if user is only a requester or has other permissions
+    const isOnlyRequester = permissions.canCreate && 
+                           !permissions.canView && 
+                           !permissions.canForward && 
+                           !permissions.canApprove && 
+                           !permissions.isSystemAdmin;
+
+    if (isOnlyRequester) {
       // Requesters see only their own requests
       visibleRequests = allRequests.filter(req =>
         req.requester._id?.toString() === dbUser._id.toString() ||
@@ -204,13 +303,20 @@ export async function GET() {
       totalRequests = visibleRequests.length;
     }
 
+    console.log('[DEBUG] [STATS] Visible requests:', {
+      userId: dbUser._id.toString(),
+      isOnlyRequester,
+      totalRequests,
+      visibleRequestTitles: visibleRequests.map(r => r.title)
+    });
+
     // Calculate other stats
     let pendingRequests: number;
     let approvedRequests: number;
     let rejectedRequests: number;
     let inProgressRequests: number;
 
-    if (permissions.canCreate && !permissions.isSystemAdmin) {
+    if (isOnlyRequester) {
       // For requesters, use their own requests
       pendingRequests = visibleRequests.filter(req =>
         !['approved', 'rejected'].includes(req.status)
@@ -229,12 +335,18 @@ export async function GET() {
       // For non-requesters, use visibility-filtered requests for all counts
       // This ensures they only see requests that have been at their level
       pendingRequests = visibleRequests.filter(req =>
-        req._visibility.category === 'pending'
+        req._visibility?.category === 'pending'
       ).length;
+
+      console.log('[DEBUG] [STATS] Pending requests calculation:', {
+        visibleCount: visibleRequests.length,
+        pendingCount: pendingRequests,
+        categories: visibleRequests.map(r => ({ title: r.title, category: r._visibility?.category }))
+      });
 
       // Approved: show requests they have approved (regardless of current status)
       approvedRequests = visibleRequests.filter(req =>
-        req._visibility.category === 'approved'
+        req._visibility?.category === 'approved'
       ).length;
 
       // Rejected: show requests they have rejected OR requests they approved but were later rejected by someone else

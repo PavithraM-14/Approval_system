@@ -77,7 +77,10 @@ export async function POST(
     const validator = new WorkflowValidator();
     const structureValidation = validator.validate(workflow);
     
+    console.log('[WORKFLOW ACTIVATION] Structure validation result:', structureValidation);
+    
     if (!structureValidation.valid) {
+      console.error('[WORKFLOW ACTIVATION] Validation failed:', structureValidation.errors);
       return NextResponse.json(
         {
           error: 'Cannot activate invalid workflow',

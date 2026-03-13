@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useState } from 'react';
 import { RequestStatus } from '../lib/types';
@@ -9,244 +9,169 @@ interface ApprovalWorkflowProps {
   workflowExecutionId?: string;
 }
 
-interface WorkflowStep {
+interface WorkflowNode {
   id: string;
-  name: string;
-  roleName?: string;
-  type?: string;
+  type: string;
+  label: string;
+  data?: any;
+  parentId?: string;
 }
 
-const getStatusBadgeClass = (status: string, isCurrent: boolean, isCompleted: boolean) => {
-  if (isCurrent) {
-    return 'bg-blue-500 text-white shadow-lg';
-  }
-  if (isCompleted) {
-    return 'bg-green-500 text-white';
-  }
-  return 'bg-gray-200 text-gray-600';
-};
+interface WorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+}
 
-const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus, requestId, workflowExecutionId }) => {
-  const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>([]);
+interface FlowStep {
+  id: string;
+  name: string;
+  type: string;
+  status: 'completed' | 'active' | 'pending';
+  groupName?: string;
+  groupType?: string;
+  parallelBranches?: FlowStep[][];
+  optionBranches?: FlowStep[][];
+}
+
+const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ 
+  currentStatus, 
+  requestId, 
+  workflowExecutionId 
+}) => {
+  const [flowSteps, setFlowSteps] = useState<FlowStep[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [workflowName, setWorkflowName] = useState('Approval Workflow');
 
   useEffect(() => {
-    const fetchWorkflowSteps = async () => {
+    const fetchWorkflow = async () => {
       try {
-        // First, get the current user's company
         const userResponse = await fetch('/api/auth/me');
-        if (!userResponse.ok) {
-          throw new Error('Failed to fetch user');
-        }
+        if (!userResponse.ok) throw new Error('Failed to fetch user');
+        
         const userData = await userResponse.json();
         const user = userData.user || userData;
         const companyId = user.company?._id || user.company;
 
-        if (!companyId) {
-          throw new Error('No company found for user');
-        }
+        if (!companyId) throw new Error('No company found');
 
-        // Fetch the active workflow for this company
         const workflowResponse = await fetch(`/api/workflows/company/${companyId}`);
-        if (!workflowResponse.ok) {
-          throw new Error('Failed to fetch workflow');
-        }
+        if (!workflowResponse.ok) throw new Error('Failed to fetch workflow');
 
         const workflowsData = await workflowResponse.json();
-        
-        console.log('[ApprovalWorkflow] Fetched workflows:', workflowsData);
-        console.log('[ApprovalWorkflow] Workflows details:', workflowsData.map((w: any) => ({
-          name: w.name,
-          isActive: w.isActive,
-          nodeCount: w.nodes?.length,
-          edgeCount: w.edges?.length
-        })));
-        
-        // Try to find active workflow, or use the most recent one
-        let activeWorkflow = Array.isArray(workflowsData) 
-          ? workflowsData.find((w: any) => w.isActive)
+        const activeWorkflow = Array.isArray(workflowsData) 
+          ? workflowsData.find((w: any) => w.isActive) || workflowsData[0]
           : workflowsData.workflows?.find((w: any) => w.isActive);
-        
-        // If no active workflow, use the first one (most recent)
-        if (!activeWorkflow && Array.isArray(workflowsData) && workflowsData.length > 0) {
-          console.log('[ApprovalWorkflow] No active workflow found, using most recent');
-          activeWorkflow = workflowsData[0];
+
+        if (!activeWorkflow || !activeWorkflow.nodes) {
+          throw new Error('No workflow found');
         }
 
-        console.log('[ApprovalWorkflow] Selected workflow:', activeWorkflow);
+        setWorkflowName(activeWorkflow.name || 'Approval Workflow');
 
-        if (activeWorkflow && activeWorkflow.nodes) {
-          setWorkflowName(activeWorkflow.name || 'Approval Workflow');
+        let currentNodeId = '';
+        let completedNodeIds = new Set<string>();
+        let parallelPathStatuses = new Map<string, 'completed' | 'active' | 'pending'>();
 
-          // Find the start node
-          const startNode = activeWorkflow.nodes.find((n: any) => n.type === 'start');
-          
-          console.log('[ApprovalWorkflow] Start node:', startNode);
-          console.log('[ApprovalWorkflow] All nodes:', activeWorkflow.nodes);
-          console.log('[ApprovalWorkflow] All edges:', activeWorkflow.edges);
-
-          if (!startNode) {
-            throw new Error('No start node found in workflow');
-          }
-
-          // Build the workflow path by following edges
-          const steps: WorkflowStep[] = [];
-          const edges = activeWorkflow.edges || [];
-          let currentNodeId = startNode.id;
-          const visited = new Set<string>();
-
-          // Add initial submitted step
-          steps.push({
-            id: 'start',
-            name: 'Submitted',
-            type: 'start'
-          });
-
-          // Follow the workflow path
-          while (currentNodeId && !visited.has(currentNodeId)) {
-            visited.add(currentNodeId);
+        if (workflowExecutionId) {
+          const execResponse = await fetch(`/api/executions/${workflowExecutionId}`);
+          if (execResponse.ok) {
+            const executionData = await execResponse.json();
+            currentNodeId = executionData.currentNodeId;
             
-            // Find the next edge from current node
-            const nextEdge = edges.find((e: any) => e.source === currentNodeId);
-            
-            if (!nextEdge) break;
-            
-            const nextNodeId = nextEdge.target;
-            const nextNode = activeWorkflow.nodes.find((n: any) => n.id === nextNodeId);
-            
-            if (!nextNode) break;
-
-            console.log('[ApprovalWorkflow] Processing node:', nextNode);
-
-            // Add approval nodes to steps (skip requester role)
-            if (nextNode.type === 'approval') {
-              // Try multiple places where the role name might be stored
-              const stepName = nextNode.label || nextNode.data?.label || nextNode.data?.roleName || 'Approval';
-              
-              // Skip roles that are for requesters (they don't approve, they just create)
-              const isRequesterRole = stepName.toLowerCase().includes('requester') || 
-                                     stepName.toLowerCase().includes('creator') ||
-                                     stepName.toLowerCase().includes('employee') ||
-                                     stepName.toLowerCase().includes('emplyee'); // Handle typo in label
-              
-              if (!isRequesterRole) {
-                console.log('[ApprovalWorkflow] Adding approval step:', stepName);
-                
-                steps.push({
-                  id: nextNode.id,
-                  name: stepName,
-                  roleName: nextNode.data?.roleName || nextNode.label,
-                  type: 'approval'
-                });
-              } else {
-                console.log('[ApprovalWorkflow] Skipping requester role:', stepName);
-              }
-            } else if (nextNode.type === 'end') {
-              steps.push({
-                id: 'approved',
-                name: 'Approved',
-                type: 'end'
+            if (executionData.history) {
+              executionData.history.forEach((h: any) => {
+                if (h.action === 'approved' || h.action === 'forwarded') {
+                  completedNodeIds.add(h.nodeId);
+                }
               });
-              break;
             }
-            
-            currentNodeId = nextNodeId;
-          }
 
-          // If no end node was found, add it
-          if (!steps.find(s => s.type === 'end')) {
-            steps.push({
-              id: 'approved',
-              name: 'Approved',
-              type: 'end'
-            });
-          }
-
-          console.log('[ApprovalWorkflow] Final steps:', steps);
-
-          setWorkflowSteps(steps);
-
-          // Determine current step based on execution state
-          if (workflowExecutionId) {
-            const execResponse = await fetch(`/api/executions/${workflowExecutionId}`);
-            if (execResponse.ok) {
-              const execution = await execResponse.json();
-              const currentNodeId = execution.currentNodeId;
-              console.log('[ApprovalWorkflow] Execution current node:', currentNodeId);
-              console.log('[ApprovalWorkflow] Execution status:', execution.status);
+            // Check parallel path statuses
+            if (executionData.parallelPaths && executionData.parallelPaths.length > 0) {
+              let allPathsCompleted = true;
+              let parallelSplitNodeId: string | null = null;
               
-              // Find the step that matches the current node
-              let currentIndex = steps.findIndex((s: WorkflowStep) => s.id === currentNodeId);
+              executionData.parallelPaths.forEach((path: any) => {
+                // Store the split node ID from the first path
+                if (!parallelSplitNodeId && path.splitNodeId) {
+                  parallelSplitNodeId = path.splitNodeId;
+                }
+                
+                // A path is completed if:
+                // 1. Its status is 'completed', OR
+                // 2. There's a history entry showing approval/forward for this path's current node
+                const pathNodeId = path.currentNodeId;
+                const pathCompleted = path.status === 'completed' || 
+                  executionData.history.some((h: any) => 
+                    h.nodeId === pathNodeId && (h.action === 'approved' || h.action === 'forwarded')
+                  );
+                
+                if (pathCompleted) {
+                  parallelPathStatuses.set(pathNodeId, 'completed');
+                } else {
+                  allPathsCompleted = false;
+                  if (path.status === 'active') {
+                    parallelPathStatuses.set(pathNodeId, 'active');
+                  } else {
+                    parallelPathStatuses.set(pathNodeId, 'pending');
+                  }
+                }
+              });
               
-              // If we can't find the exact node, try to determine based on execution status
-              if (currentIndex < 0) {
-                if (execution.status === 'completed') {
-                  // If workflow is completed, show the last step (Approved)
-                  currentIndex = steps.length - 1;
-                } else if (execution.status === 'in_progress') {
-                  // If in progress but can't find the node, show first approval step
-                  currentIndex = steps.findIndex(s => s.type === 'approval');
-                  if (currentIndex < 0) currentIndex = 1; // Default to second step if no approval found
+              // If all parallel paths are completed, mark the parallel_split node as completed
+              if (allPathsCompleted && parallelSplitNodeId) {
+                completedNodeIds.add(parallelSplitNodeId);
+              }
+            } else {
+              // If parallel paths array is empty, check if there was a parallel split in history
+              // and if all its branches were completed
+              const parallelSplitEntry = executionData.history.find((h: any) => 
+                h.nodeType === 'parallel_split' && h.action === 'entered'
+              );
+              
+              if (parallelSplitEntry) {
+                const splitNodeId = parallelSplitEntry.nodeId;
+                
+                // Find all nodes that were entered after the split
+                const splitIndex = executionData.history.findIndex((h: any) => 
+                  h.nodeId === splitNodeId && h.action === 'entered'
+                );
+                
+                // Find the parallel join entry
+                const joinEntry = executionData.history.find((h: any) => 
+                  h.nodeType === 'parallel_join' && h.action === 'entered'
+                );
+                
+                // If we found a join entry, it means all parallel paths completed
+                if (joinEntry) {
+                  completedNodeIds.add(splitNodeId);
                 }
               }
-              
-              console.log('[ApprovalWorkflow] Current step index from execution:', currentIndex);
-              setCurrentStepIndex(Math.max(0, currentIndex));
-            } else {
-              console.log('[ApprovalWorkflow] Failed to fetch execution, using status-based detection');
-              // Fallback to status-based detection
-              setCurrentStepFromStatus(steps);
             }
-          } else {
-            console.log('[ApprovalWorkflow] No execution ID, using status-based detection');
-            setCurrentStepFromStatus(steps);
           }
-
-          setLoading(false);
-          return;
         }
 
-        throw new Error('No active workflow found');
+        const steps = buildFlowSteps(
+          activeWorkflow.nodes,
+          activeWorkflow.edges,
+          currentNodeId,
+          completedNodeIds,
+          parallelPathStatuses
+        );
+        
+        setFlowSteps(steps);
+        setLoading(false);
       } catch (error) {
         console.error('Error fetching workflow:', error);
-        
-        // No fallback - custom workflow is required
-        setWorkflowSteps([]);
-        setWorkflowName('No Workflow Configured');
+        setFlowSteps([]);
         setLoading(false);
       }
     };
 
-    const setCurrentStepFromStatus = (steps: WorkflowStep[]) => {
-      console.log('[ApprovalWorkflow] Current status:', currentStatus);
-      console.log('[ApprovalWorkflow] Available steps:', steps.map(s => ({ name: s.name, roleName: s.roleName, type: s.type })));
-      
-      // Map status to step index
-      if (currentStatus === 'submitted') {
-        // When status is submitted, the request has been created and should be at the first approval step
-        console.log('[ApprovalWorkflow] Status is submitted, setting to first approval step');
-        const firstApprovalIndex = steps.findIndex(s => s.type === 'approval');
-        console.log('[ApprovalWorkflow] First approval step index:', firstApprovalIndex);
-        setCurrentStepIndex(firstApprovalIndex >= 0 ? firstApprovalIndex : 1);
-      } else if (currentStatus === 'approved') {
-        console.log('[ApprovalWorkflow] Status is approved, setting to last step');
-        setCurrentStepIndex(steps.length - 1);
-      } else {
-        // For other statuses, try to find the first approval step
-        console.log('[ApprovalWorkflow] Other status detected, defaulting to first approval step');
-        const firstApprovalIndex = steps.findIndex(s => s.type === 'approval');
-        console.log('[ApprovalWorkflow] First approval step index:', firstApprovalIndex);
-        setCurrentStepIndex(firstApprovalIndex >= 0 ? firstApprovalIndex : 1);
-      }
-    };
-
-    fetchWorkflowSteps();
+    fetchWorkflow();
   }, [workflowExecutionId, requestId, currentStatus]);
-
-  // Check if current status is a query status
-  const isQueryStatus = ['sop_query', 'budget_query', 'query_required', 'department_checks'].includes(currentStatus);
 
   if (loading) {
     return (
@@ -262,18 +187,12 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus, requ
     );
   }
 
-  if (workflowSteps.length === 0) {
+  if (flowSteps.length === 0) {
     return (
       <div className="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
         <div className="px-4 py-5 sm:px-6">
           <h3 className="text-lg leading-6 font-medium text-gray-900">Approval Workflow</h3>
           <p className="mt-1 text-sm text-gray-500">No workflow configured</p>
-        </div>
-        <div className="border-t border-gray-200 px-4 py-8">
-          <div className="text-center">
-            <p className="text-gray-600 mb-4">No active workflow found for this request.</p>
-            <p className="text-sm text-gray-500">Please contact your administrator to configure a workflow.</p>
-          </div>
         </div>
       </div>
     );
@@ -287,191 +206,384 @@ const ApprovalWorkflow: React.FC<ApprovalWorkflowProps> = ({ currentStatus, requ
             <h3 className="text-lg leading-6 font-medium text-gray-900">{workflowName}</h3>
             <p className="mt-1 text-sm text-gray-500">Current status of this request in the approval process</p>
           </div>
-          {workflowSteps.length > 0 && (
-            <div className="text-xs text-gray-500">
-              {workflowSteps.length} steps
-            </div>
-          )}
         </div>
       </div>
+      
       <div className="border-t border-gray-200 px-4 py-5 sm:p-6">
-        {/* Show queries status if applicable */}
-        {isQueryStatus && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-center">
-              <div className="w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center mr-3">
-                <svg className="w-4 h-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <h4 className="text-lg font-medium text-yellow-800">Query Pending</h4>
-                <p className="text-sm text-yellow-700">
-                  {String(currentStatus) === 'query_required' && 'Waiting for response from Requester'}
-                  {String(currentStatus) === 'department_checks' && 'Waiting for department response'}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        <div className="flex flex-col">
-          {/* Desktop view - Flowchart style */}
-          <div className="hidden md:block">
-            <div className="relative py-8">
-              {/* Progress line background - positioned to go through boxes */}
-              <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-200 transform -translate-y-1/2" style={{ left: '5%', right: '5%' }}>
-                <div 
-                  className="h-full bg-green-500 transition-all duration-500" 
-                  style={{ width: `${Math.max(0, Math.min(100, (currentStepIndex / (workflowSteps.length - 1)) * 100))}%` }}
-                ></div>
-              </div>
-              
-              {/* Workflow steps */}
-              <div className="relative flex justify-between items-center px-8">
-                {workflowSteps.map((step, index) => {
-                  // If status is approved, all steps including the last one should be completed
-                  const isCompleted = currentStatus === 'approved' ? true : index < currentStepIndex;
-                  const isCurrent = currentStatus === 'approved' ? false : index === currentStepIndex;
-                  
-                  return (
-                    <div key={step.id} className="flex flex-col items-center relative z-10" style={{ flex: 1, maxWidth: '120px' }}>
-                      {/* Step box with integrated indicator */}
-                      <div className={`relative text-center px-3 py-2 rounded-lg min-h-[60px] flex flex-col items-center justify-center w-full transition-all duration-300 ${
-                        isCurrent ? 'bg-blue-600 text-white shadow-lg scale-105' : 
-                        isCompleted ? 'bg-green-500 text-white shadow-md' : 
-                        'bg-white text-gray-700 border-2 border-gray-300'
-                      }`}>
-                        {/* Step indicator icon/number at top */}
-                        <div className="mb-1">
-                          {isCompleted ? (
-                            <svg className="w-4 h-4 mx-auto" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          ) : isCurrent ? (
-                            <div className="w-2 h-2 bg-white rounded-full animate-pulse mx-auto"></div>
-                          ) : (
-                            <span className="text-sm font-bold">{index + 1}</span>
-                          )}
-                        </div>
-                        
-                        {/* Step name */}
-                        <span className="text-xs font-semibold block leading-tight">
-                          {step.name}
-                        </span>
-                        
-                        {/* Active badge */}
-                        {isCurrent && !isCompleted && (
-                          <span className="text-[10px] font-medium mt-0.5 block opacity-90">● Active</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-          
-          {/* Mobile view - vertical list */}
-          <div className="md:hidden space-y-3">
-            {workflowSteps.map((step, index) => {
-              // If status is approved, all steps including the last one should be completed
-              const isCompleted = currentStatus === 'approved' ? true : index < currentStepIndex;
-              const isCurrent = currentStatus === 'approved' ? false : index === currentStepIndex;
-              
-              return (
-                <div key={step.id} className="flex items-start">
-                  <div className="flex flex-col items-center mr-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      getStatusBadgeClass(step.id, isCurrent, isCompleted)
-                    } ${isCurrent ? 'ring-4 ring-blue-200' : ''}`}>
-                      {isCompleted ? (
-                        <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      ) : isCurrent ? (
-                        <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-                      ) : (
-                        <span className="text-xs font-medium">{index + 1}</span>
-                      )}
-                    </div>
-                    {index < workflowSteps.length - 1 && (
-                      <div className={`w-0.5 h-12 mt-1 ${isCompleted ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                    )}
-                  </div>
-                  <div className={`flex-1 py-2 px-3 rounded-lg ${
-                    isCurrent ? 'bg-blue-50 border-2 border-blue-500' : 
-                    isCompleted ? 'bg-green-50 border border-green-200' : 
-                    'bg-gray-50 border border-gray-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className={`text-sm font-semibold ${
-                        isCurrent ? 'text-blue-700' : 
-                        isCompleted ? 'text-green-700' : 
-                        'text-gray-600'
-                      }`}>
-                        {step.name}
-                      </span>
-                      {isCurrent && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          Active
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-gray-500 mt-1 block">Step {index + 1} of {workflowSteps.length}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          
-          {/* Current status information */}
-          <div className={`mt-8 p-4 rounded-lg border ${
-            currentStatus === 'approved' 
-              ? 'bg-green-50 border-green-200' 
-              : 'bg-blue-50 border-blue-200'
-          }`}>
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                {currentStatus === 'approved' ? (
-                  <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg className="h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
+        <div className="overflow-x-auto pb-4">
+          <div className="flex flex-col gap-4 items-center min-w-full">
+            {flowSteps.map((step, index) => (
+              <React.Fragment key={step.id}>
+                {renderStep(step)}
+                {index < flowSteps.length - 1 && (
+                  <div className="w-0.5 h-8 bg-gray-300"></div>
                 )}
-              </div>
-              <div className="ml-3">
-                <h3 className={`text-sm font-medium ${
-                  currentStatus === 'approved' ? 'text-green-900' : 'text-blue-900'
-                }`}>
-                  {currentStatus === 'approved' ? 'Workflow Status' : 'Current Stage'}
-                </h3>
-                <div className={`mt-2 text-sm ${
-                  currentStatus === 'approved' ? 'text-green-800' : 'text-blue-800'
-                }`}>
-                  <p className="font-semibold">
-                    {currentStatus === 'approved' 
-                      ? 'Completed - Request Approved' 
-                      : workflowSteps[currentStepIndex]?.name || 'Processing'}
-                  </p>
-                  <p className={`text-xs mt-1 ${
-                    currentStatus === 'approved' ? 'text-green-600' : 'text-blue-600'
-                  }`}>
-                    {currentStatus === 'approved' 
-                      ? 'All approval steps completed successfully' 
-                      : `Step ${currentStepIndex + 1} of ${workflowSteps.length}`}
-                  </p>
-                </div>
-              </div>
-            </div>
+              </React.Fragment>
+            ))}
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+function buildFlowSteps(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  currentNodeId: string,
+  completedNodeIds: Set<string>,
+  parallelPathStatuses: Map<string, 'completed' | 'active' | 'pending'>
+): FlowStep[] {
+  const steps: FlowStep[] = [];
+  const visited = new Set<string>();
+  
+  const startNode = nodes.find(n => n.type === 'start');
+  if (!startNode) return steps;
+
+  const getStatus = (nodeId: string): 'completed' | 'active' | 'pending' => {
+    // Check if this node has a specific parallel path status
+    if (parallelPathStatuses.has(nodeId)) {
+      return parallelPathStatuses.get(nodeId)!;
+    }
+    
+    if (completedNodeIds.has(nodeId)) return 'completed';
+    if (nodeId === currentNodeId) return 'active';
+    return 'pending';
+  };
+
+  const getNextNodes = (nodeId: string): string[] => {
+    return edges.filter(e => e.source === nodeId).map(e => e.target);
+  };
+
+  const getGroupInfo = (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node?.parentId) return null;
+    const parentNode = nodes.find(n => n.id === node.parentId);
+    return parentNode;
+  };
+
+  const buildPath = (nodeId: string, stopAtJoin: boolean = false, stopAtEnd: boolean = false): FlowStep[] => {
+    const path: FlowStep[] = [];
+    let currentId = nodeId;
+
+    while (currentId && !visited.has(currentId)) {
+      const node = nodes.find(n => n.id === currentId);
+      if (!node) break;
+
+      // Skip containers
+      if (node.type === 'grouping' || node.type === 'subgroup') {
+        const nextIds = getNextNodes(currentId);
+        currentId = nextIds[0];
+        continue;
+      }
+
+      // Skip start
+      if (node.type === 'start') {
+        const nextIds = getNextNodes(currentId);
+        currentId = nextIds[0];
+        continue;
+      }
+
+      // Stop at join if in parallel branch
+      if (node.type === 'parallel_join' && stopAtJoin) {
+        break;
+      }
+
+      // Stop at end if requested (for option branches)
+      if (node.type === 'end' && stopAtEnd) {
+        break;
+      }
+
+      visited.add(currentId);
+
+      const step: FlowStep = {
+        id: node.id,
+        name: node.label || node.data?.label || node.type,
+        type: node.type,
+        status: getStatus(node.id)
+      };
+
+      const groupNode = getGroupInfo(node.id);
+      if (groupNode) {
+        step.groupName = groupNode.label || groupNode.data?.label;
+        step.groupType = groupNode.type;
+      }
+
+      // Handle parallel split
+      if (node.type === 'parallel_split') {
+        const branchIds = getNextNodes(currentId);
+        const branches: FlowStep[][] = [];
+        
+        for (const branchId of branchIds) {
+          const branchPath = buildPath(branchId, true, false);
+          if (branchPath.length > 0) branches.push(branchPath);
+        }
+        
+        step.parallelBranches = branches;
+        path.push(step);
+        
+        // Find join and continue
+        const joinNode = nodes.find(n => n.type === 'parallel_join');
+        if (joinNode) {
+          const nextIds = getNextNodes(joinNode.id);
+          currentId = nextIds[0];
+        } else {
+          break;
+        }
+        continue;
+      }
+
+      // Handle options
+      if (node.type === 'options') {
+        const optionIds = getNextNodes(currentId);
+        const options: FlowStep[][] = [];
+        
+        // Build each option branch, stopping before the end node
+        for (const optionId of optionIds) {
+          const optionPath = buildPath(optionId, false, true);
+          if (optionPath.length > 0) options.push(optionPath);
+        }
+        
+        step.optionBranches = options;
+        path.push(step);
+        
+        // Find the common end node and add it after options
+        const firstOptionNext = getNextNodes(optionIds[0]);
+        if (firstOptionNext.length > 0) {
+          const endNode = nodes.find(n => n.id === firstOptionNext[0]);
+          if (endNode && endNode.type === 'end') {
+            path.push({
+              id: endNode.id,
+              name: endNode.label || endNode.data?.label || 'Approved',
+              type: endNode.type,
+              status: getStatus(endNode.id)
+            });
+          }
+        }
+        
+        break; // Options are terminal
+      }
+
+      path.push(step);
+
+      if (node.type === 'end') break;
+
+      const nextIds = getNextNodes(currentId);
+      currentId = nextIds[0];
+    }
+
+    return path;
+  };
+
+  const firstNextIds = getNextNodes(startNode.id);
+  if (firstNextIds.length > 0) {
+    return buildPath(firstNextIds[0]);
+  }
+
+  return steps;
+}
+
+function renderStep(step: FlowStep): JSX.Element {
+  const statusColors = {
+    completed: 'bg-green-500 text-white border-green-600',
+    active: 'bg-blue-600 text-white border-blue-700 ring-4 ring-blue-200 shadow-lg',
+    pending: 'bg-white text-gray-700 border-gray-300'
+  };
+
+  const statusIcons = {
+    completed: (
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+      </svg>
+    ),
+    active: (
+      <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+    ),
+    pending: (
+      <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+    )
+  };
+
+  // Parallel split
+  if (step.parallelBranches && step.parallelBranches.length > 0) {
+    return (
+      <div className="flex flex-col items-center w-full">
+        <div className={`px-6 py-3 rounded-lg border-2 ${statusColors[step.status]} font-semibold flex items-center gap-3 shadow-md`}>
+          {statusIcons[step.status]}
+          <span>{step.name}</span>
+        </div>
+        
+        {/* Diverging lines from center to branches */}
+        <div className="relative w-full flex justify-center" style={{ height: '32px' }}>
+          <div className="absolute w-0.5 h-2 bg-gray-300" style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}></div>
+          <svg className="absolute" style={{ width: '100%', height: '100%', top: '8px' }}>
+            <line x1="50%" y1="0" x2="50%" y2="50%" stroke="#9CA3AF" strokeWidth="2" />
+            {step.parallelBranches.map((_, idx) => {
+              const totalBranches = step.parallelBranches!.length;
+              const spacing = 100 / (totalBranches + 1);
+              const xPos = spacing * (idx + 1);
+              return (
+                <g key={idx}>
+                  <line x1="50%" y1="50%" x2={`${xPos}%`} y2="50%" stroke="#9CA3AF" strokeWidth="2" />
+                  <line x1={`${xPos}%`} y1="50%" x2={`${xPos}%`} y2="100%" stroke="#9CA3AF" strokeWidth="2" />
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        
+        {/* Render branches side by side */}
+        <div className="flex gap-8 items-center justify-center flex-wrap">
+          {step.parallelBranches.map((branch, idx) => (
+            <div key={idx} className="flex flex-col items-center">
+              {branch.map((branchStep) => (
+                <div key={branchStep.id}>
+                  {renderStepCompact(branchStep)}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        
+        {/* Converging lines from branches back to center */}
+        <div className="relative w-full flex justify-center" style={{ height: '32px' }}>
+          <svg className="absolute" style={{ width: '100%', height: '100%', top: 0 }}>
+            {step.parallelBranches.map((_, idx) => {
+              const totalBranches = step.parallelBranches!.length;
+              const spacing = 100 / (totalBranches + 1);
+              const xPos = spacing * (idx + 1);
+              return (
+                <g key={idx}>
+                  <line x1={`${xPos}%`} y1="0" x2={`${xPos}%`} y2="50%" stroke="#9CA3AF" strokeWidth="2" />
+                  <line x1={`${xPos}%`} y1="50%" x2="50%" y2="50%" stroke="#9CA3AF" strokeWidth="2" />
+                </g>
+              );
+            })}
+            <line x1="50%" y1="50%" x2="50%" y2="100%" stroke="#9CA3AF" strokeWidth="2" />
+          </svg>
+        </div>
+      </div>
+    );
+  }
+
+  // Options
+  if (step.optionBranches && step.optionBranches.length > 0) {
+    return (
+      <div className="flex flex-col items-center w-full">
+        <div className={`px-6 py-3 rounded-lg border-2 ${statusColors[step.status]} font-semibold flex items-center gap-3 shadow-md`}>
+          {statusIcons[step.status]}
+          <span>{step.name}</span>
+          <span className="text-xs opacity-75 font-normal">(Choose One)</span>
+        </div>
+        
+        {/* Diverging lines from center to options */}
+        <div className="relative w-full flex justify-center" style={{ height: '32px' }}>
+          <div className="absolute w-0.5 h-2 bg-gray-300" style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}></div>
+          <svg className="absolute" style={{ width: '100%', height: '100%', top: '8px' }}>
+            <line x1="50%" y1="0" x2="50%" y2="50%" stroke="#9CA3AF" strokeWidth="2" />
+            {step.optionBranches.map((_, idx) => {
+              const totalOptions = step.optionBranches!.length;
+              const spacing = 100 / (totalOptions + 1);
+              const xPos = spacing * (idx + 1);
+              return (
+                <g key={idx}>
+                  <line x1="50%" y1="50%" x2={`${xPos}%`} y2="50%" stroke="#9CA3AF" strokeWidth="2" />
+                  <line x1={`${xPos}%`} y1="50%" x2={`${xPos}%`} y2="100%" stroke="#9CA3AF" strokeWidth="2" />
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        
+        <div className="flex gap-6 items-start justify-center flex-wrap">
+          {step.optionBranches.map((option, idx) => (
+            <div key={idx} className="flex flex-col items-center">
+              <div className="border-2 border-dashed border-teal-300 bg-teal-50 rounded-lg p-4">
+                <div className="text-xs text-teal-700 font-semibold mb-3 text-center">Option {idx + 1}</div>
+                <div className="flex flex-col gap-3">
+                  {option.map((optionStep, oIdx) => (
+                    <React.Fragment key={optionStep.id}>
+                      {renderStepCompact(optionStep)}
+                      {oIdx < option.length - 1 && <div className="w-0.5 h-4 bg-gray-300 mx-auto"></div>}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        {/* Converging lines from options back to center */}
+        <div className="relative w-full flex justify-center" style={{ height: '32px' }}>
+          <svg className="absolute" style={{ width: '100%', height: '100%', top: 0 }}>
+            {step.optionBranches.map((_, idx) => {
+              const totalOptions = step.optionBranches!.length;
+              const spacing = 100 / (totalOptions + 1);
+              const xPos = spacing * (idx + 1);
+              return (
+                <g key={idx}>
+                  <line x1={`${xPos}%`} y1="0" x2={`${xPos}%`} y2="50%" stroke="#9CA3AF" strokeWidth="2" />
+                  <line x1={`${xPos}%`} y1="50%" x2="50%" y2="50%" stroke="#9CA3AF" strokeWidth="2" />
+                </g>
+              );
+            })}
+            <line x1="50%" y1="50%" x2="50%" y2="100%" stroke="#9CA3AF" strokeWidth="2" />
+          </svg>
+        </div>
+      </div>
+    );
+  }
+
+  // Regular step
+  return renderStepCompact(step);
+}
+
+function renderStepCompact(step: FlowStep): JSX.Element {
+  const statusColors = {
+    completed: 'bg-green-500 text-white border-green-600',
+    active: 'bg-blue-600 text-white border-blue-700 ring-4 ring-blue-200 shadow-lg',
+    pending: 'bg-white text-gray-700 border-gray-300'
+  };
+
+  const statusIcons = {
+    completed: (
+      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+      </svg>
+    ),
+    active: (
+      <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+    ),
+    pending: (
+      <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+    )
+  };
+
+  return (
+    <div className={`px-6 py-3 rounded-lg border-2 ${statusColors[step.status]} font-semibold flex items-center gap-3 min-w-[180px] justify-center shadow-sm transition-all duration-200 hover:shadow-md`}>
+      {statusIcons[step.status]}
+      <div className="flex flex-col items-center">
+        <span className="text-center">{step.name}</span>
+        {step.groupName && (
+          <span className="text-[10px] opacity-75 font-normal mt-0.5 flex items-center gap-1">
+            {step.groupType === 'subgroup' ? (
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+              </svg>
+            ) : (
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+              </svg>
+            )}
+            <span>{step.groupName}</span>
+          </span>
+        )}
+      </div>
+      {step.status === 'active' && (
+        <span className="text-xs font-normal opacity-90">● Active</span>
+      )}
+    </div>
+  );
+}
 
 export default ApprovalWorkflow;

@@ -3,7 +3,8 @@ import { Role as IRole } from './types';
 import { jwtVerify } from 'jose';
 import connectDB from './mongodb';
 import User from '../models/User';
-import Role from '../models/Role'; // This registers the model
+import CustomRole from '../models/CustomRole';
+import UserRoleAssignment from '../models/UserRoleAssignment';
 
 export interface AuthUser {
   id: string;
@@ -37,17 +38,24 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
         
         await connectDB();
         
-        // Ensure models are registered by referencing them
-        // This is a common pattern to fix MissingSchemaError in Next.js dev mode
-        const user = await User.findById(payload.id)
-          .populate({
-            path: 'role',
-            model: Role
-          })
-          .lean();
+        // Get user and their role through UserRoleAssignment
+        const user = await User.findById(payload.id).lean();
         
-        if (!user || !user.role) {
-          console.error('User or role not found in DB for payload:', payload.id);
+        if (!user) {
+          console.error('User not found in DB for payload:', payload.id);
+          return null;
+        }
+        
+        // Get role through UserRoleAssignment
+        const roleAssignment = await UserRoleAssignment.findOne({ userId: user._id }).lean();
+        if (!roleAssignment) {
+          console.error('Role assignment not found for user:', payload.id);
+          return null;
+        }
+        
+        const role = await CustomRole.findById(roleAssignment.roleId).lean();
+        if (!role) {
+          console.error('Role not found for user:', payload.id);
           return null;
         }
 
@@ -56,7 +64,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
           email: user.email,
           name: user.name,
           empId: user.empId,
-          role: user.role as unknown as IRole,
+          role: role as unknown as IRole,
           college: user.college,
           department: user.department,
           companyId: user.company?.toString(),

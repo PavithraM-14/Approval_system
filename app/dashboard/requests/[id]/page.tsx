@@ -411,6 +411,9 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         throw new Error(errorData.error || 'Failed to forward request');
       }
 
+      // Update user approval status immediately
+      setUserHasApproved(true);
+      
       await fetchRequest();
       setIsApprovalModalOpen(false);
 
@@ -502,6 +505,9 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         throw new Error(errorData.error || 'Failed to process approval');
       }
 
+      // Update user approval status immediately
+      setUserHasApproved(true);
+      
       await fetchRequest();
       setIsApprovalModalOpen(false);
 
@@ -1266,7 +1272,13 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
             }
             
             // For non-requesters, check if they're authorized to process this request status
-            if (permissions?.canCreate) return null;
+            // Users with ONLY canCreate (no canView/canForward/canApprove) should not see action buttons
+            const isOnlyRequester = permissions?.canCreate && 
+                                   !permissions?.canView && 
+                                   !permissions?.canForward && 
+                                   !permissions?.canApprove;
+            
+            if (isOnlyRequester) return null;
             
             if (needsClarification) {
               // Requester: allow responding directly (already handled above)
@@ -1449,6 +1461,10 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
                 </svg>
                 <p className="text-xs sm:text-sm">Click the toggle above to view approval history</p>
               </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Approval Modal */}
       <ApprovalModal
@@ -1583,15 +1599,6 @@ export default function RequestDetailPage({ params }: { params: { id: string } }
         request={{
           _id: request._id,
           title: request.title,
-          requester: { name: request.requester.name }
-        }}
-        onSubmit={handleRejectWithClarification}
-        loading={processingApproval}
-      />
-
-    </div>
-  );
-}
           requester: { name: request.requester.name }
         }}
         onSubmit={handleRejectWithClarification}

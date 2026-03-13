@@ -83,6 +83,7 @@ export class WorkflowValidator implements IWorkflowValidator {
     });
 
     // Check 1: Node Reachability (Requirement 5.3)
+    // Note: Grouping and subgroup nodes are visual containers and should be excluded from reachability checks
     const reachable = new Set<string>();
     const queue: string[] = [startNode.id];
     reachable.add(startNode.id);
@@ -99,8 +100,12 @@ export class WorkflowValidator implements IWorkflowValidator {
       }
     }
 
-    // Find unreachable nodes
-    const unreachableNodes = workflow.nodes.filter(node => !reachable.has(node.id));
+    // Find unreachable nodes (excluding grouping and subgroup nodes which are visual containers)
+    const unreachableNodes = workflow.nodes.filter(node => 
+      !reachable.has(node.id) && 
+      node.type !== 'grouping' && 
+      node.type !== 'subgroup'
+    );
     unreachableNodes.forEach(node => {
       errors.push(`Node '${node.label}' (${node.id}) is not reachable from the start node`);
     });

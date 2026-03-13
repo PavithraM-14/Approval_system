@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
-import Role from '@/models/Role';
+import CustomRole from '@/models/CustomRole';
 import { getCurrentUser } from '@/lib/auth';
 import roleService from '@/lib/role-service';
 import mongoose from 'mongoose';

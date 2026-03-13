@@ -97,6 +97,7 @@ export class WorkflowExecutionEngine {
     }
 
     // Skip requester nodes - if the first node is a requester role, advance to the next node
+    let skippedRequesterNode = null;
     if (firstNode.type === 'approval') {
       const nodeLabel = firstNode.label || '';
       const isRequesterNode = nodeLabel.toLowerCase().includes('employee') || 
@@ -104,8 +105,15 @@ export class WorkflowExecutionEngine {
                              nodeLabel.toLowerCase().includes('requester') ||
                              nodeLabel.toLowerCase().includes('creator');
       
+      console.log('[DEBUG] Checking if first node is requester node:', {
+        nodeId: firstNode.id,
+        nodeLabel,
+        isRequesterNode
+      });
+      
       if (isRequesterNode) {
         console.log('[DEBUG] Skipping requester node:', nodeLabel);
+        skippedRequesterNode = firstNode;
         
         // Find the next node after the requester node
         const nextEdge = workflow.edges.find((edge: IWorkflowEdge) => edge.source === firstNode.id);
@@ -119,6 +127,40 @@ export class WorkflowExecutionEngine {
       }
     }
 
+    // Build history entries
+    const historyEntries: any[] = [
+      {
+        nodeId: startNode.id,
+        nodeType: startNode.type,
+        action: 'entered',
+        timestamp: new Date(),
+      }
+    ];
+
+    // If we skipped a requester node, add entries showing it was completed
+    if (skippedRequesterNode) {
+      historyEntries.push({
+        nodeId: skippedRequesterNode.id,
+        nodeType: skippedRequesterNode.type,
+        action: 'entered',
+        timestamp: new Date(),
+      });
+      historyEntries.push({
+        nodeId: skippedRequesterNode.id,
+        nodeType: skippedRequesterNode.type,
+        action: 'approved',
+        timestamp: new Date(),
+      });
+    }
+
+    // Add entry for the current node
+    historyEntries.push({
+      nodeId: firstNode.id,
+      nodeType: firstNode.type,
+      action: 'entered',
+      timestamp: new Date(),
+    });
+
     // Create a new ExecutionState document
     const executionState = new ExecutionState({
       requestId,
@@ -129,20 +171,7 @@ export class WorkflowExecutionEngine {
       status: 'in_progress',
       parallelPaths: [],
       requesterGroupIds, // Store requester's groups for routing decisions
-      history: [
-        {
-          nodeId: startNode.id,
-          nodeType: startNode.type,
-          action: 'entered',
-          timestamp: new Date(),
-        },
-        {
-          nodeId: firstNode.id,
-          nodeType: firstNode.type,
-          action: 'entered',
-          timestamp: new Date(),
-        },
-      ],
+      history: historyEntries,
       startedAt: new Date(),
     });
 
@@ -223,6 +252,63 @@ export class WorkflowExecutionEngine {
       throw new Error(`Workflow not found with ID ${executionState.workflowId}`);
     }
 
+    // Check if we're in parallel execution
+    if (executionState.parallelPaths && executionState.parallelPaths.length > 0) {
+      // Find which parallel path this user should act on
+      const userRoleAssignments = await UserRoleAssignment.find({
+        userId: new mongoose.Types.ObjectId(userId)
+      }).lean();
+      const userRoleIds = userRoleAssignments.map(a => a.roleId.toString());
+      
+      // Also get user's primary role through UserRoleAssignment
+      const User = (await import('../models/User')).default;
+      const dbUser = await User.findById(userId);
+      if (dbUser) {
+        const primaryRoleAssignment = await UserRoleAssignment.findOne({ userId: dbUser._id });
+        if (primaryRoleAssignment) {
+          const primaryRoleId = primaryRoleAssignment.roleId.toString();
+          if (!userRoleIds.includes(primaryRoleId)) {
+            userRoleIds.push(primaryRoleId);
+          }
+        }
+      }
+
+      // Find the parallel path where user is the current approver
+      let targetPath = null;
+      let targetNode = null;
+      
+      for (const path of executionState.parallelPaths) {
+        if (path.status !== 'active') continue;
+        
+        const pathNode = workflow.nodes.find((n: IWorkflowNode) => n.id === path.currentNodeId);
+        if (pathNode && pathNode.type === 'approval' && pathNode.data?.roleId) {
+          const pathRoleId = pathNode.data.roleId.toString();
+          if (userRoleIds.includes(pathRoleId)) {
+            targetPath = path;
+            targetNode = pathNode;
+            break;
+          }
+        }
+      }
+
+      if (!targetPath || !targetNode) {
+        throw new Error('No active parallel path found for this user');
+      }
+
+      // Process the parallel path action
+      return await this.processParallelPathAction(
+        executionState,
+        workflow,
+        targetPath,
+        targetNode,
+        action,
+        userId,
+        notes,
+        isForward
+      );
+    }
+
+    // Regular (non-parallel) execution
     // Find the current node
     const currentNode = workflow.nodes.find((node: IWorkflowNode) => node.id === executionState.currentNodeId);
     if (!currentNode) {
@@ -245,25 +331,27 @@ export class WorkflowExecutionEngine {
       // Check both UserRoleAssignment and the user's primary role
       const User = (await import('../models/User')).default;
       const CustomRole = (await import('../models/CustomRole')).default;
-      const dbUser = await User.findById(userId).populate('role');
+      const dbUser = await User.findById(userId);
       
       // Get all user role assignments
       const allUserRoleAssignments = await UserRoleAssignment.find({
         userId: new mongoose.Types.ObjectId(userId)
-      }).populate('roleId');
+      });
       
       // Get the required role details
       const requiredRole = await CustomRole.findById(currentNode.data.roleId);
       
-      const userHasPrimaryRole = dbUser?.role?._id?.toString() === currentNode.data.roleId.toString();
+      // Check if user has the required role through UserRoleAssignment
       const userHasAssignedRole = allUserRoleAssignments.some(assignment => 
-        assignment.roleId._id?.toString() === currentNode.data.roleId.toString()
+        assignment.roleId?.toString() === currentNode.data.roleId.toString()
       );
       
       // Also check by role name in case the role ID doesn't match but the name does
-      const userHasRoleByName = allUserRoleAssignments.some(assignment => 
-        assignment.roleId.name === requiredRole?.name
-      ) || dbUser?.role?.name === requiredRole?.name;
+      const userRoleIds = allUserRoleAssignments.map(a => a.roleId);
+      const userRoles = await CustomRole.find({ _id: { $in: userRoleIds } });
+      const userHasRoleByName = userRoles.some(role => 
+        role.name === requiredRole?.name
+      );
       
       const userRoleAssignment = await UserRoleAssignment.findOne({
         userId: new mongoose.Types.ObjectId(userId),
@@ -275,19 +363,16 @@ export class WorkflowExecutionEngine {
         userId,
         requiredRoleId: currentNode.data.roleId?.toString(),
         requiredRoleName: requiredRole?.name,
-        userPrimaryRoleId: dbUser?.role?._id?.toString(),
-        userPrimaryRoleName: dbUser?.role?.name,
-        userHasPrimaryRole,
         userHasAssignedRole,
         userHasRoleByName,
         userRoleAssignmentWithCompanyFound: !!userRoleAssignment,
-        allUserRoleIds: allUserRoleAssignments.map(a => a.roleId._id?.toString()),
-        allUserRoleNames: allUserRoleAssignments.map(a => a.roleId.name),
+        allUserRoleIds: userRoleIds.map(id => id?.toString()).filter(Boolean),
+        allUserRoleNames: userRoles.map(r => r.name),
         companyId: executionState.companyId
       });
 
       // Allow if user has the required role in any form (by ID or by name)
-      if (!userRoleAssignment && !userHasPrimaryRole && !userHasAssignedRole && !userHasRoleByName) {
+      if (!userRoleAssignment && !userHasAssignedRole && !userHasRoleByName) {
         throw new Error(`User ${userId} is not assigned to the required role for this approval step`);
       }
     }
@@ -352,6 +437,73 @@ export class WorkflowExecutionEngine {
 
     // Save the updated execution state
     await executionState.save();
+
+    // If the next node is a parallel_split, automatically create parallel paths
+    if (nextNode.type === 'parallel_split') {
+      console.log('[DEBUG] Next node is parallel_split, creating parallel paths');
+      await this.createParallelPaths(executionState._id.toString(), nextNode.id);
+      
+      // Reload execution state after creating parallel paths
+      const updatedState = await ExecutionState.findById(executionId);
+      if (updatedState) {
+        // Send notifications to all parallel branch approvers
+        for (const path of updatedState.parallelPaths) {
+          const branchNode = workflow.nodes.find((node: IWorkflowNode) => node.id === path.currentNodeId);
+          if (branchNode && branchNode.type === 'approval' && branchNode.data.roleId) {
+            try {
+              const roleAssignments = await UserRoleAssignment.find({
+                roleId: branchNode.data.roleId,
+                companyId: executionState.companyId,
+              }).lean();
+
+              let eligibleUserIds = roleAssignments.map(a => a.userId);
+              
+              if (branchNode.data.groupScope?.enabled && branchNode.data.groupScope.groupIds && branchNode.data.groupScope.groupIds.length > 0) {
+                const matchType = branchNode.data.groupScope.matchType || 'any';
+                const requiredGroupIds = branchNode.data.groupScope.groupIds.map(id => id.toString());
+                
+                const eligibleUsers = await this.getUsersMatchingGroupScope(
+                  eligibleUserIds,
+                  executionState.requesterGroupIds,
+                  requiredGroupIds,
+                  matchType,
+                  executionState.companyId
+                );
+                
+                eligibleUserIds = eligibleUsers;
+              }
+
+              const request = await Request.findOne({ 
+                workflowExecutionId: executionState._id 
+              }).populate('requester', 'name email').lean();
+
+              if (request && eligibleUserIds.length > 0) {
+                for (const userId of eligibleUserIds) {
+                  const user = await User.findById(userId).lean();
+                  if (user) {
+                    await notifyApprovalPending(
+                      user._id.toString(),
+                      request._id.toString(),
+                      request.title,
+                      request.requester.name
+                    );
+                    console.log('[NOTIFICATION] Sent parallel branch approval notification to:', {
+                      userId: user._id,
+                      userName: user.name,
+                      branchNodeId: branchNode.id,
+                      branchNodeLabel: branchNode.label
+                    });
+                  }
+                }
+              }
+            } catch (notificationError) {
+              console.error('[ERROR] Failed to send parallel branch notifications:', notificationError);
+            }
+          }
+        }
+        return updatedState;
+      }
+    }
 
     // Send notifications to users who need to approve at the next node
     if (nextNode.type === 'approval' && nextNode.data.roleId) {
@@ -553,6 +705,148 @@ export class WorkflowExecutionEngine {
     // Save the updated execution state
     await executionState.save();
 
+    return executionState;
+  }
+
+  /**
+   * Process an action (approve/reject) on a parallel path
+   */
+  private async processParallelPathAction(
+    executionState: IExecutionState,
+    workflow: any,
+    targetPath: IParallelPath,
+    targetNode: IWorkflowNode,
+    action: 'approved' | 'rejected',
+    userId: string,
+    notes?: string,
+    isForward: boolean = false
+  ): Promise<IExecutionState> {
+    // Record the action in execution history
+    executionState.history.push({
+      nodeId: targetNode.id,
+      nodeType: targetNode.type,
+      action,
+      userId: new mongoose.Types.ObjectId(userId),
+      notes,
+      timestamp: new Date(),
+    });
+
+    // If rejected, mark the entire execution as rejected
+    if (action === 'rejected') {
+      executionState.status = 'rejected';
+      executionState.completedAt = new Date();
+      await executionState.save();
+      return executionState;
+    }
+
+    // For approved action, advance this parallel path to the next node
+    const outgoingEdge = workflow.edges.find((edge: any) => edge.source === targetNode.id);
+    if (!outgoingEdge) {
+      throw new Error(`No outgoing edge found from node ${targetNode.id}`);
+    }
+
+    const nextNode = workflow.nodes.find((node: IWorkflowNode) => node.id === outgoingEdge.target);
+    if (!nextNode) {
+      throw new Error(`Next node not found with ID ${outgoingEdge.target}`);
+    }
+
+    console.log('[DEBUG] Advancing parallel path:', {
+      pathId: targetPath.pathId,
+      fromNode: targetNode.label,
+      toNode: nextNode.label,
+      toNodeType: nextNode.type
+    });
+
+    // Update the parallel path
+    targetPath.currentNodeId = nextNode.id;
+    
+    // If the next node is the join node, mark this path as completed
+    if (nextNode.id === targetPath.joinNodeId) {
+      targetPath.status = 'completed';
+      
+      // Add history entry for reaching the join
+      executionState.history.push({
+        nodeId: nextNode.id,
+        nodeType: nextNode.type,
+        action: 'entered',
+        timestamp: new Date(),
+      });
+    } else {
+      // Add history entry for entering the next node
+      executionState.history.push({
+        nodeId: nextNode.id,
+        nodeType: nextNode.type,
+        action: 'entered',
+        timestamp: new Date(),
+      });
+    }
+
+    // Check if all parallel paths are completed
+    const allPathsCompleted = executionState.parallelPaths.every(p => p.status === 'completed');
+    
+    if (allPathsCompleted) {
+      console.log('[DEBUG] All parallel paths completed, moving past join node');
+      
+      // Find the join node
+      const joinNode = workflow.nodes.find((n: IWorkflowNode) => n.id === targetPath.joinNodeId);
+      if (joinNode) {
+        // Find the next node after the join
+        const joinOutgoingEdge = workflow.edges.find((edge: any) => edge.source === joinNode.id);
+        if (joinOutgoingEdge) {
+          const nodeAfterJoin = workflow.nodes.find((n: IWorkflowNode) => n.id === joinOutgoingEdge.target);
+          if (nodeAfterJoin) {
+            // Move to the node after the join
+            executionState.currentNodeId = nodeAfterJoin.id;
+            executionState.parallelPaths = []; // Clear parallel paths
+            
+            executionState.history.push({
+              nodeId: nodeAfterJoin.id,
+              nodeType: nodeAfterJoin.type,
+              action: 'entered',
+              timestamp: new Date(),
+            });
+
+            // If it's an end node, mark as completed
+            if (nodeAfterJoin.type === 'end') {
+              executionState.status = 'completed';
+              executionState.completedAt = new Date();
+            }
+
+            // Send notifications for the next node if it's an approval node
+            if (nodeAfterJoin.type === 'approval' && nodeAfterJoin.data?.roleId) {
+              try {
+                const roleAssignments = await UserRoleAssignment.find({
+                  roleId: nodeAfterJoin.data.roleId,
+                  companyId: executionState.companyId,
+                }).lean();
+
+                const request = await Request.findOne({ 
+                  workflowExecutionId: executionState._id 
+                }).populate('requester', 'name email').lean();
+
+                if (request && roleAssignments.length > 0) {
+                  for (const assignment of roleAssignments) {
+                    const user = await User.findById(assignment.userId).lean();
+                    if (user) {
+                      await notifyApprovalPending(
+                        user._id.toString(),
+                        request._id.toString(),
+                        request.title,
+                        request.requester.name
+                      );
+                    }
+                  }
+                }
+              } catch (notificationError) {
+                console.error('[ERROR] Failed to send notifications after parallel join:', notificationError);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    await executionState.save();
     return executionState;
   }
 

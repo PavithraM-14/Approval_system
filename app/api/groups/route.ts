@@ -12,12 +12,18 @@ export async function GET(request: NextRequest) {
     await connectDB();
     
     const user = await getCurrentUser();
+    console.log('[GROUPS API] Current user:', user);
+    
     if (!user) {
+      console.log('[GROUPS API] No user found - unauthorized');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const companyId = (user as any).company;
+    const companyId = (user as any).company || (user as any).companyId;
+    console.log('[GROUPS API] Company ID:', companyId);
+    
     if (!companyId) {
+      console.log('[GROUPS API] User has no company association');
       return NextResponse.json({ error: 'User not associated with a company' }, { status: 400 });
     }
 

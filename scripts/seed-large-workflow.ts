@@ -1,14 +1,19 @@
 import mongoose from 'mongoose';
 import * as dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import Company from '../models/Company';
-import Role from '../models/Role';
+import CustomRole from '../models/CustomRole';
 import User from '../models/User';
 import Group from '../models/Group';
 import UserGroupAssignment from '../models/UserGroupAssignment';
+import UserRoleAssignment from '../models/UserRoleAssignment';
 import WorkflowConfiguration, { IWorkflowNode, IWorkflowEdge } from '../models/WorkflowConfiguration';
 
 // Load environment variables
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '..', '.env.local') });
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sead';
 
@@ -30,10 +35,10 @@ async function createSystemAdmin(companyId: any): Promise<any> {
   console.log('Creating system admin...');
   
   // Create System Admin role
-  const adminRole = await Role.create({
+  const adminRole = await CustomRole.create({
     name: 'System Admin',
     description: 'Full system access with all permissions',
-    company: companyId,
+    companyId: companyId,
     isSystemAdmin: true,
     permissions: {
       canView: true,
@@ -64,6 +69,14 @@ async function createSystemAdmin(companyId: any): Promise<any> {
     isActive: true,
   });
   console.log('  ✓ Created System Admin user');
+
+  // Create UserRoleAssignment for admin
+  await UserRoleAssignment.create({
+    userId: adminUser._id,
+    roleId: adminRole._id,
+    companyId: companyId,
+  });
+  console.log('  ✓ Created role assignment for System Admin');
 
   return { adminUser, adminRole };
 }
@@ -157,11 +170,11 @@ async function seedLargeWorkflow() {
 
     for (const rName of roleNames) {
       // Role
-      let role = await Role.findOne({ name: rName, company: companyId });
+      let role = await CustomRole.findOne({ name: rName, companyId: companyId });
       if (!role) {
-        role = await Role.create({
+        role = await CustomRole.create({
           name: rName,
-          company: companyId,
+          companyId: companyId,
           isSystemAdmin: rName === 'CEO',
           permissions: {
             canView: true,
@@ -196,6 +209,13 @@ async function seedLargeWorkflow() {
           isActive: true
         });
         console.log(`Created User: ${rName} (${email})`);
+        
+        // Create UserRoleAssignment
+        await UserRoleAssignment.create({
+          userId: user._id,
+          roleId: role._id,
+          companyId: companyId,
+        });
       }
       usersMap[rName] = user;
 

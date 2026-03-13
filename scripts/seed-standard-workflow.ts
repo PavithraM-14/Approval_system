@@ -21,7 +21,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env.local') });
 
 // Import models
 import Company from '../models/Company.js';
-import Role from '../models/Role.js';
+import CustomRole from '../models/CustomRole.js';
 import Group from '../models/Group.js';
 import WorkflowConfiguration from '../models/WorkflowConfiguration.js';
 import SignupFormConfiguration from '../models/SignupFormConfiguration.js';
@@ -120,7 +120,7 @@ async function createStandardRoles(companyId: any): Promise<CreatedRoles> {
         canApprove: false,
         canRaiseQueries: false,
       },
-      company: companyId,
+      companyId: companyId,
     },
     {
       name: 'Manager',
@@ -138,7 +138,7 @@ async function createStandardRoles(companyId: any): Promise<CreatedRoles> {
         canApprove: false,
         canRaiseQueries: true,
       },
-      company: companyId,
+      companyId: companyId,
     },
     {
       name: 'Boss',
@@ -156,14 +156,14 @@ async function createStandardRoles(companyId: any): Promise<CreatedRoles> {
         canApprove: true,
         canRaiseQueries: true,
       },
-      company: companyId,
+      companyId: companyId,
     },
   ];
 
   const createdRoles: CreatedRoles = {} as CreatedRoles;
   
   for (const roleData of roles) {
-    const role = new Role(roleData);
+    const role = new CustomRole(roleData);
     await role.save();
     console.log(`  ✓ Created role: ${role.name}`);
     
@@ -338,10 +338,10 @@ async function createSystemAdmin(companyId: any): Promise<any> {
   console.log('Creating system admin...');
   
   // Create System Admin role
-  const adminRole = new Role({
+  const adminRole = new CustomRole({
     name: 'System Admin',
     description: 'Full system access with all permissions',
-    company: companyId,
+    companyId: companyId,
     isSystemAdmin: true,
     permissions: {
       canView: true,

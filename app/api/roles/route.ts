@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
 import { getCurrentUser } from '@/lib/auth';
-import Role from '@/models/Role';
+import CustomRole from '@/models/CustomRole';
 
 /**
  * GET /api/roles
@@ -38,7 +38,7 @@ export async function GET() {
     const companyId = dbUser.company.toString();
 
     // Get all roles for the company
-    const roles = await Role.find({ company: companyId }).sort({ createdAt: -1 });
+    const roles = await CustomRole.find({ companyId: companyId }).sort({ createdAt: -1 });
 
     return NextResponse.json(roles, { status: 200 });
   } catch (error: any) {
@@ -106,10 +106,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Create role
-    const role = await Role.create({
+    const role = await CustomRole.create({
       name: body.name.trim(),
       description: body.description?.trim() || '',
-      company: companyId,
+      companyId: companyId,
       isSystemAdmin: body.isSystemAdmin || false,
       permissions: body.permissions || {
         canView: true,
