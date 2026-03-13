@@ -192,81 +192,38 @@ export default function CompliancePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 pb-12">
-      {/* Premium Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-blue-900 to-slate-900 text-white pb-24 pt-10 px-6 lg:px-8 shadow-xl relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-        <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse"></div>
-        
-        <div className="max-w-7xl mx-auto relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 pb-12">
+      {/* Header */}
+      <div className="bg-white border-b border-slate-200 pb-8 pt-8 px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div>
-            <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-blue-200">
+            <h1 className="text-3xl font-bold text-slate-900">
               Compliance & Governance
             </h1>
-            <p className="mt-2 text-blue-200 text-lg max-w-2xl">
+            <p className="mt-2 text-slate-600 text-lg max-w-2xl">
               Centralized command center for retention policies, system backups, and regulatory audits.
             </p>
           </div>
           <button
             onClick={handleApplyPolicies}
-            className="group relative inline-flex items-center justify-center px-6 py-3 font-semibold text-white transition-all duration-200 bg-blue-600 border border-transparent rounded-xl hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(37,99,235,0.6)]"
+            className="inline-flex items-center justify-center px-6 py-3 font-semibold text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm"
           >
-            <ShieldCheckIcon className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+            <ShieldCheckIcon className="w-5 h-5 mr-2" />
             Enforce Policies
           </button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 -mt-16 relative z-20 space-y-8">
+      <div className="max-w-7xl mx-auto px-6 lg:px-8 pt-8 space-y-8">
         
-        {/* KPI Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            { label: 'Compliant Documents', value: stats.compliant?.toLocaleString() || '0', icon: ShieldCheckIcon, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-            { label: 'Expiring Soon', value: stats.expiringSoon?.toLocaleString() || '0', icon: ExclamationTriangleIcon, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-            { label: 'Pending Reviews', value: stats.pendingReviews?.toLocaleString() || '0', icon: ClockIcon, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-            { label: 'Audit Logs (30d)', value: stats.auditLogs?.toLocaleString() || '0', icon: DocumentTextIcon, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-          ].map((kpi, idx) => (
-            <div key={idx} className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-lg shadow-slate-200/50 border border-slate-100 hover:-translate-y-1 transition-transform duration-300">
-              <div className="flex items-center gap-4">
-                <div className={`p-4 rounded-xl ${kpi.bg}`}>
-                  <kpi.icon className={`h-8 w-8 ${kpi.color}`} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-500">{kpi.label}</p>
-                  <p className="text-3xl font-bold text-slate-900 tracking-tight">{kpi.value}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           
           {/* Main Content Area */}
           <div className="xl:col-span-2 space-y-8">
             
-            {/* Sector Regulations & Compliance Status */}
-            <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden">
-              <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                <h2 className="text-xl font-bold text-slate-900 flex items-center">
-                  <CheckBadgeIcon className="w-6 h-6 mr-2 text-blue-600" />
-                  Regulatory Frameworks
-                </h2>
-                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full border border-emerald-200">All Systems Normal</span>
-              </div>
-              <div className="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {['GDPR', 'HIPAA', 'SOC 2 Type II'].map((framework) => (
-                  <div key={framework} className="p-4 rounded-xl border border-slate-200 hover:border-blue-300 hover:shadow-md transition-all bg-white group cursor-default">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-bold text-slate-800">{framework}</h3>
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] group-hover:animate-pulse"></div>
-                    </div>
-                    <p className="text-xs text-slate-500">Controls active & monitoring enabled.</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+
 
             {/* Retention Policies */}
             <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 border border-slate-100 overflow-hidden">

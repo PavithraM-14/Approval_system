@@ -114,13 +114,10 @@ export default function HomePage() {
 
                 <div className="flex items-center gap-3 mb-4">
 
-                  <Image
-                    src="/person.png"
-                    alt="person"
-                    width={68}
-                    height={68}
-                    className="rounded-full"
-                  />
+                  {/* Initial-based Avatar */}
+                  <div className="w-[68px] h-[68px] bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white text-2xl font-bold">RK</span>
+                  </div>
 
                   <div>
                     <p className="font-semibold text-gray-900">
