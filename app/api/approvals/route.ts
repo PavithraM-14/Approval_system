@@ -142,9 +142,9 @@ async function filterCustomWorkflowRequests(
                     requiredGroupIds.includes(groupId) && requesterGroupIds.includes(groupId)
                   );
                 } else if (matchType === 'all') {
-                  const requiredAndRequesterGroups = requiredGroupIds.filter(g => requesterGroupIds.includes(g));
+                  const requiredAndRequesterGroups = requiredGroupIds.filter((g: string) => requesterGroupIds.includes(g));
                   hasGroupMatch = requiredAndRequesterGroups.length > 0 && 
-                                 requiredAndRequesterGroups.every(groupId => userGroupIds.includes(groupId));
+                                 requiredAndRequesterGroups.every((groupId: string) => userGroupIds.includes(groupId));
                 }
                 
                 isParallelApprover = hasGroupMatch;

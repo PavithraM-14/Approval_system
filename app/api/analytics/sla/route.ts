@@ -124,7 +124,7 @@ export async function GET() {
         let prevTimestamp = new Date(req.createdAt).getTime();
         for (const log of req.history) {
           const logTime = new Date(log.timestamp).getTime();
-          if (log.action === ActionType.FORWARD && log.actor?.toString() === f._id.toString()) {
+          if (log.action === ActionType.FORWARD && log.actor?.toString() === (f._id as any).toString()) {
             if (logTime > thirtyDaysAgo.getTime()) {
               forwardedCount++;
             }

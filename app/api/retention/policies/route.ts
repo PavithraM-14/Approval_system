@@ -7,7 +7,13 @@ import {
   checkUpcomingRetentions,
 } from '../../../../lib/retention-service';
 import { UserRole } from '../../../../lib/types';
-import { RetentionAction } from '../../../../models/RetentionPolicy';
+
+// Define retention actions locally
+const RetentionAction = {
+  ARCHIVE: 'archive',
+  DELETE: 'delete',
+  REVIEW: 'review'
+} as const;
 
 export async function GET(request: NextRequest) {
   try {

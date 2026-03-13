@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline';
 
 interface Role {
   _id: string;
@@ -31,6 +31,7 @@ export default function RolesPage() {
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [signupFormStatus, setSignupFormStatus] = useState<Record<string, 'none' | 'configured' | 'loading'>>({});
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [viewingRole, setViewingRole] = useState<Role | null>(null);
 
   useEffect(() => {
     fetchCurrentUser();
@@ -176,9 +177,6 @@ export default function RolesPage() {
                 Description
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Permissions
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Signup Form
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -198,33 +196,6 @@ export default function RolesPage() {
                 </td>
                 <td className="px-6 py-4">
                   <div className="text-sm text-gray-600">{role.description}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-wrap gap-1">
-                    {Object.entries(role.permissions).map(([key, value]) => {
-                      if (!value || key === 'canView') return null;
-                      
-                      const getPermissionLabel = (permKey: string) => {
-                        if (permKey === 'canCreate') return 'Create & Respond';
-                        if (permKey === 'canApprove') return 'Final Approval';
-                        if (permKey === 'canForward') return 'Forward Approval';
-                        if (permKey === 'canShare') return 'External Sharing';
-                        if (permKey === 'canDownload') return 'Download';
-                        if (permKey === 'canESign') return 'E-Signature';
-                        if (permKey === 'canRaiseQueries') return 'Raise Queries';
-                        return permKey.replace('can', '').replace(/([A-Z])/g, ' $1').trim();
-                      };
-
-                      return (
-                        <span
-                          key={key}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800"
-                        >
-                          {getPermissionLabel(key)}
-                        </span>
-                      );
-                    })}
-                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-2">
@@ -272,6 +243,16 @@ export default function RolesPage() {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewingRole(role);
+                    }}
+                    className="text-green-600 hover:text-green-900 mr-4"
+                    title="View permissions"
+                  >
+                    <EyeIcon className="h-5 w-5" />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -323,6 +304,14 @@ export default function RolesPage() {
             setEditingRole(null);
             fetchRoles();
           }}
+        />
+      )}
+
+      {/* View Permissions Modal */}
+      {viewingRole && (
+        <ViewPermissionsModal
+          role={viewingRole}
+          onClose={() => setViewingRole(null)}
         />
       )}
     </div>
@@ -544,6 +533,125 @@ function RoleModal({ role, onClose, onSave }: { role: Role | null; onClose: () =
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function ViewPermissionsModal({ role, onClose }: { role: Role; onClose: () => void }) {
+  const getPermissionLabel = (permKey: string) => {
+    if (permKey === 'canCreate') return 'Create & Respond';
+    if (permKey === 'canApprove') return 'Final Approval';
+    if (permKey === 'canForward') return 'Forward Approval';
+    if (permKey === 'canShare') return 'External Sharing';
+    if (permKey === 'canDownload') return 'Download';
+    if (permKey === 'canESign') return 'E-Signature';
+    if (permKey === 'canRaiseQueries') return 'Raise Queries';
+    return permKey.replace('can', '').replace(/([A-Z])/g, ' $1').trim();
+  };
+
+  const getPermissionDescription = (permKey: string) => {
+    switch (permKey) {
+      case 'canCreate':
+        return 'Allows creating new requests and responding to queries raised on them';
+      case 'canEdit':
+        return 'Allows editing documents, attachments, and uploading new versions';
+      case 'canShare':
+        return 'Allows creating external links, sending via Gmail, and linking to ERP/CRM/HR';
+      case 'canDownload':
+        return 'Allows downloading documents and attachments';
+      case 'canForward':
+        return 'Receives requests from creators and forwards to final approvers';
+      case 'canManageBudget':
+        return 'Allows managing budget allocations and financial records';
+      case 'canESign':
+        return 'Allows providing e-signature for approvals and authorizations';
+      case 'canApprove':
+        return 'Final approver who completes the approval flow';
+      case 'canRaiseQueries':
+        return 'Allows raising queries to request creators';
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+          <div>
+            <h3 className="text-2xl font-bold text-gray-900">Role Permissions</h3>
+            <p className="text-gray-600 mt-1">{role.name} - {role.description}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-6">
+          {role.isSystemAdmin ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="font-medium text-blue-800">System Administrator</span>
+              </div>
+              <p className="text-blue-700 text-sm mt-1">This role has full access to all features and permissions.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <h4 className="text-lg font-semibold text-gray-900 mb-4">Active Permissions</h4>
+              <div className="grid grid-cols-1 gap-3">
+                {Object.entries(role.permissions)
+                  .filter(([key, value]) => value && key !== 'canView')
+                  .map(([key, value]) => {
+                    const description = getPermissionDescription(key);
+                    return (
+                      <div key={key} className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                            <svg className="w-5 h-5 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <h5 className="font-medium text-green-800">{getPermissionLabel(key)}</h5>
+                            {description && (
+                              <p className="text-green-700 text-sm mt-1">{description}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+              
+              {Object.values(role.permissions).filter(Boolean).length === 1 && (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 mb-2">
+                    <EyeIcon className="w-12 h-12 mx-auto" />
+                  </div>
+                  <p className="text-gray-500">This role only has basic view permissions.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
