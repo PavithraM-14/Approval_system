@@ -620,58 +620,66 @@ export async function getNextApprovers(requestId: string, newStatus: string): Pr
 
   const approverIds: string[] = [];
 
-  // Map status to role.  Any status that represents the *next* approval
-  // step should be included here so the appropriate users receive an email.
-  // Most statuses correspond exactly to roles, but department_checks requires
-  // special handling (see below) and parallel_verification needs both SOP and
-  // accountant.
-  const statusToRole: Record<string, string> = {
-    'manager_review': 'institution_manager',
-    'parallel_verification': 'sop_verifier', // Will also notify accountant
-    'sop_completed': 'accountant',           // if accountant not already notified
-    'budget_completed': 'sop_verifier',     // vice‑versa for SOP verifier
-    'institution_verified': 'institution_manager', // after parallel paths
-    'vp_approval': 'vp',
-    'hoi_approval': 'head_of_institution',
-    'dean_review': 'dean',
-    // department_checks is dealt with dynamically below
-    'chief_director_approval': 'chief_director',
-    'chairman_approval': 'chairman',
+  // Import CustomRole model to find roles by name
+  const CustomRole = (await import('../models/CustomRole')).default;
+
+  // Map status to role names
+  const statusToRoleName: Record<string, string> = {
+    'manager_review': 'Manager',
+    'parallel_verification': 'SOP Verifier',
+    'sop_completed': 'Accountant',
+    'budget_completed': 'SOP Verifier',
+    'institution_verified': 'Institution Manager',
+    'vp_approval': 'VP',
+    'hoi_approval': 'Head of Institution',
+    'dean_review': 'Dean',
+    'chief_director_approval': 'Chief Director',
+    'chairman_approval': 'Chairman',
   };
 
-  // handle department checks specially by looking at the most recent
-  // clarification entry which stores the target department in queryTarget
+  // Handle department checks specially
   if (newStatus === RequestStatus.DEPARTMENT_CHECKS) {
     const latestClarification = request.history
       ?.filter((h: any) => h.queryTarget)
       .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
 
     if (latestClarification && latestClarification.queryTarget) {
-      const deptRole = latestClarification.queryTarget.toLowerCase();
-      const deptUsers = await User.find({ role: deptRole, isActive: true });
-      approverIds.push(...deptUsers.map(u => u._id.toString()));
+      // Find role by name and then users with that role
+      const targetRoleName = latestClarification.queryTarget;
+      const targetRole = await CustomRole.findOne({ name: targetRoleName });
+      if (targetRole) {
+        const deptUsers = await User.find({ role: targetRole._id, isActive: true });
+        approverIds.push(...deptUsers.map(u => u._id.toString()));
+      }
     } else {
-      // fallback to MMA if we can't determine a target
-      const mmaUsers = await User.find({ role: 'mma', isActive: true });
-      approverIds.push(...mmaUsers.map(u => u._id.toString()));
+      // Fallback to Manager role if we can't determine target
+      const managerRole = await CustomRole.findOne({ name: 'Manager' });
+      if (managerRole) {
+        const managerUsers = await User.find({ role: managerRole._id, isActive: true });
+        approverIds.push(...managerUsers.map(u => u._id.toString()));
+      }
     }
     return approverIds;
   }
 
-  const targetRole = statusToRole[newStatus];
-  if (targetRole) {
-    // Find users with the mapped role
-    const approvers = await User.find({ role: targetRole, isActive: true });
-    approverIds.push(...approvers.map(u => u._id.toString()));
+  const targetRoleName = statusToRoleName[newStatus];
+  if (targetRoleName) {
+    // Find role by name first, then find users with that role
+    const targetRole = await CustomRole.findOne({ name: targetRoleName });
+    if (targetRole) {
+      const approvers = await User.find({ role: targetRole._id, isActive: true });
+      approverIds.push(...approvers.map(u => u._id.toString()));
+    }
   }
 
-  // Special cases
+  // Special case for parallel verification - also notify accountants
   if (newStatus === RequestStatus.PARALLEL_VERIFICATION) {
-    const accountants = await User.find({ role: 'accountant', isActive: true });
-    approverIds.push(...accountants.map(u => u._id.toString()));
+    const accountantRole = await CustomRole.findOne({ name: 'Accountant' });
+    if (accountantRole) {
+      const accountants = await User.find({ role: accountantRole._id, isActive: true });
+      approverIds.push(...accountants.map(u => u._id.toString()));
+    }
   }
-
-  return approverIds;
 
   return approverIds;
 }
