@@ -1,7 +1,11 @@
+import dotenv from 'dotenv';
 import connectDB from '../lib/mongodb';
 import Request from '../models/Request';
 import { RequestStatus } from '../lib/types';
 import { getNextApprovers, notifyApprovalReminder } from '../lib/notification-service';
+
+// Load environment variables from .env.local
+dotenv.config({ path: '.env.local' });
 
 /**
  * This script is intended to be run periodically (cron, scheduled task, etc.).
