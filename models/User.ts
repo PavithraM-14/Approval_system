@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   empId: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: mongoose.Schema.Types.ObjectId, ref: 'Role', required: true },
+  role: { type: mongoose.Schema.Types.ObjectId, ref: 'CustomRole', required: true },
   company: { type: mongoose.Schema.Types.ObjectId, ref: 'Company' },
   signature: { type: String },
   college: { type: String },

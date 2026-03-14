@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import User from '../../../models/User';
 import connectDB from '../../../lib/mongodb';
 import Request from '../../../models/Request';
-import User from '../../../models/User';
 import AuditLog from '../../../models/AuditLog';
 import { getCurrentUser } from '../../../lib/auth';
 import { CreateRequestSchema } from '../../../lib/types';
@@ -86,8 +86,8 @@ async function filterRequestsWithCustomWorkflow(
   const userRoleIds = userRoleAssignments.map(assignment => assignment.roleId.toString());
 
   // Also get the user's primary role ID from their User record
-  const dbUser = await User.findById(userId).populate('role');
-  const primaryRoleId = dbUser?.role?._id?.toString();
+  const dbUser = await User.findById(userId);
+  const primaryRoleId = dbUser?.role?.toString();
   
   // Combine custom role assignments with primary role
   const allUserRoleIds = [...userRoleIds];
@@ -202,9 +202,9 @@ async function filterRequestsWithCustomWorkflow(
                     requiredGroupIds.includes(groupId) && requesterGroupIds.includes(groupId)
                   );
                 } else if (matchType === 'all') {
-                  const requiredAndRequesterGroups = requiredGroupIds.filter(g => requesterGroupIds.includes(g));
+                  const requiredAndRequesterGroups = requiredGroupIds.filter((g: string) => requesterGroupIds.includes(g));
                   hasGroupMatch = requiredAndRequesterGroups.length > 0 && 
-                                 requiredAndRequesterGroups.every(groupId => userGroupIds.includes(groupId));
+                                 requiredAndRequesterGroups.every((groupId: string) => userGroupIds.includes(groupId));
                 }
                 
                 isParallelApprover = hasGroupMatch;
@@ -255,9 +255,9 @@ async function filterRequestsWithCustomWorkflow(
         );
       } else if (matchType === 'all') {
         // User must be in ALL required groups that the requester is also in
-        const requiredAndRequesterGroups = requiredGroupIds.filter(g => requesterGroupIds.includes(g));
+        const requiredAndRequesterGroups = requiredGroupIds.filter((g: string) => requesterGroupIds.includes(g));
         hasGroupMatch = requiredAndRequesterGroups.length > 0 && 
-                       requiredAndRequesterGroups.every(groupId => userGroupIds.includes(groupId));
+                       requiredAndRequesterGroups.every((groupId: string) => userGroupIds.includes(groupId));
       }
       
       console.log('[DEBUG] Group match result:', { hasGroupMatch, isCurrentApprover: hasGroupMatch });
@@ -354,9 +354,9 @@ export async function GET(request: NextRequest) {
     // Get user's database record for proper filtering
     let dbUser = null;
     if (mongoose.Types.ObjectId.isValid(user.id)) {
-      dbUser = await User.findById(user.id).populate('role');
+      dbUser = await User.findById(user.id);
     } else {
-      dbUser = await User.findOne({ email: user.email }).populate('role');
+      dbUser = await User.findOne({ email: user.email });
     }
 
     if (!dbUser) {
@@ -391,8 +391,8 @@ export async function GET(request: NextRequest) {
     }
 
     const allRequests = await Request.find(baseQuery)
-      .populate('requester', 'name email empId role')
-      .populate('history.actor', 'name email empId role')
+      .populate('requester', 'name email empId')
+      .populate('history.actor', 'name email empId')
       .sort({ updatedAt: -1, createdAt: -1 })
       .lean(); // Convert to plain objects for better performance
 
@@ -423,7 +423,7 @@ export async function GET(request: NextRequest) {
         // For both requesters and approvers: use visibility category
         visibleRequests = visibleRequests.filter(req => req._visibility?.category === 'pending');
       } else if (statusFilter === 'approved') {
-        if (hasCanCreate) {
+        if (permissions.canCreate) {
           // For users with canCreate: show only requests that have been fully approved by Chairman
           visibleRequests = visibleRequests.filter(req => req.status === RequestStatus.APPROVED);
         } else {
@@ -520,7 +520,7 @@ export async function POST(request: NextRequest) {
     const validatedData = CreateRequestSchema.parse(body);
 
     // Find the requester user (should already exist from authentication)
-    const requesterUser = await User.findOne({ email: user!.email }).populate('company');
+    const requesterUser = await User.findOne({ email: user!.email });
     if (!requesterUser) {
       return NextResponse.json({ error: 'User not found. Please ensure you are properly authenticated.' }, { status: 404 });
     }

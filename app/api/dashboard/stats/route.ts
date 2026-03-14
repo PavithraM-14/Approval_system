@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '../../../../lib/mongodb';
 import Request from '../../../../models/Request';
 import User from '../../../../models/User';
+import Role from '../../../../models/Role';
 import { getCurrentUser } from '../../../../lib/auth';
 import { RequestStatus, ActionType, UserRole } from '../../../../lib/types';
 import mongoose from 'mongoose';
@@ -237,9 +238,9 @@ export async function GET() {
     // Get user's database record
     let dbUser = null;
     if (mongoose.Types.ObjectId.isValid(user.id)) {
-      dbUser = await User.findById(user.id).populate('role');
+      dbUser = await User.findById(user.id);
     } else {
-      dbUser = await User.findOne({ email: user.email }).populate('role');
+      dbUser = await User.findOne({ email: user.email });
     }
 
     if (!dbUser) {

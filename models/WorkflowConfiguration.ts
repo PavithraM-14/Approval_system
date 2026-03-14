@@ -64,7 +64,7 @@ const NodeDataSchema = new Schema<INodeData>(
   {
     roleId: {
       type: Schema.Types.ObjectId,
-      ref: 'Role',
+      ref: 'CustomRole',
     },
     groupScope: {
       enabled: { type: Boolean, default: false },

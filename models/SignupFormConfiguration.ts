@@ -77,7 +77,7 @@ const SignupFormConfigurationSchema = new Schema<ISignupFormConfiguration>(
     },
     roleId: {
       type: Schema.Types.ObjectId,
-      ref: 'Role',
+      ref: 'CustomRole',
       required: true,
       index: true,
     },
@@ -179,5 +179,9 @@ SignupFormConfigurationSchema.statics.getDefaultFields = function(): ISignupFiel
   ];
 };
 
-export default mongoose.models.SignupFormConfiguration || 
-  mongoose.model<ISignupFormConfiguration>('SignupFormConfiguration', SignupFormConfigurationSchema);
+interface ISignupFormConfigurationModel extends mongoose.Model<ISignupFormConfiguration> {
+  getDefaultFields(): ISignupField[];
+}
+
+export default (mongoose.models.SignupFormConfiguration as ISignupFormConfigurationModel) || 
+  mongoose.model<ISignupFormConfiguration, ISignupFormConfigurationModel>('SignupFormConfiguration', SignupFormConfigurationSchema);

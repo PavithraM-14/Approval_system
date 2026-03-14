@@ -795,8 +795,9 @@ export default function DocumentsPage() {
           setShowSendEmail(false);
           setSelectedDocForEmail(null);
         }}
-        documentId={selectedDocForEmail?._id || ''}
+        documentId={selectedDocForEmail?.isRequestAttachment ? '' : (selectedDocForEmail?._id || '')}
         documentTitle={selectedDocForEmail?.title || ''}
+        filePath={selectedDocForEmail?.isRequestAttachment ? selectedDocForEmail.filePath : undefined}
       />
 
       {/* Document Versions Modal */}

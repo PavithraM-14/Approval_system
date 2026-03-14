@@ -13,22 +13,36 @@ export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
+    console.log('=== Escalations API Called ===');
+    
     await connectDB();
+    console.log('✓ Database connected');
     
     // Check if user is system admin
     const currentUser = await getCurrentUser();
+    console.log('Current user:', currentUser ? {
+      id: currentUser.id,
+      email: currentUser.email,
+      hasRole: !!currentUser.role,
+      isSystemAdmin: currentUser.role?.isSystemAdmin
+    } : 'null');
     
     if (!currentUser) {
+      console.log('❌ No user found');
       return NextResponse.json({ error: 'Unauthorized - Not logged in' }, { status: 401 });
     }
     
     // Check if role exists and has isSystemAdmin property
     if (!currentUser.role || !currentUser.role.isSystemAdmin) {
+      console.log('❌ User is not system admin');
       return NextResponse.json({ error: 'Unauthorized - Admin access required' }, { status: 403 });
     }
+    
+    console.log('✓ User is system admin');
 
     // Find requests that have been stuck for more than 3 days (72 hours)
     const threeDaysAgo = new Date(Date.now() - 72 * 60 * 60 * 1000);
+    console.log('Looking for requests older than:', threeDaysAgo);
     
     const escalatedRequests = await Request.find({
       status: { 
@@ -36,9 +50,10 @@ export async function GET(request: NextRequest) {
       },
       updatedAt: { $lt: threeDaysAgo }
     })
-    .populate('requester', 'name email empId')
-    .populate('company', 'name')
+    .populate('requester', 'name email empId company')
     .sort({ updatedAt: 1 }); // Oldest first
+    
+    console.log(`✓ Found ${escalatedRequests.length} escalated requests`);
 
     // Get additional details for each request
     const requestsWithDetails = await Promise.all(
@@ -56,9 +71,12 @@ export async function GET(request: NextRequest) {
                 const currentNode = workflow.nodes.find((n: any) => n.id === execution.currentNodeId);
                 if (currentNode && currentNode.data?.roleId) {
                   // Find users with this role through UserRoleAssignment
+                  // Get company from requester
+                  const requesterCompanyId = (req.requester as any)?.company;
+                  
                   const roleAssignments = await UserRoleAssignment.find({
                     roleId: currentNode.data.roleId,
-                    companyId: req.company
+                    companyId: requesterCompanyId
                   }).select('userId');
                   
                   const userIds = roleAssignments.map(ra => ra.userId);
@@ -90,7 +108,7 @@ export async function GET(request: NextRequest) {
           title: req.title,
           status: req.status,
           requester: req.requester,
-          company: req.company,
+          company: (req.requester as any)?.company, // Get company from requester
           createdAt: req.createdAt,
           updatedAt: req.updatedAt,
           daysStuck,

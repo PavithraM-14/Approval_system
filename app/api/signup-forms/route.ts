@@ -16,8 +16,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const companyId = (user as any).company;
+    const companyId = user.companyId;
     if (!companyId) {
+      console.warn('[DEBUG] User missing companyId:', user.id);
       return NextResponse.json({ error: 'User not associated with a company' }, { status: 400 });
     }
 
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const companyId = (user as any).company;
+    const companyId = user.companyId;
     if (!companyId) {
       return NextResponse.json({ error: 'User not associated with a company' }, { status: 400 });
     }
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
     // Use default fields if none provided
     const finalFields = fields && fields.length > 0 
       ? fields 
-      : SignupFormConfiguration.getDefaultFields();
+      : (SignupFormConfiguration as any).getDefaultFields();
 
     const configuration = await SignupFormConfiguration.create({
       companyId: new mongoose.Types.ObjectId(companyId),

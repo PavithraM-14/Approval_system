@@ -56,6 +56,18 @@ export async function POST(request: NextRequest) {
     let fileBuffer: Buffer;
 
     if (documentId) {
+      // Validate documentId format (must be a valid MongoDB ObjectId)
+      const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+      if (!objectIdRegex.test(documentId)) {
+        return NextResponse.json(
+          { 
+            error: 'Invalid document ID format',
+            details: 'Document ID must be a valid MongoDB ObjectId (24 hex characters)'
+          },
+          { status: 400 }
+        );
+      }
+
       // Get document from database
       document = await Document.findById(documentId);
       if (!document) {

@@ -175,7 +175,7 @@ export async function POST(
     try {
       console.log('[WORKFLOW ACTIVATION] Auto-assigning users to roles...');
       
-      // Get all users in the company
+      // Get all users in the company with populated role
       const users = await User.find({ company: companyId }).populate('role');
       console.log('[WORKFLOW ACTIVATION] Found users in company:', users.length);
       
@@ -186,8 +186,15 @@ export async function POST(
           continue;
         }
         
-        const userRoleName = user.role.name;
-        const userRoleId = user.role._id;
+        // Handle both populated and unpopulated role references
+        const userRole = typeof user.role === 'object' && 'name' in user.role ? user.role : null;
+        if (!userRole) {
+          console.log('[WORKFLOW ACTIVATION] User role not populated:', user._id, user.name);
+          continue;
+        }
+        
+        const userRoleName = userRole.name;
+        const userRoleId = userRole._id;
         
         console.log('[WORKFLOW ACTIVATION] Processing user:', {
           userId: user._id,
