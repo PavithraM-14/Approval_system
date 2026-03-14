@@ -61,7 +61,7 @@ export async function GET(
     }
 
     // Retrieve role by ID
-    const role = await Role.findById(roleId);
+    const role = await CustomRole.findById(roleId);
 
     // Check if role exists
     if (!role) {
@@ -72,7 +72,7 @@ export async function GET(
     }
 
     // Verify company ownership (multi-tenant isolation)
-    if (role.company && role.company.toString() !== companyId) {
+    if (role.companyId && role.companyId.toString() !== companyId) {
       return NextResponse.json(
         { error: 'Forbidden: Access denied to this role' },
         { status: 403 }
@@ -149,7 +149,7 @@ export async function PUT(
     }
 
     // Retrieve role by ID
-    const role = await Role.findById(roleId);
+    const role = await CustomRole.findById(roleId);
 
     // Check if role exists
     if (!role) {
@@ -160,7 +160,7 @@ export async function PUT(
     }
 
     // Verify company ownership (multi-tenant isolation)
-    if (role.company && role.company.toString() !== companyId) {
+    if (role.companyId && role.companyId.toString() !== companyId) {
       return NextResponse.json(
         { error: 'Forbidden: Access denied to this role' },
         { status: 403 }
@@ -299,7 +299,7 @@ export async function DELETE(
     }
 
     // Check if role is a system admin role before attempting deletion
-    const role = await Role.findById(roleId);
+    const role = await CustomRole.findById(roleId);
     if (!role) {
       return NextResponse.json(
         { error: 'Role not found' },

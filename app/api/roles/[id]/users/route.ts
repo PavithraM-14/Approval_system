@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
-import Role from '@/models/Role';
+import CustomRole from '@/models/CustomRole';
 import { getCurrentUser } from '@/lib/auth';
 import mongoose from 'mongoose';
 
@@ -56,7 +56,7 @@ export async function GET(
     }
 
     // Retrieve role by ID
-    const role = await Role.findById(roleId);
+    const role = await CustomRole.findById(roleId);
 
     // Check if role exists
     if (!role) {
@@ -67,7 +67,7 @@ export async function GET(
     }
 
     // Verify company ownership (multi-tenant isolation)
-    if (role.company && role.company.toString() !== companyId) {
+    if (role.companyId && role.companyId.toString() !== companyId) {
       return NextResponse.json(
         { error: 'Forbidden: Access denied to this role' },
         { status: 403 }
